@@ -49,3 +49,19 @@ body {
 .muted {
   color: #645b51;
 }
+
+@media (max-width: 1024px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .pane {
+    border-right: 0;
+    border-bottom: 1px solid rgba(31, 29, 26, 0.12);
+  }
+
+  .debug-pane {
+    border-left: 0;
+    border-bottom: 0;
+  }
+}
