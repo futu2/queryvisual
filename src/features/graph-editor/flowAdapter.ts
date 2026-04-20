@@ -10,11 +10,13 @@ export interface FlowNodeData {
 export function toFlowNodes(
   document: GraphDocument,
   diagnostics: Diagnostic[],
+  selectedNodeId: string | null,
 ): Array<Node<FlowNodeData>> {
   return document.nodes.map((node) => ({
     id: node.id,
     type: "queryNode",
     position: node.position,
+    selected: node.id === selectedNodeId,
     data: {
       node,
       diagnostics: diagnostics.filter(

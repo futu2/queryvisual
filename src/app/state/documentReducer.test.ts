@@ -82,6 +82,28 @@ describe("documentReducer", () => {
     );
   });
 
+  test("replaces any existing edge on the same target handle", () => {
+    const initial = createInitialEditorState(createSampleDocument());
+
+    const next = documentReducer(initial, {
+      type: "upsert-edge",
+      edge: {
+        id: "edge-from-orders-output",
+        source: "from-orders",
+        sourceHandle: "out",
+        target: "output-orders",
+        targetHandle: "in",
+      },
+    });
+
+    const outputInputEdges = next.document.edges.filter(
+      (edge) => edge.target === "output-orders" && edge.targetHandle === "in",
+    );
+
+    expect(outputInputEdges).toHaveLength(1);
+    expect(outputInputEdges[0]?.source).toBe("from-orders");
+  });
+
   test("keeps the current active output when given a non-output node id", () => {
     const initial = createInitialEditorState(createSampleDocument());
 
@@ -99,6 +121,17 @@ describe("documentReducer", () => {
     expect(() =>
       documentReducer(initial, { type: "unknown-action" } as never),
     ).toThrow("Unknown action");
+  });
+
+  test("updates the stored viewport", () => {
+    const initial = createInitialEditorState(createSampleDocument());
+
+    const next = documentReducer(initial, {
+      type: "set-viewport",
+      viewport: { x: 120, y: 64, zoom: 0.75 },
+    });
+
+    expect(next.document.viewport).toEqual({ x: 120, y: 64, zoom: 0.75 });
   });
 
   test("replaces provider state when initialDocument changes", () => {

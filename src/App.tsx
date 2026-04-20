@@ -2,15 +2,20 @@ import {
   DocumentProvider,
   useDocumentContext,
 } from "./app/state/DocumentContext";
+import { useMemo } from "react";
 import { compileOutput } from "./domain/compile/compileOutput";
 import { GraphCanvas } from "./features/graph-editor/GraphCanvas";
 import { NodePalette } from "./features/graph-editor/NodePalette";
 
 function AppLayout() {
   const { state } = useDocumentContext();
-  const diagnostics = state.activeOutputId
-    ? compileOutput(state.document, state.activeOutputId).semantic.diagnostics
-    : [];
+  const diagnostics = useMemo(() => {
+    if (!state.activeOutputId) {
+      return [];
+    }
+
+    return compileOutput(state.document, state.activeOutputId).semantic.diagnostics;
+  }, [state.activeOutputId, state.document.edges, state.document.nodes]);
 
   return (
     <div className="app-shell">

@@ -17,7 +17,11 @@ const nodeTypes = {
 
 export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
   const { state, dispatch } = useDocumentContext();
-  const nodes = toFlowNodes(state.document, diagnostics);
+  const nodes = toFlowNodes(
+    state.document,
+    diagnostics,
+    state.selectedNodeId,
+  );
   const edges = toFlowEdges(state.document);
 
   const onConnect = (connection: Connection) => {
@@ -55,10 +59,14 @@ export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
       <ReactFlow
         nodes={nodes}
         edges={edges}
-        fitView
         nodeTypes={nodeTypes}
+        viewport={state.document.viewport}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
+        onPaneClick={() => {
+          dispatch({ type: "select-node", nodeId: null });
+          dispatch({ type: "open-node-editor", nodeId: null });
+        }}
         onNodeDragStop={(_, node) =>
           dispatch({
             type: "set-node-position",
@@ -66,9 +74,7 @@ export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
             position: node.position,
           })
         }
-        onMoveEnd={(_, viewport) =>
-          dispatch({ type: "set-viewport", viewport })
-        }
+        onViewportChange={(viewport) => dispatch({ type: "set-viewport", viewport })}
       >
         <Background />
         <MiniMap />

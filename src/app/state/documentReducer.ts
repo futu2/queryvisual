@@ -41,6 +41,13 @@ function isOutputNodeId(document: GraphDocument, nodeId: string) {
   );
 }
 
+function sameTargetHandle(edge: GraphEdge, candidate: GraphEdge) {
+  return (
+    edge.target === candidate.target &&
+    edge.targetHandle === candidate.targetHandle
+  );
+}
+
 export function createInitialEditorState(
   document: GraphDocument = createSampleDocument(),
 ): EditorState {
@@ -83,7 +90,11 @@ export function documentReducer(
         document: {
           ...state.document,
           edges: [
-            ...state.document.edges.filter((edge) => edge.id !== action.edge.id),
+            ...state.document.edges.filter(
+              (edge) =>
+                edge.id !== action.edge.id &&
+                !sameTargetHandle(edge, action.edge),
+            ),
             action.edge,
           ],
         },
@@ -101,6 +112,14 @@ export function documentReducer(
         },
       };
     case "set-viewport":
+      if (
+        state.document.viewport.x === action.viewport.x &&
+        state.document.viewport.y === action.viewport.y &&
+        state.document.viewport.zoom === action.viewport.zoom
+      ) {
+        return state;
+      }
+
       return {
         ...state,
         document: {
