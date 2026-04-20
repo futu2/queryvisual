@@ -5,17 +5,21 @@ import {
 import { useMemo } from "react";
 import { compileOutput } from "./domain/compile/compileOutput";
 import { GraphCanvas } from "./features/graph-editor/GraphCanvas";
+import { NodeEditorModal } from "./features/graph-editor/NodeEditorModal";
 import { NodePalette } from "./features/graph-editor/NodePalette";
 
 function AppLayout() {
-  const { state } = useDocumentContext();
-  const diagnostics = useMemo(() => {
+  const { state, dispatch } = useDocumentContext();
+  const editedNode =
+    state.document.nodes.find((node) => node.id === state.editorNodeId) ?? null;
+  const compileResult = useMemo(() => {
     if (!state.activeOutputId) {
-      return [];
+      return null;
     }
 
-    return compileOutput(state.document, state.activeOutputId).semantic.diagnostics;
+    return compileOutput(state.document, state.activeOutputId);
   }, [state.activeOutputId, state.document.edges, state.document.nodes]);
+  const diagnostics = compileResult?.semantic.diagnostics ?? [];
 
   return (
     <div className="app-shell">
@@ -37,6 +41,16 @@ function AppLayout() {
         <h2>Outputs</h2>
         <div className="placeholder">Compiler artifacts will appear here.</div>
       </section>
+      {editedNode ? (
+        <NodeEditorModal
+          node={editedNode}
+          onClose={() => dispatch({ type: "open-node-editor", nodeId: null })}
+          onSave={(node) => {
+            dispatch({ type: "replace-node", node });
+            dispatch({ type: "open-node-editor", nodeId: null });
+          }}
+        />
+      ) : null}
     </div>
   );
 }
