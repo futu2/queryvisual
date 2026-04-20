@@ -416,4 +416,76 @@ describe("validateOutput", () => {
       result.diagnostics.some(diagnostic => diagnostic.code === "join.duplicate-left-input"),
     ).toBe(true);
   });
+
+  test("reports invalid join types", () => {
+    const invalid = {
+      version: 1,
+      metadata: { name: "bad join type" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "left-table",
+          kind: "fromTable",
+          label: "Left",
+          position: { x: -200, y: 0 },
+          data: {
+            tableRef: { tableName: "left_table" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "right-table",
+          kind: "fromTable",
+          label: "Right",
+          position: { x: -200, y: 200 },
+          data: {
+            tableRef: { tableName: "right_table" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "join-1",
+          kind: "join",
+          label: "Join",
+          position: { x: 0, y: 100 },
+          data: { joinType: "banana", predicate: "id = id" },
+        },
+        {
+          id: "output-1",
+          kind: "output",
+          label: "Output",
+          position: { x: 200, y: 100 },
+          data: { outputName: "bad_join_type" },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-left-join",
+          source: "left-table",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "left",
+        },
+        {
+          id: "edge-right-join",
+          source: "right-table",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "right",
+        },
+        {
+          id: "edge-join-output",
+          source: "join-1",
+          sourceHandle: "out",
+          target: "output-1",
+          targetHandle: "in",
+        },
+      ],
+    } as unknown as GraphDocument;
+
+    const result = validateOutput(invalid, "output-1");
+    expect(result.diagnostics.some(diagnostic => diagnostic.code === "join.invalid-type")).toBe(
+      true,
+    );
+  });
 });

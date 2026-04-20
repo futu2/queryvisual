@@ -10,11 +10,9 @@ describe("renderSql", () => {
   test("renders the sample select query", () => {
     const semantic = validateOutput(createSampleDocument(), "output-orders");
     const ir = optimizeOutput(lowerOutputToIr(semantic)!);
-    const sql = renderSql(ir);
-
-    expect(sql).toContain("SELECT");
-    expect(sql).toContain("gross_total");
-    expect(sql).toContain("FROM sales.orders");
+    expect(renderSql(ir)).toBe(
+      'SELECT order_id AS "order_id", total AS "gross_total" FROM sales.orders',
+    );
   });
 
   test("renders nested join aggregate sort and limit queries", () => {
@@ -58,7 +56,46 @@ describe("renderSql", () => {
     };
 
     expect(renderSql(ir)).toBe(
-      "SELECT region AS region, SUM(total) AS sum_total FROM (SELECT * FROM sales.orders INNER JOIN sales.customers ON (orders.customer_id = customers.customer_id) WHERE (status = 'paid')) GROUP BY region ORDER BY sum_total DESC LIMIT 10 OFFSET 5",
+      'SELECT * FROM (SELECT * FROM (SELECT region AS "region", SUM(total) AS "sum_total" FROM (SELECT * FROM (SELECT * FROM sales.orders INNER JOIN sales.customers ON (orders.customer_id = customers.customer_id)) AS q1 WHERE (status = \'paid\')) AS q2 GROUP BY region) AS q3 ORDER BY sum_total DESC) AS q4 LIMIT 10 OFFSET 5',
     );
+  });
+
+  test("renders filter over limit as a valid outer query", () => {
+    const ir: IRRelNode = {
+      kind: "filter",
+      predicateSql: "(status = 'paid')",
+      input: {
+        kind: "limit",
+        count: 5,
+        offset: null,
+        input: {
+          kind: "scan",
+          tableSql: "sales.orders",
+          schema: {},
+        },
+      },
+    };
+
+    expect(renderSql(ir)).toBe(
+      "SELECT * FROM (SELECT * FROM sales.orders LIMIT 5) AS q1 WHERE (status = 'paid')",
+    );
+  });
+
+  test("omits GROUP BY when aggregate has no grouping keys", () => {
+    const ir: IRRelNode = {
+      kind: "aggregate",
+      groupBy: [],
+      aggregates: [{ alias: "sum total", expressionSql: "SUM(total)" }],
+      input: {
+        kind: "scan",
+        tableSql: "sales.orders",
+        schema: {},
+      },
+      schema: {
+        "sum total": "float",
+      },
+    };
+
+    expect(renderSql(ir)).toBe('SELECT SUM(total) AS "sum total" FROM sales.orders');
   });
 });

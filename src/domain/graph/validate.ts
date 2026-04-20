@@ -9,6 +9,8 @@ import { parseExpression } from "../expr/parser";
 import type { ColumnMap, ColumnType } from "../schema/types";
 import type { SemanticOutput } from "./semantic";
 
+const JOIN_TYPES = ["inner", "left", "right", "full"] as const;
+
 function incomingEdges(document: GraphDocument, nodeId: string) {
   return document.edges.filter(edge => edge.target === nodeId);
 }
@@ -54,6 +56,10 @@ function diagnostic(
     message,
     ref: { nodeId, field },
   };
+}
+
+function isJoinType(joinType: string): joinType is (typeof JOIN_TYPES)[number] {
+  return JOIN_TYPES.includes(joinType as (typeof JOIN_TYPES)[number]);
 }
 
 function inferExpressionSafely(
@@ -181,6 +187,16 @@ export function validateOutput(
         const leftSchema = schemas[left.source] ?? {};
         const rightSchema = schemas[right.source] ?? {};
         const scope = { ...scopeFromSchema(leftSchema), ...scopeFromSchema(rightSchema) };
+        if (!isJoinType(node.data.joinType)) {
+          diagnostics.push(
+            diagnostic(
+              "join.invalid-type",
+              "Join type must be inner, left, right, or full.",
+              node.id,
+              "joinType",
+            ),
+          );
+        }
         const predicate = inferExpressionSafely(
           node.data.predicate,
           scope,
