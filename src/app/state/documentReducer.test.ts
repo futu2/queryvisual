@@ -1,7 +1,21 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import { cleanup, render, screen } from "@testing-library/react";
+import { createElement } from "react";
 import { createSampleDocument } from "../../domain/document/sample";
 import type { GraphDocument } from "../../domain/document/types";
+import { DocumentProvider, useDocumentContext } from "./DocumentContext";
 import { createInitialEditorState, documentReducer } from "./documentReducer";
+
+afterEach(cleanup);
+
+function ActiveOutputProbe() {
+  const { state } = useDocumentContext();
+  return createElement(
+    "span",
+    { "data-testid": "active-output" },
+    state.activeOutputId ?? "none",
+  );
+}
 
 describe("documentReducer", () => {
   test("tracks the active output and open editor", () => {
@@ -66,5 +80,62 @@ describe("documentReducer", () => {
     expect(next.document.edges.find((edge) => edge.id === "edge-select-output")?.source).toBe(
       "from-orders",
     );
+  });
+
+  test("keeps the current active output when given a non-output node id", () => {
+    const initial = createInitialEditorState(createSampleDocument());
+
+    const next = documentReducer(initial, {
+      type: "set-active-output",
+      nodeId: "select-orders",
+    });
+
+    expect(next.activeOutputId).toBe("output-orders");
+  });
+
+  test("throws on unknown runtime actions", () => {
+    const initial = createInitialEditorState(createSampleDocument());
+
+    expect(() =>
+      documentReducer(initial, { type: "unknown-action" } as never),
+    ).toThrow("Unknown action");
+  });
+
+  test("replaces provider state when initialDocument changes", () => {
+    const replacement: GraphDocument = {
+      version: 1,
+      metadata: { name: "replacement" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "output-next",
+          kind: "output",
+          label: "Output",
+          position: { x: 0, y: 0 },
+          data: { outputName: "replacement_out" },
+        },
+      ],
+      edges: [],
+    };
+
+    const { rerender } = render(
+      createElement(
+        DocumentProvider,
+        { initialDocument: createSampleDocument() },
+        createElement(ActiveOutputProbe),
+      ),
+    );
+
+    expect(screen.getByTestId("active-output").textContent).toBe("output-orders");
+
+    rerender(
+      createElement(
+        DocumentProvider,
+        { initialDocument: replacement },
+        createElement(ActiveOutputProbe),
+      ),
+    );
+
+    expect(screen.getByTestId("active-output").textContent).toBe("output-next");
   });
 });

@@ -27,8 +27,18 @@ export type EditorAction =
   | { type: "select-node"; nodeId: string | null }
   | { type: "set-active-output"; nodeId: string | null };
 
+function assertNever(action: never): never {
+  throw new Error(`Unknown action: ${JSON.stringify(action)}`);
+}
+
 function firstOutputId(document: GraphDocument) {
   return document.nodes.find((node) => node.kind === "output")?.id ?? null;
+}
+
+function isOutputNodeId(document: GraphDocument, nodeId: string) {
+  return document.nodes.some(
+    (node) => node.id === nodeId && node.kind === "output",
+  );
 }
 
 export function createInitialEditorState(
@@ -111,7 +121,14 @@ export function documentReducer(
     case "set-active-output":
       return {
         ...state,
-        activeOutputId: action.nodeId,
+        activeOutputId:
+          action.nodeId === null
+            ? null
+            : isOutputNodeId(state.document, action.nodeId)
+              ? action.nodeId
+              : state.activeOutputId,
       };
+    default:
+      return assertNever(action);
   }
 }

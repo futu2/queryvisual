@@ -1,7 +1,9 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useReducer,
+  useRef,
   type Dispatch,
   type ReactNode,
 } from "react";
@@ -27,10 +29,23 @@ export function DocumentProvider({
   children: ReactNode;
   initialDocument?: GraphDocument;
 }) {
+  const previousInitialDocument = useRef(initialDocument);
   const [state, dispatch] = useReducer(
     documentReducer,
-    createInitialEditorState(initialDocument),
+    initialDocument,
+    createInitialEditorState,
   );
+
+  useEffect(() => {
+    if (
+      initialDocument &&
+      initialDocument !== previousInitialDocument.current
+    ) {
+      dispatch({ type: "replace-document", document: initialDocument });
+    }
+
+    previousInitialDocument.current = initialDocument;
+  }, [initialDocument]);
 
   return (
     <DocumentContext.Provider value={{ state, dispatch }}>
