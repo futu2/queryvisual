@@ -6,6 +6,10 @@ import { formatTableRef } from "../schema/types";
 import type { IRRelNode } from "./types";
 
 export function lowerOutputToIr(semantic: SemanticOutput): IRRelNode | null {
+  if (semantic.diagnostics.some((diagnostic) => diagnostic.level === "error")) {
+    return null;
+  }
+
   const cache = new Map<string, IRRelNode>();
   const edgesByTarget = new Map(
     semantic.document.nodes.map((node) => [
@@ -14,13 +18,19 @@ export function lowerOutputToIr(semantic: SemanticOutput): IRRelNode | null {
     ]),
   );
 
-  function lowerNode(node: GraphNode): IRRelNode | null {
-    if (cache.has(node.id)) return cache.get(node.id)!;
+  function lowerNode(node: GraphNode | undefined): IRRelNode | null {
+    if (!node) return null;
+
+    const cached = cache.get(node.id);
+    if (cached) return cached;
 
     const inputs = edgesByTarget.get(node.id) ?? [];
     const oneInput = () => {
       const edge = inputs.find((candidate) => candidate.targetHandle === "in");
-      return edge ? lowerNode(semantic.nodesById[edge.source]) : null;
+      if (!edge) return null;
+      const source = semantic.nodesById[edge.source];
+      if (!source) return null;
+      return lowerNode(source);
     };
 
     let lowered: IRRelNode | null = null;
@@ -40,35 +50,51 @@ export function lowerOutputToIr(semantic: SemanticOutput): IRRelNode | null {
         const leftEdge = inputs.find((edge) => edge.targetHandle === "left");
         const rightEdge = inputs.find((edge) => edge.targetHandle === "right");
         if (!leftEdge || !rightEdge) return null;
+        const leftNode = semantic.nodesById[leftEdge.source];
+        const rightNode = semantic.nodesById[rightEdge.source];
+        const left = lowerNode(leftNode);
+        const right = lowerNode(rightNode);
+        const schema = semantic.schemas[node.id];
+        if (!left || !right || !schema) return null;
         lowered = {
           kind: "join",
           joinType: node.data.joinType,
           predicateSql: renderExpressionSql(parseExpression(node.data.predicate)),
-          left: lowerNode(semantic.nodesById[leftEdge.source])!,
-          right: lowerNode(semantic.nodesById[rightEdge.source])!,
-          schema: semantic.schemas[node.id],
+          left,
+          right,
+          schema,
         };
         break;
       }
-      case "where":
+      case "where": {
+        const input = oneInput();
+        if (!input) return null;
         lowered = {
           kind: "filter",
           predicateSql: renderExpressionSql(parseExpression(node.data.predicate)),
-          input: oneInput()!,
+          input,
         };
         break;
-      case "select":
+      }
+      case "select": {
+        const input = oneInput();
+        const schema = semantic.schemas[node.id];
+        if (!input || !schema) return null;
         lowered = {
           kind: "project",
           projections: node.data.mappings.map((mapping) => ({
             alias: mapping.name,
             expressionSql: renderExpressionSql(parseExpression(mapping.expression)),
           })),
-          input: oneInput()!,
-          schema: semantic.schemas[node.id],
+          input,
+          schema,
         };
         break;
-      case "aggregation":
+      }
+      case "aggregation": {
+        const input = oneInput();
+        const schema = semantic.schemas[node.id];
+        if (!input || !schema) return null;
         lowered = {
           kind: "aggregate",
           groupBy: node.data.groupBy.map((row) => ({
@@ -79,28 +105,35 @@ export function lowerOutputToIr(semantic: SemanticOutput): IRRelNode | null {
             alias: row.name,
             expressionSql: renderExpressionSql(parseExpression(row.expression)),
           })),
-          input: oneInput()!,
-          schema: semantic.schemas[node.id],
+          input,
+          schema,
         };
         break;
-      case "sort":
+      }
+      case "sort": {
+        const input = oneInput();
+        if (!input) return null;
         lowered = {
           kind: "sort",
           items: node.data.items.map((item) => ({
             expressionSql: renderExpressionSql(parseExpression(item.expression)),
             direction: item.direction,
           })),
-          input: oneInput()!,
+          input,
         };
         break;
-      case "limit":
+      }
+      case "limit": {
+        const input = oneInput();
+        if (!input) return null;
         lowered = {
           kind: "limit",
           count: node.data.count,
           offset: node.data.offset,
-          input: oneInput()!,
+          input,
         };
         break;
+      }
       case "output":
         lowered = oneInput();
         break;
@@ -111,5 +144,6 @@ export function lowerOutputToIr(semantic: SemanticOutput): IRRelNode | null {
   }
 
   const outputNode = semantic.nodesById[semantic.outputId];
+  if (!outputNode) return null;
   return lowerNode(outputNode);
 }
