@@ -6,7 +6,7 @@ import type {
 } from "../document/types";
 import { inferExpressionType } from "../expr/infer";
 import { parseExpression } from "../expr/parser";
-import type { ColumnMap } from "../schema/types";
+import type { ColumnMap, ColumnType } from "../schema/types";
 import type { SemanticOutput } from "./semantic";
 
 function incomingEdges(document: GraphDocument, nodeId: string) {
@@ -42,15 +42,6 @@ function scopeFromSchema(schema: ColumnMap) {
   return { ...schema };
 }
 
-function mappingsToSchema(mappings: NamedExpression[], scope: ColumnMap) {
-  return Object.fromEntries(
-    mappings.map(mapping => [
-      mapping.name,
-      inferExpressionType(parseExpression(mapping.expression), scope),
-    ]),
-  );
-}
-
 function diagnostic(
   code: string,
   message: string,
@@ -63,6 +54,76 @@ function diagnostic(
     message,
     ref: { nodeId, field },
   };
+}
+
+function inferExpressionSafely(
+  expression: string,
+  scope: ColumnMap,
+  diagnostics: Diagnostic[],
+  code: string,
+  message: string,
+  nodeId: string,
+  field?: string,
+) {
+  try {
+    return {
+      type: inferExpressionType(parseExpression(expression), scope),
+      ok: true,
+    };
+  } catch {
+    diagnostics.push(diagnostic(code, message, nodeId, field));
+    return {
+      type: "unknown" as ColumnType,
+      ok: false,
+    };
+  }
+}
+
+function mappingsToSchema(
+  mappings: NamedExpression[],
+  scope: ColumnMap,
+  diagnostics: Diagnostic[],
+  nodeId: string,
+  code: string,
+) {
+  return Object.fromEntries(
+    mappings.map(mapping => [
+      mapping.name,
+      inferExpressionSafely(
+        mapping.expression,
+        scope,
+        diagnostics,
+        code,
+        "Mapping expression is invalid.",
+        nodeId,
+        mapping.name,
+      ).type,
+    ]),
+  );
+}
+
+function singleInput(
+  inputs: ReturnType<typeof incomingEdges>,
+  diagnostics: Diagnostic[],
+  nodeId: string,
+  nodeKind: string,
+  missingMessage: string,
+) {
+  const inEdges = inputs.filter(edge => edge.targetHandle === "in");
+  if (inEdges.length === 0) {
+    diagnostics.push(diagnostic(`${nodeKind}.missing-input`, missingMessage, nodeId));
+    return null;
+  }
+  if (inEdges.length > 1) {
+    diagnostics.push(
+      diagnostic(
+        `${nodeKind}.duplicate-input`,
+        `${nodeKind} nodes require exactly one input.`,
+        nodeId,
+      ),
+    );
+  }
+  return inEdges[0];
 }
 
 export function validateOutput(
@@ -100,29 +161,51 @@ export function validateOutput(
         const leftSchema = schemas[left.source] ?? {};
         const rightSchema = schemas[right.source] ?? {};
         const scope = { ...scopeFromSchema(leftSchema), ...scopeFromSchema(rightSchema) };
-        inferExpressionType(parseExpression(node.data.predicate), scope);
+        const predicate = inferExpressionSafely(
+          node.data.predicate,
+          scope,
+          diagnostics,
+          "join.invalid-expression",
+          "Join predicate is invalid.",
+          node.id,
+          "predicate",
+        );
+        if (predicate.ok && predicate.type !== "boolean") {
+          diagnostics.push(
+            diagnostic(
+              "join.non-boolean",
+              "Join predicate must be boolean.",
+              node.id,
+              "predicate",
+            ),
+          );
+        }
         schemas[node.id] = { ...leftSchema, ...rightSchema };
         break;
       }
       case "where": {
-        const input = inputs.find(edge => edge.targetHandle === "in");
+        const input = singleInput(
+          inputs,
+          diagnostics,
+          node.id,
+          "where",
+          "Where nodes require one input.",
+        );
         if (!input) {
-          diagnostics.push(
-            diagnostic(
-              "where.missing-input",
-              "Where nodes require one input.",
-              node.id,
-            ),
-          );
           schemas[node.id] = {};
           break;
         }
         const inputSchema = schemas[input.source] ?? {};
-        const predicateType = inferExpressionType(
-          parseExpression(node.data.predicate),
+        const predicate = inferExpressionSafely(
+          node.data.predicate,
           inputSchema,
+          diagnostics,
+          "where.invalid-expression",
+          "Where predicate is invalid.",
+          node.id,
+          "predicate",
         );
-        if (predicateType !== "boolean") {
+        if (predicate.ok && predicate.type !== "boolean") {
           diagnostics.push(
             diagnostic(
               "where.non-boolean",
@@ -136,49 +219,60 @@ export function validateOutput(
         break;
       }
       case "select": {
-        const input = inputs.find(edge => edge.targetHandle === "in");
+        const input = singleInput(
+          inputs,
+          diagnostics,
+          node.id,
+          "select",
+          "Select nodes require one input.",
+        );
         const inputSchema = input ? schemas[input.source] ?? {} : {};
-        if (!input) {
-          diagnostics.push(
-            diagnostic(
-              "select.missing-input",
-              "Select nodes require one input.",
-              node.id,
-            ),
-          );
-        }
-        schemas[node.id] = mappingsToSchema(node.data.mappings, inputSchema);
+        schemas[node.id] = mappingsToSchema(
+          node.data.mappings,
+          inputSchema,
+          diagnostics,
+          node.id,
+          "select.invalid-expression",
+        );
         break;
       }
       case "aggregation": {
-        const input = inputs.find(edge => edge.targetHandle === "in");
+        const input = singleInput(
+          inputs,
+          diagnostics,
+          node.id,
+          "aggregation",
+          "Aggregation nodes require one input.",
+        );
         const inputSchema = input ? schemas[input.source] ?? {} : {};
-        if (!input) {
-          diagnostics.push(
-            diagnostic(
-              "aggregation.missing-input",
-              "Aggregation nodes require one input.",
-              node.id,
-            ),
-          );
-        }
         schemas[node.id] = {
-          ...mappingsToSchema(node.data.groupBy, inputSchema),
-          ...mappingsToSchema(node.data.aggregates, inputSchema),
+          ...mappingsToSchema(
+            node.data.groupBy,
+            inputSchema,
+            diagnostics,
+            node.id,
+            "aggregation.invalid-expression",
+          ),
+          ...mappingsToSchema(
+            node.data.aggregates,
+            inputSchema,
+            diagnostics,
+            node.id,
+            "aggregation.invalid-expression",
+          ),
         };
         break;
       }
       case "sort":
       case "limit": {
-        const input = inputs.find(edge => edge.targetHandle === "in");
+        const input = singleInput(
+          inputs,
+          diagnostics,
+          node.id,
+          node.kind,
+          `${node.kind} nodes require one input.`,
+        );
         if (!input) {
-          diagnostics.push(
-            diagnostic(
-              `${node.kind}.missing-input`,
-              `${node.kind} nodes require one input.`,
-              node.id,
-            ),
-          );
           schemas[node.id] = {};
           break;
         }
@@ -186,15 +280,14 @@ export function validateOutput(
         break;
       }
       case "output": {
-        const input = inputs.find(edge => edge.targetHandle === "in");
+        const input = singleInput(
+          inputs,
+          diagnostics,
+          node.id,
+          "output",
+          "Output nodes require one input.",
+        );
         if (!input) {
-          diagnostics.push(
-            diagnostic(
-              "output.missing-input",
-              "Output nodes require one input.",
-              node.id,
-            ),
-          );
           schemas[node.id] = {};
           break;
         }
@@ -210,6 +303,7 @@ export function validateOutput(
       level: "error",
       code: "output.invalid",
       message: `Node ${outputId} is not an output node.`,
+      ref: { nodeId: outputId },
     });
   }
 

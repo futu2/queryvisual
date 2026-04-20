@@ -77,7 +77,255 @@ describe("validateOutput", () => {
 
     const result = validateOutput(document, "missing-output");
     expect(result.outputName).toBe("missing-output");
-    expect(result.diagnostics.some(diagnostic => diagnostic.code === "output.invalid")).toBe(
+    const outputInvalid = result.diagnostics.find(
+      diagnostic => diagnostic.code === "output.invalid",
+    );
+    expect(outputInvalid).toBeDefined();
+    expect(outputInvalid?.ref?.nodeId).toBe("missing-output");
+  });
+
+  test("does not throw on malformed expressions and reports diagnostics", () => {
+    const invalid: GraphDocument = {
+      ...createSampleDocument(),
+      nodes: [
+        {
+          id: "left-table",
+          kind: "fromTable",
+          label: "Left",
+          position: { x: -200, y: 0 },
+          data: {
+            tableRef: { tableName: "left_table" },
+            columns: { id: "int", total: "float" },
+          },
+        },
+        {
+          id: "right-table",
+          kind: "fromTable",
+          label: "Right",
+          position: { x: -200, y: 200 },
+          data: {
+            tableRef: { tableName: "right_table" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "join-1",
+          kind: "join",
+          label: "Join",
+          position: { x: 0, y: 100 },
+          data: { joinType: "inner", predicate: "(" },
+        },
+        {
+          id: "where-1",
+          kind: "where",
+          label: "Where",
+          position: { x: 200, y: 100 },
+          data: { predicate: "(" },
+        },
+        {
+          id: "select-1",
+          kind: "select",
+          label: "Select",
+          position: { x: 400, y: 100 },
+          data: { mappings: [{ name: "broken", expression: "(" }] },
+        },
+        {
+          id: "output-1",
+          kind: "output",
+          label: "Output",
+          position: { x: 600, y: 100 },
+          data: { outputName: "bad_exprs" },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-left-join",
+          source: "left-table",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "left",
+        },
+        {
+          id: "edge-right-join",
+          source: "right-table",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "right",
+        },
+        {
+          id: "edge-join-where",
+          source: "join-1",
+          sourceHandle: "out",
+          target: "where-1",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-where-select",
+          source: "where-1",
+          sourceHandle: "out",
+          target: "select-1",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-select-output",
+          source: "select-1",
+          sourceHandle: "out",
+          target: "output-1",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    expect(() => validateOutput(invalid, "output-1")).not.toThrow();
+
+    const result = validateOutput(invalid, "output-1");
+    expect(result.diagnostics.some(diagnostic => diagnostic.code === "join.invalid-expression")).toBe(
+      true,
+    );
+    expect(result.diagnostics.some(diagnostic => diagnostic.code === "where.invalid-expression")).toBe(
+      true,
+    );
+    expect(
+      result.diagnostics.some(diagnostic => diagnostic.code === "select.invalid-expression"),
+    ).toBe(true);
+  });
+
+  test("reports duplicate single-input edges", () => {
+    const invalid: GraphDocument = {
+      ...createSampleDocument(),
+      nodes: [
+        {
+          id: "left-1",
+          kind: "fromTable",
+          label: "Left 1",
+          position: { x: -200, y: 0 },
+          data: {
+            tableRef: { tableName: "t1" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "left-2",
+          kind: "fromTable",
+          label: "Left 2",
+          position: { x: -200, y: 200 },
+          data: {
+            tableRef: { tableName: "t2" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "where-dup",
+          kind: "where",
+          label: "Where",
+          position: { x: 0, y: 100 },
+          data: { predicate: "id = 1" },
+        },
+        {
+          id: "output-dup",
+          kind: "output",
+          label: "Output",
+          position: { x: 200, y: 100 },
+          data: { outputName: "dup_input" },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-1",
+          source: "left-1",
+          sourceHandle: "out",
+          target: "where-dup",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-2",
+          source: "left-2",
+          sourceHandle: "out",
+          target: "where-dup",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-3",
+          source: "where-dup",
+          sourceHandle: "out",
+          target: "output-dup",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const result = validateOutput(invalid, "output-dup");
+    expect(result.diagnostics.some(diagnostic => diagnostic.code === "where.duplicate-input")).toBe(
+      true,
+    );
+  });
+
+  test("reports non-boolean join predicates", () => {
+    const invalid: GraphDocument = {
+      ...createSampleDocument(),
+      nodes: [
+        {
+          id: "left-table",
+          kind: "fromTable",
+          label: "Left",
+          position: { x: -200, y: 0 },
+          data: {
+            tableRef: { tableName: "left_table" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "right-table",
+          kind: "fromTable",
+          label: "Right",
+          position: { x: -200, y: 200 },
+          data: {
+            tableRef: { tableName: "right_table" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "join-1",
+          kind: "join",
+          label: "Join",
+          position: { x: 0, y: 100 },
+          data: { joinType: "inner", predicate: "1 + 1" },
+        },
+        {
+          id: "output-1",
+          kind: "output",
+          label: "Output",
+          position: { x: 200, y: 100 },
+          data: { outputName: "bad_join_predicate" },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-left-join",
+          source: "left-table",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "left",
+        },
+        {
+          id: "edge-right-join",
+          source: "right-table",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "right",
+        },
+        {
+          id: "edge-join-output",
+          source: "join-1",
+          sourceHandle: "out",
+          target: "output-1",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const result = validateOutput(invalid, "output-1");
+    expect(result.diagnostics.some(diagnostic => diagnostic.code === "join.non-boolean")).toBe(
       true,
     );
   });
