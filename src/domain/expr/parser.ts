@@ -11,11 +11,36 @@ type Token =
 const TOKEN_RE =
   /\s*(>=|<=|!=|[(),*/+-]|=|>|<|\bcase\b|\bwhen\b|\bthen\b|\belse\b|\bend\b|\bcast\b|\bas\b|\band\b|\bor\b|\bnot\b|\bnull\b|\btrue\b|\bfalse\b|[A-Za-z_][A-Za-z0-9_.]*|\d+\.\d+|\d+|'[^']*')/giy;
 
+const COLUMN_TYPES: ReadonlySet<ColumnType> = new Set([
+  "boolean",
+  "int",
+  "float",
+  "string",
+  "date",
+  "timestamp",
+  "null",
+  "unknown",
+]);
+
+function isColumnType(value: string): value is ColumnType {
+  return COLUMN_TYPES.has(value as ColumnType);
+}
+
 function tokenize(input: string): Token[] {
   const tokens: Token[] = [];
-  let match: RegExpExecArray | null;
+  let cursor = 0;
 
-  while ((match = TOKEN_RE.exec(input)) !== null) {
+  while (cursor < input.length) {
+    TOKEN_RE.lastIndex = cursor;
+    const match = TOKEN_RE.exec(input);
+
+    if (!match) {
+      if (/^\s*$/.test(input.slice(cursor))) {
+        break;
+      }
+      throw new Error(`Unexpected token at position ${cursor}`);
+    }
+
     const value = match[1];
     const lower = value.toLowerCase();
 
@@ -34,6 +59,8 @@ function tokenize(input: string): Token[] {
     } else {
       tokens.push({ kind: "identifier", value });
     }
+
+    cursor = TOKEN_RE.lastIndex;
   }
 
   return tokens;
@@ -108,6 +135,10 @@ export function parseExpression(input: string): Expr {
         branches.push({ when, then });
       }
 
+      if (branches.length === 0) {
+        throw new Error("CASE requires at least one WHEN/THEN branch");
+      }
+
       let elseExpression: Expr | null = null;
       if (matchValue("else")) {
         consumeKeyword("else");
@@ -129,11 +160,15 @@ export function parseExpression(input: string): Expr {
       if (!typeToken || typeToken.kind !== "identifier") {
         throw new Error("Expected type name after AS");
       }
+      const normalizedType = typeToken.value.toLowerCase();
+      if (!isColumnType(normalizedType)) {
+        throw new Error(`Invalid cast target type: ${typeToken.value}`);
+      }
       if (!matchValue(")")) {
         throw new Error("Expected ')'");
       }
       consume();
-      return { kind: "cast", expression, to: typeToken.value as ColumnType };
+      return { kind: "cast", expression, to: normalizedType };
     }
 
     if (token.kind === "identifier") {
@@ -141,9 +176,19 @@ export function parseExpression(input: string): Expr {
         consume();
         const args: Expr[] = [];
         while (!matchValue(")")) {
-          args.push(parseOr());
           if (matchValue(",")) {
-            consume();
+            throw new Error("Expected expression in function argument list");
+          }
+          args.push(parseOr());
+          if (matchValue(")")) {
+            break;
+          }
+          if (!matchValue(",")) {
+            throw new Error("Expected ',' or ')' in function argument list");
+          }
+          consume();
+          if (matchValue(")")) {
+            throw new Error("Expected expression in function argument list");
           }
         }
         consume();

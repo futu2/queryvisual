@@ -25,4 +25,24 @@ describe("parseExpression", () => {
     expect(parsed.kind).toBe("case");
     expect(parsed.branches).toHaveLength(1);
   });
+
+  test("throws on invalid characters", () => {
+    expect(() => parseExpression("1 $ 2")).toThrow();
+  });
+
+  test("throws on malformed numeric tokenization", () => {
+    expect(() => parseExpression("1.2.3")).toThrow();
+  });
+
+  test("throws on malformed function calls", () => {
+    expect(() => parseExpression("coalesce(total,)")).toThrow();
+  });
+
+  test("throws on malformed case expressions", () => {
+    expect(() => parseExpression("case end")).toThrow();
+  });
+
+  test("throws on invalid cast target types", () => {
+    expect(() => parseExpression("cast(total as nonsense)")).toThrow();
+  });
 });
