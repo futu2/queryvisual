@@ -95,7 +95,7 @@ export function useEditableNode(node: GraphNode) {
 
   useEffect(() => {
     setDraft(node);
-  }, [node]);
+  }, [node.id]);
 
   return { draft, setDraft };
 }
@@ -241,7 +241,7 @@ export function renderNodeEditor(
             Offset
             <input
               type="number"
-              value={draft.data.offset ?? 0}
+              value={draft.data.offset === null ? "" : draft.data.offset}
               onChange={(event) =>
                 setDraft({
                   ...draft,
