@@ -1,0 +1,43 @@
+.query-node {
+  position: relative;
+  min-width: 180px;
+  padding: 14px 16px;
+  border: 1px solid rgba(57, 47, 35, 0.18);
+  border-radius: 16px;
+  background: rgba(255, 253, 248, 0.96);
+  box-shadow: 0 8px 20px rgba(68, 55, 40, 0.08);
+}
+
+.query-node.is-selected {
+  border-color: #9a5f19;
+  box-shadow: 0 10px 26px rgba(154, 95, 25, 0.18);
+}
+
+.query-node.has-errors {
+  border-color: #ae3f2f;
+}
+
+.query-node__kind {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #8d7257;
+}
+
+.query-node__title {
+  margin-top: 6px;
+  font-weight: 700;
+}
+
+.query-node__summary {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #5d5248;
+}
+
+.query-node__badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 11px;
+  color: #ae3f2f;
+}
