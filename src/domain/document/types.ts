@@ -48,9 +48,9 @@ export type GraphNode =
 export interface GraphEdge {
   id: string;
   source: string;
-  sourceHandle: string;
+  sourceHandle: "out";
   target: string;
-  targetHandle: string;
+  targetHandle: "in" | "left" | "right";
 }
 
 export interface GraphDocument {
