@@ -1,4 +1,6 @@
-export function App() {
+import { DocumentProvider } from "./app/state/DocumentContext";
+
+function AppLayout() {
   return (
     <div className="app-shell">
       <aside className="pane sidebar">
@@ -15,5 +17,13 @@ export function App() {
         <div className="placeholder">Compiler artifacts will appear here.</div>
       </section>
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <DocumentProvider>
+      <AppLayout />
+    </DocumentProvider>
   );
 }
