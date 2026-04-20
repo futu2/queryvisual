@@ -1,7 +1,50 @@
 import type { GraphDocument } from "../../domain/document/types";
 
+const columnTypes = [
+  "boolean",
+  "int",
+  "float",
+  "string",
+  "date",
+  "timestamp",
+  "null",
+  "unknown",
+] as const;
+
+const nodeKinds = [
+  "graphInput",
+  "fromTable",
+  "join",
+  "where",
+  "select",
+  "aggregation",
+  "sort",
+  "limit",
+  "output",
+] as const;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isColumnType(value: unknown) {
+  return typeof value === "string" && columnTypes.includes(value as typeof columnTypes[number]);
+}
+
+function isColumnMap(value: unknown) {
+  return (
+    isRecord(value) &&
+    Object.keys(value).every((columnName) => typeof columnName === "string") &&
+    Object.values(value).every(isColumnType)
+  );
+}
+
+function isTableRef(value: unknown) {
+  return (
+    isRecord(value) &&
+    typeof value.tableName === "string" &&
+    (value.schemaName === undefined || typeof value.schemaName === "string")
+  );
 }
 
 function isPosition(value: unknown) {
@@ -19,14 +62,75 @@ function isViewport(value: unknown) {
   );
 }
 
+function isNamedExpression(value: unknown) {
+  return (
+    isRecord(value) &&
+    typeof value.name === "string" &&
+    typeof value.expression === "string"
+  );
+}
+
+function isSortItem(value: unknown) {
+  return (
+    isRecord(value) &&
+    typeof value.expression === "string" &&
+    (value.direction === "asc" || value.direction === "desc")
+  );
+}
+
+function isNodeKind(value: unknown): value is typeof nodeKinds[number] {
+  return typeof value === "string" && nodeKinds.includes(value as typeof nodeKinds[number]);
+}
+
+function isNodeData(kind: typeof nodeKinds[number], value: unknown) {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  switch (kind) {
+    case "graphInput":
+      return isColumnMap(value.columns);
+    case "fromTable":
+      return isTableRef(value.tableRef) && isColumnMap(value.columns);
+    case "join":
+      return (
+        (value.joinType === "inner" ||
+          value.joinType === "left" ||
+          value.joinType === "right" ||
+          value.joinType === "full") &&
+        typeof value.predicate === "string"
+      );
+    case "where":
+      return typeof value.predicate === "string";
+    case "select":
+      return Array.isArray(value.mappings) && value.mappings.every(isNamedExpression);
+    case "aggregation":
+      return (
+        Array.isArray(value.groupBy) &&
+        value.groupBy.every(isNamedExpression) &&
+        Array.isArray(value.aggregates) &&
+        value.aggregates.every(isNamedExpression)
+      );
+    case "sort":
+      return Array.isArray(value.items) && value.items.every(isSortItem);
+    case "limit":
+      return (
+        typeof value.count === "number" &&
+        (value.offset === null || typeof value.offset === "number")
+      );
+    case "output":
+      return typeof value.outputName === "string";
+  }
+}
+
 function isGraphNode(value: unknown) {
   return (
     isRecord(value) &&
     typeof value.id === "string" &&
-    typeof value.kind === "string" &&
+    isNodeKind(value.kind) &&
     typeof value.label === "string" &&
     isPosition(value.position) &&
-    isRecord(value.data)
+    isNodeData(value.kind, value.data)
   );
 }
 
@@ -35,9 +139,11 @@ function isGraphEdge(value: unknown) {
     isRecord(value) &&
     typeof value.id === "string" &&
     typeof value.source === "string" &&
-    typeof value.sourceHandle === "string" &&
+    value.sourceHandle === "out" &&
     typeof value.target === "string" &&
-    typeof value.targetHandle === "string"
+    (value.targetHandle === "in" ||
+      value.targetHandle === "left" ||
+      value.targetHandle === "right")
   );
 }
 

@@ -45,4 +45,94 @@ describe("fileIO", () => {
       ),
     ).toThrow("Invalid QueryVisual document");
   });
+
+  test("rejects malformed kind-specific node payloads", () => {
+    expect(() =>
+      parseDocumentJson(
+        JSON.stringify({
+          version: 1,
+          metadata: { name: "bad" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [
+            {
+              id: "from-1",
+              kind: "fromTable",
+              label: "Orders",
+              position: { x: 0, y: 0 },
+              data: {},
+            },
+          ],
+          edges: [],
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual document");
+  });
+
+  test("rejects unknown node kinds", () => {
+    expect(() =>
+      parseDocumentJson(
+        JSON.stringify({
+          version: 1,
+          metadata: { name: "bad" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [
+            {
+              id: "node-1",
+              kind: "mystery",
+              label: "Mystery",
+              position: { x: 0, y: 0 },
+              data: {},
+            },
+          ],
+          edges: [],
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual document");
+  });
+
+  test("rejects malformed expression row payloads", () => {
+    expect(() =>
+      parseDocumentJson(
+        JSON.stringify({
+          version: 1,
+          metadata: { name: "bad" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [
+            {
+              id: "select-1",
+              kind: "select",
+              label: "Select",
+              position: { x: 0, y: 0 },
+              data: {
+                mappings: [{ name: "gross_total" }],
+              },
+            },
+          ],
+          edges: [],
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual document");
+  });
+
+  test("rejects invalid edge handle payloads", () => {
+    expect(() =>
+      parseDocumentJson(
+        JSON.stringify({
+          version: 1,
+          metadata: { name: "bad" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [],
+          edges: [
+            {
+              id: "edge-1",
+              source: "a",
+              sourceHandle: "left",
+              target: "b",
+              targetHandle: "in",
+            },
+          ],
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual document");
+  });
 });
