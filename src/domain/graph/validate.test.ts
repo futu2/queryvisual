@@ -18,6 +18,19 @@ describe("validateOutput", () => {
       ...createSampleDocument(),
       nodes: [
         {
+          id: "from-orders",
+          kind: "fromTable",
+          label: "Orders",
+          position: { x: -200, y: 0 },
+          data: {
+            tableRef: { schemaName: "sales", tableName: "orders" },
+            columns: {
+              order_id: "int",
+              customer_id: "int",
+            },
+          },
+        },
+        {
           id: "join-1",
           kind: "join",
           label: "Join",
@@ -34,6 +47,13 @@ describe("validateOutput", () => {
       ],
       edges: [
         {
+          id: "edge-from-join-left",
+          source: "from-orders",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "left",
+        },
+        {
           id: "edge-join-output",
           source: "join-1",
           sourceHandle: "out",
@@ -48,5 +68,17 @@ describe("validateOutput", () => {
     expect(
       result.diagnostics.some(diagnostic => diagnostic.code === "join.missing-input"),
     ).toBe(true);
+  });
+
+  test("returns output.invalid instead of throwing for a missing output id", () => {
+    const document = createSampleDocument();
+
+    expect(() => validateOutput(document, "missing-output")).not.toThrow();
+
+    const result = validateOutput(document, "missing-output");
+    expect(result.outputName).toBe("missing-output");
+    expect(result.diagnostics.some(diagnostic => diagnostic.code === "output.invalid")).toBe(
+      true,
+    );
   });
 });

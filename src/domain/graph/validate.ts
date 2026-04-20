@@ -1,7 +1,6 @@
 import type { Diagnostic } from "../diagnostics/types";
 import type {
   GraphDocument,
-  GraphEdge,
   GraphNode,
   NamedExpression,
 } from "../document/types";
@@ -23,11 +22,16 @@ function orderedReachableNodes(document: GraphDocument, outputId: string) {
     if (visited.has(nodeId)) return;
     visited.add(nodeId);
 
+    const node = nodesById[nodeId];
+    if (!node) {
+      return;
+    }
+
     for (const edge of incomingEdges(document, nodeId)) {
       visit(edge.source);
     }
 
-    ordered.push(nodesById[nodeId]);
+    ordered.push(node);
   }
 
   visit(outputId);
