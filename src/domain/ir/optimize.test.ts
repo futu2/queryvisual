@@ -30,7 +30,11 @@ describe("optimizeOutput", () => {
     const optimized = optimizeOutput(ir);
 
     expect(optimized.kind).toBe("filter");
-    expect(optimized.predicateSql).toContain("AND");
+    expect(optimized.predicateSql).toBe("(total > 0) AND (status = 'paid')");
+    expect(optimized.input.kind).toBe("scan");
+    if (optimized.input.kind === "scan") {
+      expect(optimized.input.tableSql).toBe("sales.orders");
+    }
   });
 });
 
@@ -124,5 +128,229 @@ describe("lowerOutputToIr", () => {
 
     expect(() => lowerOutputToIr(semantic)).not.toThrow();
     expect(lowerOutputToIr(semantic)).toBeNull();
+  });
+
+  test("returns null for cyclic inputs instead of overflowing the stack", () => {
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "cycle" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "where-1",
+          kind: "where",
+          label: "Where",
+          position: { x: 0, y: 0 },
+          data: { predicate: "flag = true" },
+        },
+        {
+          id: "select-1",
+          kind: "select",
+          label: "Select",
+          position: { x: 200, y: 0 },
+          data: { mappings: [{ name: "flag", expression: "flag" }] },
+        },
+        {
+          id: "output-1",
+          kind: "output",
+          label: "Output",
+          position: { x: 400, y: 0 },
+          data: { outputName: "cycle_out" },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-where-select",
+          source: "where-1",
+          sourceHandle: "out",
+          target: "select-1",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-select-where",
+          source: "select-1",
+          sourceHandle: "out",
+          target: "where-1",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-select-output",
+          source: "select-1",
+          sourceHandle: "out",
+          target: "output-1",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const semantic = validateOutput(document, "output-1");
+    expect(semantic.diagnostics).toHaveLength(0);
+    expect(() => lowerOutputToIr(semantic)).not.toThrow();
+    expect(lowerOutputToIr(semantic)).toBeNull();
+  });
+
+  test("successfully lowers graphInput join where aggregation sort and limit nodes", () => {
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "full-lowering" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "input-1",
+          kind: "graphInput",
+          label: "OrdersIn",
+          position: { x: -300, y: 0 },
+          data: {
+            columns: {
+              customer_id: "int",
+              total: "float",
+              flag: "boolean",
+            },
+          },
+        },
+        {
+          id: "table-1",
+          kind: "fromTable",
+          label: "Customers",
+          position: { x: -300, y: 200 },
+          data: {
+            tableRef: { schemaName: "sales", tableName: "customers" },
+            columns: {
+              customer_id: "int",
+              region: "string",
+            },
+          },
+        },
+        {
+          id: "join-1",
+          kind: "join",
+          label: "Join",
+          position: { x: -100, y: 100 },
+          data: {
+            joinType: "inner",
+            predicate: "customer_id = customer_id",
+          },
+        },
+        {
+          id: "where-1",
+          kind: "where",
+          label: "Where",
+          position: { x: 100, y: 100 },
+          data: {
+            predicate: "flag = true",
+          },
+        },
+        {
+          id: "agg-1",
+          kind: "aggregation",
+          label: "Agg",
+          position: { x: 300, y: 100 },
+          data: {
+            groupBy: [{ name: "region", expression: "region" }],
+            aggregates: [{ name: "sum_total", expression: "sum(total)" }],
+          },
+        },
+        {
+          id: "sort-1",
+          kind: "sort",
+          label: "Sort",
+          position: { x: 500, y: 100 },
+          data: {
+            items: [{ expression: "sum_total", direction: "desc" }],
+          },
+        },
+        {
+          id: "limit-1",
+          kind: "limit",
+          label: "Limit",
+          position: { x: 700, y: 100 },
+          data: { count: 10, offset: 5 },
+        },
+        {
+          id: "output-1",
+          kind: "output",
+          label: "Output",
+          position: { x: 900, y: 100 },
+          data: { outputName: "full_out" },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-input-join",
+          source: "input-1",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "left",
+        },
+        {
+          id: "edge-table-join",
+          source: "table-1",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "right",
+        },
+        {
+          id: "edge-join-where",
+          source: "join-1",
+          sourceHandle: "out",
+          target: "where-1",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-where-agg",
+          source: "where-1",
+          sourceHandle: "out",
+          target: "agg-1",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-agg-sort",
+          source: "agg-1",
+          sourceHandle: "out",
+          target: "sort-1",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-sort-limit",
+          source: "sort-1",
+          sourceHandle: "out",
+          target: "limit-1",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-limit-output",
+          source: "limit-1",
+          sourceHandle: "out",
+          target: "output-1",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const semantic = validateOutput(document, "output-1");
+    expect(semantic.diagnostics).toHaveLength(0);
+
+    const lowered = lowerOutputToIr(semantic);
+    expect(lowered?.kind).toBe("limit");
+    if (!lowered || lowered.kind !== "limit") return;
+    expect(lowered.count).toBe(10);
+    expect(lowered.offset).toBe(5);
+    expect(lowered.input.kind).toBe("sort");
+    if (lowered.input.kind !== "sort") return;
+    expect(lowered.input.items[0]?.direction).toBe("desc");
+    expect(lowered.input.input.kind).toBe("aggregate");
+    if (lowered.input.input.kind !== "aggregate") return;
+    expect(lowered.input.input.groupBy[0]?.alias).toBe("region");
+    expect(lowered.input.input.aggregates[0]?.alias).toBe("sum_total");
+    expect(lowered.input.input.input.kind).toBe("filter");
+    if (lowered.input.input.input.kind !== "filter") return;
+    expect(lowered.input.input.input.input.kind).toBe("join");
+    if (lowered.input.input.input.input.kind !== "join") return;
+    expect(lowered.input.input.input.input.joinType).toBe("inner");
+    expect(lowered.input.input.input.input.left.kind).toBe("input");
+    if (lowered.input.input.input.input.left.kind === "input") {
+      expect(lowered.input.input.input.input.left.name).toBe("OrdersIn");
+    }
+    expect(lowered.input.input.input.input.right.kind).toBe("scan");
   });
 });
