@@ -1,4 +1,4 @@
-import type { IRJoinType, IRRelNode } from "../ir/types";
+import type { IRRelNode } from "../ir/types";
 
 interface RenderContext {
   nextAlias: number;
@@ -18,7 +18,7 @@ function allocateAlias(context: RenderContext) {
   return alias;
 }
 
-function renderJoinType(joinType: IRJoinType) {
+function renderJoinType(joinType: string) {
   switch (joinType) {
     case "inner":
       return "INNER";
@@ -28,6 +28,8 @@ function renderJoinType(joinType: IRJoinType) {
       return "RIGHT";
     case "full":
       return "FULL";
+    default:
+      return "INNER";
   }
 }
 

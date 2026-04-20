@@ -1,13 +1,11 @@
 import type { ColumnMap } from "../schema/types";
 
-export type IRJoinType = "inner" | "left" | "right" | "full";
-
 export type IRRelNode =
   | { kind: "input"; name: string; schema: ColumnMap }
   | { kind: "scan"; tableSql: string; schema: ColumnMap }
   | {
       kind: "join";
-      joinType: IRJoinType;
+      joinType: string;
       predicateSql: string;
       left: IRRelNode;
       right: IRRelNode;
