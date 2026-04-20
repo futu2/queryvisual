@@ -329,4 +329,91 @@ describe("validateOutput", () => {
       true,
     );
   });
+
+  test("reports duplicate join-side inputs", () => {
+    const invalid: GraphDocument = {
+      ...createSampleDocument(),
+      nodes: [
+        {
+          id: "left-a",
+          kind: "fromTable",
+          label: "Left A",
+          position: { x: -300, y: 0 },
+          data: {
+            tableRef: { tableName: "left_a" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "left-b",
+          kind: "fromTable",
+          label: "Left B",
+          position: { x: -300, y: 200 },
+          data: {
+            tableRef: { tableName: "left_b" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "right-a",
+          kind: "fromTable",
+          label: "Right A",
+          position: { x: -300, y: 400 },
+          data: {
+            tableRef: { tableName: "right_a" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "join-dup",
+          kind: "join",
+          label: "Join",
+          position: { x: 0, y: 200 },
+          data: { joinType: "inner", predicate: "left_a.id = right_a.id" },
+        },
+        {
+          id: "output-dup-join",
+          kind: "output",
+          label: "Output",
+          position: { x: 200, y: 200 },
+          data: { outputName: "dup_join_input" },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-left-a-join",
+          source: "left-a",
+          sourceHandle: "out",
+          target: "join-dup",
+          targetHandle: "left",
+        },
+        {
+          id: "edge-left-b-join",
+          source: "left-b",
+          sourceHandle: "out",
+          target: "join-dup",
+          targetHandle: "left",
+        },
+        {
+          id: "edge-right-a-join",
+          source: "right-a",
+          sourceHandle: "out",
+          target: "join-dup",
+          targetHandle: "right",
+        },
+        {
+          id: "edge-join-output",
+          source: "join-dup",
+          sourceHandle: "out",
+          target: "output-dup-join",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const result = validateOutput(invalid, "output-dup-join");
+    expect(
+      result.diagnostics.some(diagnostic => diagnostic.code === "join.duplicate-left-input"),
+    ).toBe(true);
+  });
 });

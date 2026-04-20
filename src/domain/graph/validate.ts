@@ -145,8 +145,10 @@ export function validateOutput(
         schemas[node.id] = node.data.columns;
         break;
       case "join": {
-        const left = inputs.find(edge => edge.targetHandle === "left");
-        const right = inputs.find(edge => edge.targetHandle === "right");
+        const leftEdges = inputs.filter(edge => edge.targetHandle === "left");
+        const rightEdges = inputs.filter(edge => edge.targetHandle === "right");
+        const left = leftEdges[0];
+        const right = rightEdges[0];
         if (!left || !right) {
           diagnostics.push(
             diagnostic(
@@ -157,6 +159,24 @@ export function validateOutput(
           );
           schemas[node.id] = {};
           break;
+        }
+        if (leftEdges.length > 1) {
+          diagnostics.push(
+            diagnostic(
+              "join.duplicate-left-input",
+              "Join nodes require exactly one left input.",
+              node.id,
+            ),
+          );
+        }
+        if (rightEdges.length > 1) {
+          diagnostics.push(
+            diagnostic(
+              "join.duplicate-right-input",
+              "Join nodes require exactly one right input.",
+              node.id,
+            ),
+          );
         }
         const leftSchema = schemas[left.source] ?? {};
         const rightSchema = schemas[right.source] ?? {};
