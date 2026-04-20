@@ -6,6 +6,26 @@ export type ExprScope = Record<string, ColumnType>;
 const numericOperators = new Set(["+", "-", "*", "/"]);
 const booleanOperators = new Set(["and", "or"]);
 const comparisonOperators = new Set(["=", "!=", ">", ">=", "<", "<="]);
+const numericTypes = new Set<ColumnType>(["int", "float"]);
+
+function isNumericType(type: ColumnType) {
+  return numericTypes.has(type);
+}
+
+function unifyExpressionTypes(types: ColumnType[]): ColumnType {
+  const nonNullTypes = types.filter(type => type !== "null");
+
+  if (nonNullTypes.length === 0) {
+    return types.length ? "null" : "unknown";
+  }
+
+  if (nonNullTypes.every(isNumericType)) {
+    return nonNullTypes.includes("float") ? "float" : "int";
+  }
+
+  const firstType = nonNullTypes[0];
+  return nonNullTypes.every(type => type === firstType) ? firstType : "unknown";
+}
 
 export function inferExpressionType(expr: Expr, scope: ExprScope): ColumnType {
   switch (expr.kind) {
@@ -29,6 +49,9 @@ export function inferExpressionType(expr: Expr, scope: ExprScope): ColumnType {
       if (numericOperators.has(expr.op)) {
         const left = inferExpressionType(expr.left, scope);
         const right = inferExpressionType(expr.right, scope);
+        if (!isNumericType(left) || !isNumericType(right)) {
+          return "unknown";
+        }
         return left === "float" || right === "float" ? "float" : "int";
       }
       return "unknown";
@@ -40,18 +63,19 @@ export function inferExpressionType(expr: Expr, scope: ExprScope): ColumnType {
         case "avg":
           return "float";
         case "coalesce":
-          return expr.args.length
-            ? inferExpressionType(expr.args[0], scope)
-            : "unknown";
+          return unifyExpressionTypes(
+            expr.args.map(argument => inferExpressionType(argument, scope)),
+          );
         default:
           return "unknown";
       }
     case "case":
-      return expr.branches.length
-        ? inferExpressionType(expr.branches[0].then, scope)
-        : expr.elseExpression
-          ? inferExpressionType(expr.elseExpression, scope)
-          : "unknown";
+      return unifyExpressionTypes([
+        ...expr.branches.map(branch => inferExpressionType(branch.then, scope)),
+        ...(expr.elseExpression
+          ? [inferExpressionType(expr.elseExpression, scope)]
+          : []),
+      ]);
     case "cast":
       return expr.to;
   }

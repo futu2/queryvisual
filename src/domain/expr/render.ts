@@ -17,8 +17,10 @@ export function renderExpressionSql(expr: Expr): string {
       return expr.op === "not"
         ? `(NOT ${renderExpressionSql(expr.expression)})`
         : `(-${renderExpressionSql(expr.expression)})`;
-    case "binary":
-      return `(${renderExpressionSql(expr.left)} ${expr.op.toUpperCase()} ${renderExpressionSql(expr.right)})`;
+    case "binary": {
+      const operator = expr.op === "!=" ? "<>" : expr.op.toUpperCase();
+      return `(${renderExpressionSql(expr.left)} ${operator} ${renderExpressionSql(expr.right)})`;
+    }
     case "call":
       return `${expr.name.toUpperCase()}(${expr.args.map(renderExpressionSql).join(", ")})`;
     case "case":
