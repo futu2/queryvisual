@@ -1,13 +1,15 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useDocumentContext } from "../../app/state/DocumentContext";
 import { downloadDocument, parseDocumentJson } from "./fileIO";
 
 export function DocumentToolbar() {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const { state, dispatch } = useDocumentContext();
 
   return (
     <div className="toolbar-row">
+      {loadError ? <p role="alert">{loadError}</p> : null}
       <button
         type="button"
         className="ghost-button"
@@ -30,11 +32,19 @@ export function DocumentToolbar() {
         onChange={async (event) => {
           const file = event.target.files?.[0];
           if (!file) return;
-          const raw = await file.text();
-          dispatch({
-            type: "replace-document",
-            document: parseDocumentJson(raw),
-          });
+
+          try {
+            const raw = await file.text();
+            dispatch({
+              type: "replace-document",
+              document: parseDocumentJson(raw),
+            });
+            setLoadError(null);
+          } catch {
+            setLoadError("Could not load QueryVisual document.");
+          } finally {
+            event.target.value = "";
+          }
         }}
       />
     </div>
