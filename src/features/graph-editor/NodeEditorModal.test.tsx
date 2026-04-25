@@ -237,6 +237,51 @@ describe("NodeEditorModal", () => {
     ]);
   });
 
+  test("edits aggregation group keys and aggregates independently", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+
+    const node: GraphNode = {
+      id: "agg-orders",
+      kind: "aggregation",
+      label: "Aggregate",
+      position: { x: 0, y: 0 },
+      data: {
+        groupBy: [{ name: "customer_id", expression: "customer_id" }],
+        aggregates: [{ name: "gross_total", expression: "sum(total)" }],
+      },
+    };
+
+    render(<NodeEditorModal node={node} onClose={() => {}} onSave={onSave} />);
+
+    await user.click(screen.getByRole("button", { name: "Add group key" }));
+    await user.type(screen.getByLabelText("Group key name 2"), "status");
+    await user.type(screen.getByLabelText("Group key expression 2"), "status");
+
+    await user.click(
+      screen.getByRole("button", { name: "Duplicate aggregate 1" }),
+    );
+    await user.clear(screen.getByLabelText("Aggregate name 2"));
+    await user.clear(screen.getByLabelText("Aggregate expression 2"));
+    await user.type(screen.getByLabelText("Aggregate name 2"), "order_count");
+    await user.type(
+      screen.getByLabelText("Aggregate expression 2"),
+      "count(order_id)",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalled();
+    expect(onSave.mock.calls[0][0].data.groupBy).toEqual([
+      { name: "customer_id", expression: "customer_id" },
+      { name: "status", expression: "status" },
+    ]);
+    expect(onSave.mock.calls[0][0].data.aggregates).toEqual([
+      { name: "gross_total", expression: "sum(total)" },
+      { name: "order_count", expression: "count(order_id)" },
+    ]);
+  });
+
   test("closes when cancel is clicked", async () => {
     const user = userEvent.setup();
     const onClose = mock();

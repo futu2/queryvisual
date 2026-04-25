@@ -214,6 +214,19 @@ function toEditableNodeDraft(node: GraphNode): EditableNodeDraft {
     };
   }
 
+  if (node.kind === "aggregation") {
+    return {
+      ...node,
+      data: {
+        groupBy: ensureAtLeastOneRow(node.data.groupBy, blankNamedExpression),
+        aggregates: ensureAtLeastOneRow(
+          node.data.aggregates,
+          blankNamedExpression,
+        ),
+      },
+    };
+  }
+
   if (node.kind !== "fromTable") {
     return node;
   }
@@ -242,6 +255,16 @@ export function serializeNodeEditorDraft(draft: EditableNodeDraft): GraphNode {
     };
   }
 
+  if (draft.kind === "aggregation") {
+    return {
+      ...draft,
+      data: {
+        groupBy: sanitizeNamedExpressions(draft.data.groupBy),
+        aggregates: sanitizeNamedExpressions(draft.data.aggregates),
+      },
+    };
+  }
+
   if (draft.kind !== "fromTable") {
     return draft;
   }
@@ -261,11 +284,19 @@ export function serializeNodeEditorDraft(draft: EditableNodeDraft): GraphNode {
   };
 }
 
-function SelectMappingRows({
+function NamedExpressionRows({
   rows,
+  itemName,
+  addButtonLabel,
+  nameLabel,
+  expressionLabel,
   onChange,
 }: {
   rows: NamedExpression[];
+  itemName: string;
+  addButtonLabel: string;
+  nameLabel: (rowNumber: number) => string;
+  expressionLabel: (rowNumber: number) => string;
   onChange: (rows: NamedExpression[]) => void;
 }) {
   return (
@@ -273,7 +304,7 @@ function SelectMappingRows({
       {rows.map((row, index) => (
         <div key={index} className="mapping-row">
           <label>
-            {`Mapping name ${index + 1}`}
+            {nameLabel(index + 1)}
             <input
               value={row.name}
               onChange={(event) => {
@@ -284,7 +315,7 @@ function SelectMappingRows({
             />
           </label>
           <label>
-            Expression
+            {expressionLabel(index + 1)}
             <textarea
               value={row.expression}
               onChange={(event) => {
@@ -295,7 +326,7 @@ function SelectMappingRows({
             />
           </label>
           <RowActionButtons
-            itemName="mapping"
+            itemName={itemName}
             index={index}
             rowCount={rows.length}
             onMoveUp={() => onChange(moveRow(rows, index, -1))}
@@ -312,9 +343,28 @@ function SelectMappingRows({
         className="row-add-button"
         onClick={() => onChange(addRow(rows, blankNamedExpression))}
       >
-        Add mapping
+        {addButtonLabel}
       </button>
     </div>
+  );
+}
+
+function SelectMappingRows({
+  rows,
+  onChange,
+}: {
+  rows: NamedExpression[];
+  onChange: (rows: NamedExpression[]) => void;
+}) {
+  return (
+    <NamedExpressionRows
+      rows={rows}
+      itemName="mapping"
+      addButtonLabel="Add mapping"
+      nameLabel={(rowNumber) => `Mapping name ${rowNumber}`}
+      expressionLabel={() => "Expression"}
+      onChange={onChange}
+    />
   );
 }
 
@@ -354,45 +404,6 @@ function ColumnMapEditor({
                 onChange(
                   Object.fromEntries(nextEntries) as Record<string, ColumnType>,
                 );
-              }}
-            />
-          </label>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function MappingRows({
-  rows,
-  onChange,
-}: {
-  rows: NamedExpression[];
-  onChange: (rows: NamedExpression[]) => void;
-}) {
-  return (
-    <div className="editor-stack">
-      {rows.map((row, index) => (
-        <div key={index} className="mapping-row">
-          <label>
-            {`Mapping name ${index + 1}`}
-            <input
-              value={row.name}
-              onChange={(event) => {
-                const next = [...rows];
-                next[index] = { ...row, name: event.target.value };
-                onChange(next);
-              }}
-            />
-          </label>
-          <label>
-            Expression
-            <textarea
-              value={row.expression}
-              onChange={(event) => {
-                const next = [...rows];
-                next[index] = { ...row, expression: event.target.value };
-                onChange(next);
               }}
             />
           </label>
@@ -477,15 +488,23 @@ export function renderNodeEditor(
       return (
         <>
           <h3>Group By</h3>
-          <MappingRows
+          <NamedExpressionRows
             rows={draft.data.groupBy}
+            itemName="group key"
+            addButtonLabel="Add group key"
+            nameLabel={(rowNumber) => `Group key name ${rowNumber}`}
+            expressionLabel={(rowNumber) => `Group key expression ${rowNumber}`}
             onChange={(rows) =>
               setDraft({ ...draft, data: { ...draft.data, groupBy: rows } })
             }
           />
           <h3>Aggregates</h3>
-          <MappingRows
+          <NamedExpressionRows
             rows={draft.data.aggregates}
+            itemName="aggregate"
+            addButtonLabel="Add aggregate"
+            nameLabel={(rowNumber) => `Aggregate name ${rowNumber}`}
+            expressionLabel={(rowNumber) => `Aggregate expression ${rowNumber}`}
             onChange={(rows) =>
               setDraft({
                 ...draft,
