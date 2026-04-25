@@ -233,7 +233,7 @@ export function validateOutput(
         break;
       }
       case "select": {
-        const input = singleInput(
+        singleInput(
           inputs,
           diagnostics,
           node.id,
@@ -252,7 +252,7 @@ export function validateOutput(
         break;
       }
       case "aggregation": {
-        const input = singleInput(
+        singleInput(
           inputs,
           diagnostics,
           node.id,
