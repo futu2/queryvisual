@@ -161,6 +161,42 @@ body {
   justify-self: start;
 }
 
+.expression-input {
+  display: grid;
+  gap: 10px;
+}
+
+.expression-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.expression-suggestion {
+  border-radius: 999px;
+  padding: 6px 10px;
+  border: 1px solid rgba(31, 29, 26, 0.16);
+  background: rgba(255, 255, 255, 0.92);
+  color: #1f1d1a;
+  font: inherit;
+  cursor: pointer;
+}
+
+.expression-diagnostics {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(161, 73, 41, 0.32);
+  background: rgba(255, 245, 237, 0.9);
+  color: #7a3524;
+  font-size: 13px;
+}
+
+.expression-diagnostic {
+  line-height: 1.25;
+}
+
 @media (max-width: 1024px) {
   .app-shell {
     grid-template-columns: 1fr;
