@@ -13,6 +13,198 @@ describe("validateOutput", () => {
     expect(result.schemas["select-orders"].gross_total).toBe("float");
   });
 
+  test("reports unknown select columns with select.unknown-column and correct field path", () => {
+    const invalid: GraphDocument = {
+      version: 1,
+      metadata: { name: "Unknown Select Column" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "from-1",
+          kind: "fromTable",
+          label: "T",
+          position: { x: -200, y: 0 },
+          data: {
+            tableRef: { tableName: "t" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "select-1",
+          kind: "select",
+          label: "Select",
+          position: { x: 0, y: 0 },
+          data: { mappings: [{ name: "x", expression: "missing" }] },
+        },
+        {
+          id: "output-1",
+          kind: "output",
+          label: "Output",
+          position: { x: 200, y: 0 },
+          data: { outputName: "out" },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-from-select",
+          source: "from-1",
+          sourceHandle: "out",
+          target: "select-1",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-select-output",
+          source: "select-1",
+          sourceHandle: "out",
+          target: "output-1",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const result = validateOutput(invalid, "output-1");
+    const unknown = result.diagnostics.find(diagnostic => diagnostic.code === "select.unknown-column");
+    expect(unknown).toBeDefined();
+    expect(unknown?.ref?.nodeId).toBe("select-1");
+    expect(unknown?.ref?.field).toBe("mappings.0.expression");
+  });
+
+  test("rejects same-node select mapping references as unknown columns (still select.unknown-column)", () => {
+    const invalid: GraphDocument = {
+      version: 1,
+      metadata: { name: "Same Node Reference" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "from-1",
+          kind: "fromTable",
+          label: "T",
+          position: { x: -200, y: 0 },
+          data: {
+            tableRef: { tableName: "t" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "select-1",
+          kind: "select",
+          label: "Select",
+          position: { x: 0, y: 0 },
+          data: {
+            mappings: [
+              { name: "x", expression: "id" },
+              { name: "y", expression: "x" },
+            ],
+          },
+        },
+        {
+          id: "output-1",
+          kind: "output",
+          label: "Output",
+          position: { x: 200, y: 0 },
+          data: { outputName: "out" },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-from-select",
+          source: "from-1",
+          sourceHandle: "out",
+          target: "select-1",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-select-output",
+          source: "select-1",
+          sourceHandle: "out",
+          target: "output-1",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const result = validateOutput(invalid, "output-1");
+    const unknown = result.diagnostics.find(diagnostic => diagnostic.code === "select.unknown-column");
+    expect(unknown).toBeDefined();
+    expect(unknown?.ref?.nodeId).toBe("select-1");
+    expect(unknown?.ref?.field).toBe("mappings.1.expression");
+  });
+
+  test("reports ambiguous bare join references with join.ambiguous-column", () => {
+    const invalid: GraphDocument = {
+      version: 1,
+      metadata: { name: "Ambiguous Join Column" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "from-left",
+          kind: "fromTable",
+          label: "Left",
+          position: { x: -200, y: 0 },
+          data: {
+            tableRef: { tableName: "left_table" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "from-right",
+          kind: "fromTable",
+          label: "Right",
+          position: { x: -200, y: 200 },
+          data: {
+            tableRef: { tableName: "right_table" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "join-1",
+          kind: "join",
+          label: "Join",
+          position: { x: 0, y: 100 },
+          data: { joinType: "inner", predicate: "id = 1" },
+        },
+        {
+          id: "output-1",
+          kind: "output",
+          label: "Output",
+          position: { x: 200, y: 100 },
+          data: { outputName: "out" },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-left-join",
+          source: "from-left",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "left",
+        },
+        {
+          id: "edge-right-join",
+          source: "from-right",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "right",
+        },
+        {
+          id: "edge-join-output",
+          source: "join-1",
+          sourceHandle: "out",
+          target: "output-1",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const result = validateOutput(invalid, "output-1");
+    const ambiguous = result.diagnostics.find(
+      diagnostic => diagnostic.code === "join.ambiguous-column",
+    );
+    expect(ambiguous).toBeDefined();
+    expect(ambiguous?.ref?.nodeId).toBe("join-1");
+    expect(ambiguous?.ref?.field).toBe("predicate");
+  });
+
   test("reports a missing join input", () => {
     const invalid: GraphDocument = {
       ...createSampleDocument(),

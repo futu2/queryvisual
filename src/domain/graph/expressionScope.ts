@@ -3,6 +3,12 @@ import type { ColumnMap, ColumnType } from "../schema/types";
 
 type NodeKind = GraphNode["kind"];
 
+export type BuildExpressionScopeOptions = {
+  // Optional pre-resolved schemas (e.g. from validation) that should be preferred over
+  // the static `resolveNodeSchema` fallback (which returns unknowns for select/aggregation).
+  schemas?: Record<string, ColumnMap>;
+};
+
 export type ExpressionScopeSuggestion = {
   key: string;
   insertText: string;
@@ -139,6 +145,7 @@ function columnSuggestion(key: string, columnType: ColumnType): ExpressionScopeS
 function buildJoinDerivedScope(
   document: GraphDocument,
   joinNodeId: string,
+  options: BuildExpressionScopeOptions,
 ): ExpressionScope {
   const leftEdge = uniqueIncomingEdge(document, joinNodeId, "left");
   const rightEdge = uniqueIncomingEdge(document, joinNodeId, "right");
@@ -147,8 +154,12 @@ function buildJoinDerivedScope(
   const rightUsable = !!(rightEdge && byId[rightEdge.source]);
   if (!leftUsable && !rightUsable) return emptyScope();
 
-  const leftSchema = leftUsable ? resolveNodeSchema(document, leftEdge!.source) : {};
-  const rightSchema = rightUsable ? resolveNodeSchema(document, rightEdge!.source) : {};
+  const leftSchema = leftUsable
+    ? (options.schemas?.[leftEdge!.source] ?? resolveNodeSchema(document, leftEdge!.source))
+    : {};
+  const rightSchema = rightUsable
+    ? (options.schemas?.[rightEdge!.source] ?? resolveNodeSchema(document, rightEdge!.source))
+    : {};
 
   const flatTypes: ColumnMap = {};
   const ambiguousBareNames: Record<string, string[]> = {};
@@ -208,14 +219,18 @@ function resolveEffectiveInputNodeId(
   return null;
 }
 
-export function buildExpressionScope(document: GraphDocument, nodeId: string): ExpressionScope {
+export function buildExpressionScope(
+  document: GraphDocument,
+  nodeId: string,
+  options: BuildExpressionScopeOptions = {},
+): ExpressionScope {
   const node = nodesById(document)[nodeId];
   if (!node) {
     return emptyScope();
   }
 
   if (node.kind === "join") {
-    return buildJoinDerivedScope(document, nodeId);
+    return buildJoinDerivedScope(document, nodeId, options);
   }
 
   // Zero-input nodes should not expose misleading "input." namespaces.
@@ -239,10 +254,10 @@ export function buildExpressionScope(document: GraphDocument, nodeId: string): E
     return emptyScope();
   }
   if (effectiveInputNode.kind === "join") {
-    return buildJoinDerivedScope(document, effectiveInputNode.id);
+    return buildJoinDerivedScope(document, effectiveInputNode.id, options);
   }
 
-  const schema = resolveNodeSchema(document, effectiveInputId);
+  const schema = options.schemas?.[effectiveInputId] ?? resolveNodeSchema(document, effectiveInputId);
 
   const flatTypes: ColumnMap = {};
   const suggestions: ExpressionScopeSuggestion[] = [namespaceSuggestion("input.")];

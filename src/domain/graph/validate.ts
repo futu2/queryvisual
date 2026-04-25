@@ -4,9 +4,10 @@ import type {
   GraphNode,
   NamedExpression,
 } from "../document/types";
-import { inferExpressionType } from "../expr/infer";
-import { parseExpression } from "../expr/parser";
-import type { ColumnMap, ColumnType } from "../schema/types";
+import type { ExpressionAnalysisDiagnosticCode } from "../expr/analyze";
+import { analyzeExpression } from "../expr/analyze";
+import type { ColumnMap } from "../schema/types";
+import { buildExpressionScope } from "./expressionScope";
 import type { SemanticOutput } from "./semantic";
 
 function incomingEdges(document: GraphDocument, nodeId: string) {
@@ -38,10 +39,6 @@ function orderedReachableNodes(document: GraphDocument, outputId: string) {
   return ordered;
 }
 
-function scopeFromSchema(schema: ColumnMap) {
-  return { ...schema };
-}
-
 function diagnostic(
   code: string,
   message: string,
@@ -56,49 +53,66 @@ function diagnostic(
   };
 }
 
-function inferExpressionSafely(
-  expression: string,
-  scope: ColumnMap,
-  diagnostics: Diagnostic[],
-  code: string,
-  message: string,
-  nodeId: string,
-  field?: string,
-) {
-  try {
-    return {
-      type: inferExpressionType(parseExpression(expression), scope),
-      ok: true,
-    };
-  } catch {
-    diagnostics.push(diagnostic(code, message, nodeId, field));
-    return {
-      type: "unknown" as ColumnType,
-      ok: false,
-    };
+const analyzerCodeToNodeSuffix: Record<ExpressionAnalysisDiagnosticCode, string> = {
+  "expr.parse-error": "invalid-expression",
+  "expr.unknown-column": "unknown-column",
+  "expr.ambiguous-column": "ambiguous-column",
+  "expr.non-boolean": "non-boolean",
+};
+
+function pushAnalyzerDiagnostics(params: {
+  diagnostics: Diagnostic[];
+  nodeKind: GraphNode["kind"];
+  nodeId: string;
+  field: string;
+  expression: string;
+  requireBoolean?: boolean;
+  document: GraphDocument;
+  schemaOverrides: Record<string, ColumnMap>;
+}) {
+  const scope = buildExpressionScope(params.document, params.nodeId, {
+    schemas: params.schemaOverrides,
+  });
+  const analysis = analyzeExpression(params.expression, scope, {
+    requireBoolean: params.requireBoolean,
+  });
+
+  for (const diag of analysis.diagnostics) {
+    params.diagnostics.push(
+      diagnostic(
+        `${params.nodeKind}.${analyzerCodeToNodeSuffix[diag.code]}`,
+        diag.message,
+        params.nodeId,
+        params.field,
+      ),
+    );
   }
+
+  return analysis.type;
 }
 
 function mappingsToSchema(
   mappings: NamedExpression[],
-  scope: ColumnMap,
   diagnostics: Diagnostic[],
   nodeId: string,
-  code: string,
+  nodeKind: GraphNode["kind"],
+  fieldPrefix: string,
+  document: GraphDocument,
+  schemaOverrides: Record<string, ColumnMap>,
 ) {
   return Object.fromEntries(
-    mappings.map(mapping => [
-      mapping.name,
-      inferExpressionSafely(
-        mapping.expression,
-        scope,
+    mappings.map((mapping, index) => {
+      const type = pushAnalyzerDiagnostics({
         diagnostics,
-        code,
-        "Mapping expression is invalid.",
+        nodeKind,
         nodeId,
-        mapping.name,
-      ).type,
-    ]),
+        field: `${fieldPrefix}.${index}.expression`,
+        expression: mapping.expression,
+        document,
+        schemaOverrides,
+      });
+      return [mapping.name, type];
+    }),
   );
 }
 
@@ -180,26 +194,16 @@ export function validateOutput(
         }
         const leftSchema = schemas[left.source] ?? {};
         const rightSchema = schemas[right.source] ?? {};
-        const scope = { ...scopeFromSchema(leftSchema), ...scopeFromSchema(rightSchema) };
-        const predicate = inferExpressionSafely(
-          node.data.predicate,
-          scope,
+        pushAnalyzerDiagnostics({
           diagnostics,
-          "join.invalid-expression",
-          "Join predicate is invalid.",
-          node.id,
-          "predicate",
-        );
-        if (predicate.ok && predicate.type !== "boolean") {
-          diagnostics.push(
-            diagnostic(
-              "join.non-boolean",
-              "Join predicate must be boolean.",
-              node.id,
-              "predicate",
-            ),
-          );
-        }
+          nodeKind: "join",
+          nodeId: node.id,
+          field: "predicate",
+          expression: node.data.predicate,
+          requireBoolean: true,
+          document,
+          schemaOverrides: schemas,
+        });
         schemas[node.id] = { ...leftSchema, ...rightSchema };
         break;
       }
@@ -215,27 +219,17 @@ export function validateOutput(
           schemas[node.id] = {};
           break;
         }
-        const inputSchema = schemas[input.source] ?? {};
-        const predicate = inferExpressionSafely(
-          node.data.predicate,
-          inputSchema,
+        pushAnalyzerDiagnostics({
           diagnostics,
-          "where.invalid-expression",
-          "Where predicate is invalid.",
-          node.id,
-          "predicate",
-        );
-        if (predicate.ok && predicate.type !== "boolean") {
-          diagnostics.push(
-            diagnostic(
-              "where.non-boolean",
-              "Where predicate must be boolean.",
-              node.id,
-              "predicate",
-            ),
-          );
-        }
-        schemas[node.id] = inputSchema;
+          nodeKind: "where",
+          nodeId: node.id,
+          field: "predicate",
+          expression: node.data.predicate,
+          requireBoolean: true,
+          document,
+          schemaOverrides: schemas,
+        });
+        schemas[node.id] = schemas[input.source] ?? {};
         break;
       }
       case "select": {
@@ -246,13 +240,14 @@ export function validateOutput(
           "select",
           "Select nodes require one input.",
         );
-        const inputSchema = input ? schemas[input.source] ?? {} : {};
         schemas[node.id] = mappingsToSchema(
           node.data.mappings,
-          inputSchema,
           diagnostics,
           node.id,
-          "select.invalid-expression",
+          "select",
+          "mappings",
+          document,
+          schemas,
         );
         break;
       }
@@ -264,33 +259,61 @@ export function validateOutput(
           "aggregation",
           "Aggregation nodes require one input.",
         );
-        const inputSchema = input ? schemas[input.source] ?? {} : {};
         schemas[node.id] = {
           ...mappingsToSchema(
             node.data.groupBy,
-            inputSchema,
             diagnostics,
             node.id,
-            "aggregation.invalid-expression",
+            "aggregation",
+            "groupBy",
+            document,
+            schemas,
           ),
           ...mappingsToSchema(
             node.data.aggregates,
-            inputSchema,
             diagnostics,
             node.id,
-            "aggregation.invalid-expression",
+            "aggregation",
+            "aggregates",
+            document,
+            schemas,
           ),
         };
         break;
       }
-      case "sort":
+      case "sort": {
+        const input = singleInput(
+          inputs,
+          diagnostics,
+          node.id,
+          "sort",
+          "sort nodes require one input.",
+        );
+        if (!input) {
+          schemas[node.id] = {};
+          break;
+        }
+        for (const [index, item] of node.data.items.entries()) {
+          pushAnalyzerDiagnostics({
+            diagnostics,
+            nodeKind: "sort",
+            nodeId: node.id,
+            field: `items.${index}.expression`,
+            expression: item.expression,
+            document,
+            schemaOverrides: schemas,
+          });
+        }
+        schemas[node.id] = schemas[input.source] ?? {};
+        break;
+      }
       case "limit": {
         const input = singleInput(
           inputs,
           diagnostics,
           node.id,
-          node.kind,
-          `${node.kind} nodes require one input.`,
+          "limit",
+          "limit nodes require one input.",
         );
         if (!input) {
           schemas[node.id] = {};
