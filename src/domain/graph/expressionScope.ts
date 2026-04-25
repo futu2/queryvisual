@@ -117,6 +117,52 @@ function columnSuggestion(key: string, columnType: ColumnType): ExpressionScopeS
   };
 }
 
+function buildJoinDerivedScope(
+  document: GraphDocument,
+  joinNodeId: string,
+): ExpressionScope {
+  const inputs = incomingEdges(document, joinNodeId);
+  const leftEdge = inputs.find(edge => edge.targetHandle === "left") ?? null;
+  const rightEdge = inputs.find(edge => edge.targetHandle === "right") ?? null;
+  const leftSchema = leftEdge ? resolveNodeSchema(document, leftEdge.source) : {};
+  const rightSchema = rightEdge ? resolveNodeSchema(document, rightEdge.source) : {};
+
+  const flatTypes: ColumnMap = {};
+  const ambiguousBareNames: Record<string, string[]> = {};
+  const suggestions: ExpressionScopeSuggestion[] = [];
+
+  if (leftEdge) suggestions.push(namespaceSuggestion("left."));
+  if (rightEdge) suggestions.push(namespaceSuggestion("right."));
+
+  for (const [col, type] of Object.entries(leftSchema)) {
+    const key = `left.${col}`;
+    flatTypes[key] = type;
+    suggestions.push(columnSuggestion(key, type));
+  }
+  for (const [col, type] of Object.entries(rightSchema)) {
+    const key = `right.${col}`;
+    flatTypes[key] = type;
+    suggestions.push(columnSuggestion(key, type));
+  }
+
+  // Add bare names only when unambiguous across the connected sides.
+  const names = new Set<string>([...Object.keys(leftSchema), ...Object.keys(rightSchema)]);
+  for (const name of names) {
+    const inLeft = Object.prototype.hasOwnProperty.call(leftSchema, name);
+    const inRight = Object.prototype.hasOwnProperty.call(rightSchema, name);
+    if (inLeft && inRight) {
+      ambiguousBareNames[name] = [`left.${name}`, `right.${name}`];
+      continue;
+    }
+    const type = (inLeft ? leftSchema[name] : rightSchema[name]) as ColumnType | undefined;
+    if (!type) continue;
+    flatTypes[name] = type;
+    suggestions.push(columnSuggestion(name, type));
+  }
+
+  return { kind: "join", flatTypes, ambiguousBareNames, suggestions };
+}
+
 export function buildExpressionScope(document: GraphDocument, nodeId: string): ExpressionScope {
   const node = nodesById(document)[nodeId];
   if (!node) {
@@ -124,46 +170,7 @@ export function buildExpressionScope(document: GraphDocument, nodeId: string): E
   }
 
   if (node.kind === "join") {
-    const inputs = incomingEdges(document, nodeId);
-    const leftEdge = inputs.find(edge => edge.targetHandle === "left") ?? null;
-    const rightEdge = inputs.find(edge => edge.targetHandle === "right") ?? null;
-    const leftSchema = leftEdge ? resolveNodeSchema(document, leftEdge.source) : {};
-    const rightSchema = rightEdge ? resolveNodeSchema(document, rightEdge.source) : {};
-
-    const flatTypes: ColumnMap = {};
-    const ambiguousBareNames: Record<string, string[]> = {};
-    const suggestions: ExpressionScopeSuggestion[] = [
-      namespaceSuggestion("left."),
-      namespaceSuggestion("right."),
-    ];
-
-    for (const [col, type] of Object.entries(leftSchema)) {
-      const key = `left.${col}`;
-      flatTypes[key] = type;
-      suggestions.push(columnSuggestion(key, type));
-    }
-    for (const [col, type] of Object.entries(rightSchema)) {
-      const key = `right.${col}`;
-      flatTypes[key] = type;
-      suggestions.push(columnSuggestion(key, type));
-    }
-
-    // Add bare names only when unambiguous. Track ambiguous bare names and omit them.
-    const names = new Set<string>([...Object.keys(leftSchema), ...Object.keys(rightSchema)]);
-    for (const name of names) {
-      const inLeft = Object.prototype.hasOwnProperty.call(leftSchema, name);
-      const inRight = Object.prototype.hasOwnProperty.call(rightSchema, name);
-      if (inLeft && inRight) {
-        ambiguousBareNames[name] = [`left.${name}`, `right.${name}`];
-        continue;
-      }
-      const type = (inLeft ? leftSchema[name] : rightSchema[name]) as ColumnType | undefined;
-      if (!type) continue;
-      flatTypes[name] = type;
-      suggestions.push(columnSuggestion(name, type));
-    }
-
-    return { kind: "join", flatTypes, ambiguousBareNames, suggestions };
+    return buildJoinDerivedScope(document, nodeId);
   }
 
   // Zero-input nodes should not expose misleading "input." namespaces.
@@ -176,6 +183,16 @@ export function buildExpressionScope(document: GraphDocument, nodeId: string): E
     // Missing edges should be safe and return an empty scope.
     return { kind: "single", flatTypes: {}, ambiguousBareNames: {}, suggestions: [] };
   }
+
+  const inputNode = nodesById(document)[input.source];
+  if (!inputNode) {
+    return { kind: "single", flatTypes: {}, ambiguousBareNames: {}, suggestions: [] };
+  }
+  // If the upstream node is a join, preserve join ambiguity semantics downstream.
+  if (inputNode.kind === "join") {
+    return buildJoinDerivedScope(document, inputNode.id);
+  }
+
   const schema = resolveNodeSchema(document, input.source);
 
   const flatTypes: ColumnMap = {};

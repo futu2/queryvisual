@@ -15,6 +15,7 @@ describe("buildExpressionScope", () => {
     expect(scope.ambiguousBareNames).toEqual({});
 
     const keys = scope.suggestions.map(s => s.key);
+    expect(keys).toContain("input.");
     expect(keys).toContain("input.total");
     expect(keys).toContain("total");
   });
@@ -80,9 +81,135 @@ describe("buildExpressionScope", () => {
     expect(scope.ambiguousBareNames.id).toEqual(["left.id", "right.id"]);
 
     const keys = scope.suggestions.map(s => s.key);
+    expect(keys).toContain("left.");
+    expect(keys).toContain("right.");
     expect(keys).not.toContain("id");
     expect(keys).toContain("left.id");
     expect(keys).toContain("right.id");
+  });
+
+  test("downstream single-input consumers of a join preserve ambiguity semantics (no reintroduced bare names)", () => {
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "Downstream Join Sample" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "from-left",
+          kind: "fromTable",
+          label: "Left",
+          position: { x: -200, y: 0 },
+          data: {
+            tableRef: { tableName: "left_table" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "from-right",
+          kind: "fromTable",
+          label: "Right",
+          position: { x: -200, y: 200 },
+          data: {
+            tableRef: { tableName: "right_table" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "join-1",
+          kind: "join",
+          label: "Join",
+          position: { x: 0, y: 100 },
+          data: { joinType: "inner", predicate: "left.id = right.id" },
+        },
+        {
+          id: "where-after-join",
+          kind: "where",
+          label: "Where",
+          position: { x: 200, y: 100 },
+          data: { predicate: "left.id = 1" },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-left-join",
+          source: "from-left",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "left",
+        },
+        {
+          id: "edge-right-join",
+          source: "from-right",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "right",
+        },
+        {
+          id: "edge-join-where",
+          source: "join-1",
+          sourceHandle: "out",
+          target: "where-after-join",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const scope = buildExpressionScope(document, "where-after-join");
+
+    expect(scope.kind).toBe("join");
+    expect(scope.flatTypes["left.id"]).toBe("int");
+    expect(scope.flatTypes["right.id"]).toBe("int");
+    expect(scope.flatTypes.id).toBeUndefined();
+    expect(scope.ambiguousBareNames.id).toEqual(["left.id", "right.id"]);
+
+    const keys = scope.suggestions.map(s => s.key);
+    expect(keys).toContain("left.");
+    expect(keys).toContain("right.");
+    expect(keys).not.toContain("input.");
+    expect(keys).not.toContain("id");
+    expect(keys).toContain("left.id");
+    expect(keys).toContain("right.id");
+  });
+
+  test("partially connected joins only suggest the connected side namespace", () => {
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "Partial Join Sample" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "from-left",
+          kind: "fromTable",
+          label: "Left",
+          position: { x: -200, y: 0 },
+          data: {
+            tableRef: { tableName: "left_table" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "join-1",
+          kind: "join",
+          label: "Join",
+          position: { x: 0, y: 100 },
+          data: { joinType: "inner", predicate: "true" },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-left-join",
+          source: "from-left",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "left",
+        },
+      ],
+    };
+
+    const scope = buildExpressionScope(document, "join-1");
+    const keys = scope.suggestions.map(s => s.key);
+    expect(keys).toContain("left.");
+    expect(keys).not.toContain("right.");
   });
 });
 
