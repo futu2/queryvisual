@@ -128,15 +128,20 @@ function buildJoinDerivedScope(
   const inputs = incomingEdges(document, joinNodeId);
   const leftEdge = inputs.find(edge => edge.targetHandle === "left") ?? null;
   const rightEdge = inputs.find(edge => edge.targetHandle === "right") ?? null;
-  const leftSchema = leftEdge ? resolveNodeSchema(document, leftEdge.source) : {};
-  const rightSchema = rightEdge ? resolveNodeSchema(document, rightEdge.source) : {};
+  const byId = nodesById(document);
+  const leftUsable = !!(leftEdge && byId[leftEdge.source]);
+  const rightUsable = !!(rightEdge && byId[rightEdge.source]);
+  if (!leftUsable && !rightUsable) return emptyScope();
+
+  const leftSchema = leftUsable ? resolveNodeSchema(document, leftEdge!.source) : {};
+  const rightSchema = rightUsable ? resolveNodeSchema(document, rightEdge!.source) : {};
 
   const flatTypes: ColumnMap = {};
   const ambiguousBareNames: Record<string, string[]> = {};
   const suggestions: ExpressionScopeSuggestion[] = [];
 
-  if (leftEdge) suggestions.push(namespaceSuggestion("left."));
-  if (rightEdge) suggestions.push(namespaceSuggestion("right."));
+  if (leftUsable) suggestions.push(namespaceSuggestion("left."));
+  if (rightUsable) suggestions.push(namespaceSuggestion("right."));
 
   for (const [col, type] of Object.entries(leftSchema)) {
     const key = `left.${col}`;

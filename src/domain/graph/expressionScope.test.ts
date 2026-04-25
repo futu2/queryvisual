@@ -220,6 +220,60 @@ describe("buildExpressionScope", () => {
     expect(keys).not.toContain("right.");
   });
 
+  test("join nodes with no usable inputs fail safe to an empty scope", () => {
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "Empty Join Sample" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "join-1",
+          kind: "join",
+          label: "Join",
+          position: { x: 0, y: 0 },
+          data: { joinType: "inner", predicate: "true" },
+        },
+      ],
+      edges: [],
+    };
+
+    const scope = buildExpressionScope(document, "join-1");
+    expect(scope.kind).toBe("empty");
+    expect(scope.flatTypes).toEqual({});
+    expect(scope.ambiguousBareNames).toEqual({});
+    expect(scope.suggestions).toEqual([]);
+  });
+
+  test("join edges pointing at missing source nodes do not expose that side namespace and fail safe", () => {
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "Broken Join Edge Sample" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "join-1",
+          kind: "join",
+          label: "Join",
+          position: { x: 0, y: 0 },
+          data: { joinType: "inner", predicate: "true" },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-missing-left",
+          source: "missing-source",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "left",
+        },
+      ],
+    };
+
+    const scope = buildExpressionScope(document, "join-1");
+    expect(scope.kind).toBe("empty");
+    expect(scope.suggestions.map(s => s.key)).not.toContain("left.");
+  });
+
   test("multi-hop downstream nodes preserve join semantics: join -> where -> sort", () => {
     const document: GraphDocument = {
       version: 1,
