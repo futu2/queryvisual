@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { GraphDocument } from "../../domain/document/types";
 import { analyzeExpression } from "../../domain/expr/analyze";
+import type { ExpressionAnalysis } from "../../domain/expr/analyze";
 import { buildExpressionScope } from "../../domain/graph/expressionScope";
 
 type ExpressionInputProps = {
@@ -10,11 +11,18 @@ type ExpressionInputProps = {
   document: GraphDocument;
   nodeId: string;
   multiline?: boolean;
+  requireBoolean?: boolean;
 };
 
 type TokenPrefix = {
   start: number;
   prefix: string;
+};
+
+type TokenBounds = {
+  start: number;
+  end: number;
+  text: string;
 };
 
 function isTokenChar(char: string) {
@@ -30,6 +38,15 @@ function getTokenPrefixAt(value: string, cursor: number): TokenPrefix {
   return { start, prefix: value.slice(start, safeCursor) };
 }
 
+function getTokenBoundsAt(value: string, cursor: number): TokenBounds {
+  const safeCursor = Math.max(0, Math.min(cursor, value.length));
+  let start = safeCursor;
+  while (start > 0 && isTokenChar(value[start - 1]!)) start--;
+  let end = safeCursor;
+  while (end < value.length && isTokenChar(value[end]!)) end++;
+  return { start, end, text: value.slice(start, end) };
+}
+
 export function ExpressionInput({
   label,
   value,
@@ -37,13 +54,19 @@ export function ExpressionInput({
   document,
   nodeId,
   multiline = false,
+  requireBoolean,
 }: ExpressionInputProps) {
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
   const pendingSelection = useRef<{ start: number; end: number } | null>(null);
   const [caret, setCaret] = useState<number>(value.length);
 
   const scope = useMemo(() => buildExpressionScope(document, nodeId), [document, nodeId]);
-  const analysis = useMemo(() => analyzeExpression(value, scope), [value, scope]);
+  const analysis: ExpressionAnalysis = useMemo(() => {
+    if (value.trim() === "") {
+      return { ast: null, type: "unknown", diagnostics: [] };
+    }
+    return analyzeExpression(value, scope, { requireBoolean });
+  }, [value, scope, requireBoolean]);
 
   // Keep caret in sync while typing and while controlled value updates.
   useLayoutEffect(() => {
@@ -113,10 +136,10 @@ export function ExpressionInput({
               onClick={() => {
                 const el = inputRef.current;
                 const cursor = el?.selectionStart ?? caret;
-                const { start, prefix } = getTokenPrefixAt(value, cursor);
-                // Replace only the current token prefix.
+                const { start, end } = getTokenBoundsAt(value, cursor);
+                // Replace the whole token under the caret, not only the prefix.
                 const next =
-                  value.slice(0, start) + sugg.insertText + value.slice(start + prefix.length);
+                  value.slice(0, start) + sugg.insertText + value.slice(end);
                 pendingSelection.current = {
                   start: start + sugg.insertText.length,
                   end: start + sugg.insertText.length,

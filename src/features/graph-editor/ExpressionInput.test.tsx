@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import type { GraphDocument } from "../../domain/document/types";
@@ -103,6 +103,67 @@ describe("ExpressionInput", () => {
     );
   });
 
+  test("inserts suggestion by replacing the whole token under the caret (mid-token)", async () => {
+    const user = userEvent.setup();
+
+    const document: GraphDocument = {
+      ...makeBaseDocument(),
+      nodes: [
+        {
+          id: "in",
+          kind: "graphInput",
+          label: "Input",
+          position: { x: 0, y: 0 },
+          data: { columns: { total: "int" } },
+        },
+        {
+          id: "where",
+          kind: "where",
+          label: "Where",
+          position: { x: 0, y: 0 },
+          data: { predicate: "" },
+        },
+      ],
+      edges: [
+        {
+          id: "e1",
+          source: "in",
+          sourceHandle: "out",
+          target: "where",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    function Harness() {
+      const [value, setValue] = useState("input.totl");
+      return (
+        <ExpressionInput
+          label="Predicate"
+          value={value}
+          onChange={setValue}
+          document={document}
+          nodeId="where"
+        />
+      );
+    }
+
+    render(<Harness />);
+
+    const input = screen.getByLabelText("Predicate") as HTMLInputElement;
+    input.focus();
+    // Place caret mid-token: input.t|otl
+    input.setSelectionRange("input.t".length, "input.t".length);
+    fireEvent.select(input);
+
+    expect(screen.getByRole("button", { name: "Insert input.total" })).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Insert input.total" }));
+    expect((screen.getByLabelText("Predicate") as HTMLInputElement).value).toBe(
+      "input.total",
+    );
+  });
+
   test('suggests join namespaces from scope ("le" -> "left." / "left.id", no ambiguous bare "id")', async () => {
     const user = userEvent.setup();
 
@@ -169,6 +230,96 @@ describe("ExpressionInput", () => {
     expect(screen.getByRole("button", { name: "Insert left." })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Insert left.id" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Insert id" })).toBeNull();
+  });
+
+  test("can require boolean expressions and surfaces non-boolean diagnostics", async () => {
+    const document: GraphDocument = {
+      ...makeBaseDocument(),
+      nodes: [
+        {
+          id: "in",
+          kind: "graphInput",
+          label: "Input",
+          position: { x: 0, y: 0 },
+          data: { columns: { total: "int" } },
+        },
+        {
+          id: "where",
+          kind: "where",
+          label: "Where",
+          position: { x: 0, y: 0 },
+          data: { predicate: "" },
+        },
+      ],
+      edges: [
+        {
+          id: "e1",
+          source: "in",
+          sourceHandle: "out",
+          target: "where",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const onChange = mock();
+    render(
+      <ExpressionInput
+        label="Predicate"
+        value="1"
+        onChange={onChange}
+        document={document}
+        nodeId="where"
+        {...({ requireBoolean: true } as any)}
+      />,
+    );
+
+    expect(screen.getByText("Predicate must be boolean.")).toBeTruthy();
+  });
+
+  test("does not show diagnostics for an empty/pristine expression", async () => {
+    const document: GraphDocument = {
+      ...makeBaseDocument(),
+      nodes: [
+        {
+          id: "in",
+          kind: "graphInput",
+          label: "Input",
+          position: { x: 0, y: 0 },
+          data: { columns: { total: "int" } },
+        },
+        {
+          id: "where",
+          kind: "where",
+          label: "Where",
+          position: { x: 0, y: 0 },
+          data: { predicate: "" },
+        },
+      ],
+      edges: [
+        {
+          id: "e1",
+          source: "in",
+          sourceHandle: "out",
+          target: "where",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const onChange = mock();
+    render(
+      <ExpressionInput
+        label="Predicate"
+        value=""
+        onChange={onChange}
+        document={document}
+        nodeId="where"
+      />,
+    );
+
+    expect(screen.queryByLabelText("Diagnostics")).toBeNull();
+    expect(screen.queryByText("Expression could not be parsed.")).toBeNull();
   });
 
   test("renders inline diagnostics for invalid expressions", async () => {
