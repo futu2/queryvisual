@@ -228,7 +228,7 @@ describe("lowerOutputToIr", () => {
           position: { x: -100, y: 100 },
           data: {
             joinType: "inner",
-            predicate: "customer_id = customer_id",
+            predicate: "left.customer_id = right.customer_id",
           },
         },
         {

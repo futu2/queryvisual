@@ -3,6 +3,7 @@ import type { GraphDocument } from "../../domain/document/types";
 import { analyzeExpression } from "../../domain/expr/analyze";
 import type { ExpressionAnalysis } from "../../domain/expr/analyze";
 import { buildExpressionScope } from "../../domain/graph/expressionScope";
+import type { ColumnMap } from "../../domain/schema/types";
 
 type ExpressionInputProps = {
   label: string;
@@ -10,6 +11,7 @@ type ExpressionInputProps = {
   onChange: (value: string) => void;
   document: GraphDocument;
   nodeId: string;
+  schemaOverrides?: Record<string, ColumnMap>;
   multiline?: boolean;
   requireBoolean?: boolean;
 };
@@ -53,6 +55,7 @@ export function ExpressionInput({
   onChange,
   document,
   nodeId,
+  schemaOverrides,
   multiline = false,
   requireBoolean,
 }: ExpressionInputProps) {
@@ -60,7 +63,10 @@ export function ExpressionInput({
   const pendingSelection = useRef<{ start: number; end: number } | null>(null);
   const [caret, setCaret] = useState<number>(value.length);
 
-  const scope = useMemo(() => buildExpressionScope(document, nodeId), [document, nodeId]);
+  const scope = useMemo(
+    () => buildExpressionScope(document, nodeId, { schemas: schemaOverrides }),
+    [document, nodeId, schemaOverrides],
+  );
   const analysis: ExpressionAnalysis = useMemo(() => {
     return analyzeExpression(value, scope, { requireBoolean });
   }, [value, scope, requireBoolean]);

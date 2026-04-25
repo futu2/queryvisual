@@ -1,5 +1,7 @@
+import { useMemo } from "react";
 import type { GraphNode } from "../../domain/document/types";
 import { useDocumentContext } from "../../app/state/DocumentContext";
+import { inferNodeSchemas } from "../../domain/graph/inferSchemas";
 import {
   renderNodeEditor,
   serializeNodeEditorDraft,
@@ -20,6 +22,11 @@ export function NodeEditorModal({
   } = useDocumentContext();
   const { draft, setDraft } = useEditableNode(node);
 
+  const schemaOverrides = useMemo(
+    () => inferNodeSchemas(document, node.id),
+    [document, node.id],
+  );
+
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
       <div
@@ -36,7 +43,7 @@ export function NodeEditorModal({
         </header>
 
         <section className="modal-body">
-          {renderNodeEditor(draft, setDraft, document)}
+          {renderNodeEditor(draft, setDraft, document, schemaOverrides)}
         </section>
 
         <footer className="modal-footer">

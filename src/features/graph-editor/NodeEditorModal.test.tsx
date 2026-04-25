@@ -568,4 +568,61 @@ describe("NodeEditorModal", () => {
     expect(await screen.findByLabelText("Suggestions")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Insert left.order_id" })).toBeTruthy();
   });
+
+  test("uses inferred upstream schemas for downstream predicate checks even without an output node", () => {
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "Schema inference parity" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "in",
+          kind: "graphInput",
+          label: "Input",
+          position: { x: 0, y: 0 },
+          data: { columns: { total: "int" } },
+        },
+        {
+          id: "select-1",
+          kind: "select",
+          label: "Select",
+          position: { x: 0, y: 0 },
+          data: {
+            mappings: [
+              // This expression is boolean, so downstream predicates should accept it.
+              { name: "is_positive", expression: "total > 0" },
+            ],
+          },
+        },
+        {
+          id: "where-1",
+          kind: "where",
+          label: "Where",
+          position: { x: 0, y: 0 },
+          data: { predicate: "is_positive" },
+        },
+      ],
+      edges: [
+        {
+          id: "e-in-select",
+          source: "in",
+          sourceHandle: "out",
+          target: "select-1",
+          targetHandle: "in",
+        },
+        {
+          id: "e-select-where",
+          source: "select-1",
+          sourceHandle: "out",
+          target: "where-1",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const whereNode = document.nodes.find((node) => node.id === "where-1") as GraphNode;
+    renderModal({ node: whereNode, document });
+
+    expect(screen.queryByText("Predicate must be boolean.")).toBeNull();
+  });
 });

@@ -298,6 +298,7 @@ function NamedExpressionRows({
   expressionLabel,
   document,
   nodeId,
+  schemaOverrides,
   onChange,
 }: {
   rows: NamedExpression[];
@@ -307,6 +308,7 @@ function NamedExpressionRows({
   expressionLabel: (rowNumber: number) => string;
   document: GraphDocument;
   nodeId: string;
+  schemaOverrides?: Record<string, ColumnMap>;
   onChange: (rows: NamedExpression[]) => void;
 }) {
   return (
@@ -329,6 +331,7 @@ function NamedExpressionRows({
             value={row.expression}
             document={document}
             nodeId={nodeId}
+            schemaOverrides={schemaOverrides}
             multiline
             onChange={(expression) => {
               const next = [...rows];
@@ -364,11 +367,13 @@ function SelectMappingRows({
   rows,
   document,
   nodeId,
+  schemaOverrides,
   onChange,
 }: {
   rows: NamedExpression[];
   document: GraphDocument;
   nodeId: string;
+  schemaOverrides?: Record<string, ColumnMap>;
   onChange: (rows: NamedExpression[]) => void;
 }) {
   return (
@@ -380,6 +385,7 @@ function SelectMappingRows({
       expressionLabel={() => "Expression"}
       document={document}
       nodeId={nodeId}
+      schemaOverrides={schemaOverrides}
       onChange={onChange}
     />
   );
@@ -446,6 +452,7 @@ export function renderNodeEditor(
   draft: EditableNodeDraft,
   setDraft: (node: EditableNodeDraft) => void,
   document: GraphDocument,
+  schemaOverrides?: Record<string, ColumnMap>,
 ) {
   switch (draft.kind) {
     case "fromTable":
@@ -488,6 +495,7 @@ export function renderNodeEditor(
           value={draft.data.predicate}
           document={document}
           nodeId={draft.id}
+          schemaOverrides={schemaOverrides}
           multiline
           requireBoolean
           onChange={(predicate) =>
@@ -501,6 +509,7 @@ export function renderNodeEditor(
           rows={draft.data.mappings}
           document={document}
           nodeId={draft.id}
+          schemaOverrides={schemaOverrides}
           onChange={(rows) =>
             setDraft({ ...draft, data: { mappings: rows } })
           }
@@ -518,6 +527,7 @@ export function renderNodeEditor(
             expressionLabel={(rowNumber) => `Group key expression ${rowNumber}`}
             document={document}
             nodeId={draft.id}
+            schemaOverrides={schemaOverrides}
             onChange={(rows) =>
               setDraft({ ...draft, data: { ...draft.data, groupBy: rows } })
             }
@@ -531,6 +541,7 @@ export function renderNodeEditor(
             expressionLabel={(rowNumber) => `Aggregate expression ${rowNumber}`}
             document={document}
             nodeId={draft.id}
+            schemaOverrides={schemaOverrides}
             onChange={(rows) =>
               setDraft({
                 ...draft,
@@ -550,6 +561,7 @@ export function renderNodeEditor(
                 value={item.expression}
                 document={document}
                 nodeId={draft.id}
+                schemaOverrides={schemaOverrides}
                 onChange={(expression) => {
                   const next = [...draft.data.items];
                   next[index] = { ...item, expression };
@@ -657,6 +669,7 @@ export function renderNodeEditor(
             value={draft.data.predicate}
             document={document}
             nodeId={draft.id}
+            schemaOverrides={schemaOverrides}
             multiline
             requireBoolean
             onChange={(predicate) =>
