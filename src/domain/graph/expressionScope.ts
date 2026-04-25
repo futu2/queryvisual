@@ -6,7 +6,7 @@ export type ExpressionScopeSuggestion = {
   insertText: string;
   label: string;
   detail: string;
-  type: string;
+  type: "namespace" | "column";
 };
 
 export type ExpressionScope = {
@@ -166,8 +166,17 @@ export function buildExpressionScope(document: GraphDocument, nodeId: string): E
     return { kind: "join", flatTypes, ambiguousBareNames, suggestions };
   }
 
+  // Zero-input nodes should not expose misleading "input." namespaces.
+  if (node.kind === "graphInput" || node.kind === "fromTable") {
+    return { kind: "single", flatTypes: {}, ambiguousBareNames: {}, suggestions: [] };
+  }
+
   const input = singleInputEdge(document, nodeId);
-  const schema = input ? resolveNodeSchema(document, input.source) : {};
+  if (!input) {
+    // Missing edges should be safe and return an empty scope.
+    return { kind: "single", flatTypes: {}, ambiguousBareNames: {}, suggestions: [] };
+  }
+  const schema = resolveNodeSchema(document, input.source);
 
   const flatTypes: ColumnMap = {};
   const suggestions: ExpressionScopeSuggestion[] = [namespaceSuggestion("input.")];

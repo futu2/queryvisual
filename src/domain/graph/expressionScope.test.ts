@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createSampleDocument } from "../document/sample";
 import type { GraphDocument } from "../document/types";
-import { buildExpressionScope } from "./expressionScope";
+import { buildExpressionScope, resolveNodeSchema } from "./expressionScope";
 
 describe("buildExpressionScope", () => {
   test("single-input scope exposes input.<col> and bare names for single-input nodes", () => {
@@ -86,3 +86,191 @@ describe("buildExpressionScope", () => {
   });
 });
 
+describe("resolveNodeSchema", () => {
+  test("returns an empty schema for missing nodes (safe)", () => {
+    const document = createSampleDocument();
+
+    expect(() => resolveNodeSchema(document, "missing-node")).not.toThrow();
+    expect(resolveNodeSchema(document, "missing-node")).toEqual({});
+  });
+
+  test("forwards schemas through where/sort/limit/output and returns unknowns for select/aggregation outputs", () => {
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "Schema Forwarding Sample" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "from-t",
+          kind: "fromTable",
+          label: "T",
+          position: { x: -200, y: 0 },
+          data: {
+            tableRef: { tableName: "t" },
+            columns: { id: "int", total: "float" },
+          },
+        },
+        {
+          id: "where-1",
+          kind: "where",
+          label: "Where",
+          position: { x: 0, y: 0 },
+          data: { predicate: "total > 0" },
+        },
+        {
+          id: "sort-1",
+          kind: "sort",
+          label: "Sort",
+          position: { x: 200, y: 0 },
+          data: { items: [{ expression: "total", direction: "desc" }] },
+        },
+        {
+          id: "limit-1",
+          kind: "limit",
+          label: "Limit",
+          position: { x: 400, y: 0 },
+          data: { count: 10, offset: null },
+        },
+        {
+          id: "output-1",
+          kind: "output",
+          label: "Output",
+          position: { x: 600, y: 0 },
+          data: { outputName: "out" },
+        },
+        {
+          id: "select-1",
+          kind: "select",
+          label: "Select",
+          position: { x: 0, y: 200 },
+          data: { mappings: [{ name: "x", expression: "total" }] },
+        },
+        {
+          id: "aggregation-1",
+          kind: "aggregation",
+          label: "Agg",
+          position: { x: 200, y: 200 },
+          data: {
+            groupBy: [{ name: "g", expression: "id" }],
+            aggregates: [{ name: "cnt", expression: "count(1)" }],
+          },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-from-where",
+          source: "from-t",
+          sourceHandle: "out",
+          target: "where-1",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-where-sort",
+          source: "where-1",
+          sourceHandle: "out",
+          target: "sort-1",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-sort-limit",
+          source: "sort-1",
+          sourceHandle: "out",
+          target: "limit-1",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-limit-output",
+          source: "limit-1",
+          sourceHandle: "out",
+          target: "output-1",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-from-select",
+          source: "from-t",
+          sourceHandle: "out",
+          target: "select-1",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-from-aggregation",
+          source: "from-t",
+          sourceHandle: "out",
+          target: "aggregation-1",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    expect(resolveNodeSchema(document, "where-1")).toEqual({ id: "int", total: "float" });
+    expect(resolveNodeSchema(document, "sort-1")).toEqual({ id: "int", total: "float" });
+    expect(resolveNodeSchema(document, "limit-1")).toEqual({ id: "int", total: "float" });
+    expect(resolveNodeSchema(document, "output-1")).toEqual({ id: "int", total: "float" });
+
+    expect(resolveNodeSchema(document, "select-1")).toEqual({ x: "unknown" });
+    expect(resolveNodeSchema(document, "aggregation-1")).toEqual({ g: "unknown", cnt: "unknown" });
+  });
+});
+
+describe("namespace suggestions", () => {
+  test("does not suggest input. for zero-input source nodes like fromTable/graphInput", () => {
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "Zero Input Sample" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "from-t",
+          kind: "fromTable",
+          label: "T",
+          position: { x: 0, y: 0 },
+          data: {
+            tableRef: { tableName: "t" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "graph-in",
+          kind: "graphInput",
+          label: "Input",
+          position: { x: 0, y: 200 },
+          data: {
+            columns: { id: "int" },
+          },
+        },
+      ],
+      edges: [],
+    };
+
+    const fromScope = buildExpressionScope(document, "from-t");
+    const graphInputScope = buildExpressionScope(document, "graph-in");
+
+    expect(fromScope.flatTypes).toEqual({});
+    expect(fromScope.suggestions.map(s => s.key)).not.toContain("input.");
+
+    expect(graphInputScope.flatTypes).toEqual({});
+    expect(graphInputScope.suggestions.map(s => s.key)).not.toContain("input.");
+  });
+
+  test("returns an empty scope for single-input nodes with missing edges (safe)", () => {
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "Missing Edge Sample" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "where-1",
+          kind: "where",
+          label: "Where",
+          position: { x: 0, y: 0 },
+          data: { predicate: "id = 1" },
+        },
+      ],
+      edges: [],
+    };
+
+    const scope = buildExpressionScope(document, "where-1");
+    expect(scope.flatTypes).toEqual({});
+    expect(scope.suggestions).toEqual([]);
+  });
+});
