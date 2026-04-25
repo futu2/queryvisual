@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import type {
+  GraphDocument,
   GraphNode,
   NamedExpression,
   SortItem,
 } from "../../domain/document/types";
 import type { ColumnMap, ColumnType, TableRef } from "../../domain/schema/types";
+import { ExpressionInput } from "./ExpressionInput";
 
 type FieldRow = {
   name: string;
@@ -293,6 +295,8 @@ function NamedExpressionRows({
   addButtonLabel,
   nameLabel,
   expressionLabel,
+  document,
+  nodeId,
   onChange,
 }: {
   rows: NamedExpression[];
@@ -300,6 +304,8 @@ function NamedExpressionRows({
   addButtonLabel: string;
   nameLabel: (rowNumber: number) => string;
   expressionLabel: (rowNumber: number) => string;
+  document: GraphDocument;
+  nodeId: string;
   onChange: (rows: NamedExpression[]) => void;
 }) {
   return (
@@ -317,17 +323,18 @@ function NamedExpressionRows({
               }}
             />
           </label>
-          <label>
-            {expressionLabel(index + 1)}
-            <textarea
-              value={row.expression}
-              onChange={(event) => {
-                const next = [...rows];
-                next[index] = { ...row, expression: event.target.value };
-                onChange(next);
-              }}
-            />
-          </label>
+          <ExpressionInput
+            label={expressionLabel(index + 1)}
+            value={row.expression}
+            document={document}
+            nodeId={nodeId}
+            multiline
+            onChange={(expression) => {
+              const next = [...rows];
+              next[index] = { ...row, expression };
+              onChange(next);
+            }}
+          />
           <RowActionButtons
             itemName={itemName}
             index={index}
@@ -354,9 +361,13 @@ function NamedExpressionRows({
 
 function SelectMappingRows({
   rows,
+  document,
+  nodeId,
   onChange,
 }: {
   rows: NamedExpression[];
+  document: GraphDocument;
+  nodeId: string;
   onChange: (rows: NamedExpression[]) => void;
 }) {
   return (
@@ -366,6 +377,8 @@ function SelectMappingRows({
       addButtonLabel="Add mapping"
       nameLabel={(rowNumber) => `Mapping name ${rowNumber}`}
       expressionLabel={() => "Expression"}
+      document={document}
+      nodeId={nodeId}
       onChange={onChange}
     />
   );
@@ -431,6 +444,7 @@ export function useEditableNode(node: GraphNode) {
 export function renderNodeEditor(
   draft: EditableNodeDraft,
   setDraft: (node: EditableNodeDraft) => void,
+  document: GraphDocument,
 ) {
   switch (draft.kind) {
     case "fromTable":
@@ -468,20 +482,24 @@ export function renderNodeEditor(
       );
     case "where":
       return (
-        <label>
-          Predicate
-          <textarea
-            value={draft.data.predicate}
-            onChange={(event) =>
-              setDraft({ ...draft, data: { predicate: event.target.value } })
-            }
-          />
-        </label>
+        <ExpressionInput
+          label="Predicate"
+          value={draft.data.predicate}
+          document={document}
+          nodeId={draft.id}
+          multiline
+          requireBoolean
+          onChange={(predicate) =>
+            setDraft({ ...draft, data: { predicate } })
+          }
+        />
       );
     case "select":
       return (
         <SelectMappingRows
           rows={draft.data.mappings}
+          document={document}
+          nodeId={draft.id}
           onChange={(rows) =>
             setDraft({ ...draft, data: { mappings: rows } })
           }
@@ -497,6 +515,8 @@ export function renderNodeEditor(
             addButtonLabel="Add group key"
             nameLabel={(rowNumber) => `Group key name ${rowNumber}`}
             expressionLabel={(rowNumber) => `Group key expression ${rowNumber}`}
+            document={document}
+            nodeId={draft.id}
             onChange={(rows) =>
               setDraft({ ...draft, data: { ...draft.data, groupBy: rows } })
             }
@@ -508,6 +528,8 @@ export function renderNodeEditor(
             addButtonLabel="Add aggregate"
             nameLabel={(rowNumber) => `Aggregate name ${rowNumber}`}
             expressionLabel={(rowNumber) => `Aggregate expression ${rowNumber}`}
+            document={document}
+            nodeId={draft.id}
             onChange={(rows) =>
               setDraft({
                 ...draft,
@@ -522,17 +544,17 @@ export function renderNodeEditor(
         <div className="editor-stack">
           {draft.data.items.map((item: SortItem, index: number) => (
             <div key={index} className="mapping-row">
-              <label>
-                Expression
-                <input
-                  value={item.expression}
-                  onChange={(event) => {
-                    const next = [...draft.data.items];
-                    next[index] = { ...item, expression: event.target.value };
-                    setDraft({ ...draft, data: { items: next } });
-                  }}
-                />
-              </label>
+              <ExpressionInput
+                label="Expression"
+                value={item.expression}
+                document={document}
+                nodeId={draft.id}
+                onChange={(expression) => {
+                  const next = [...draft.data.items];
+                  next[index] = { ...item, expression };
+                  setDraft({ ...draft, data: { items: next } });
+                }}
+              />
               <label>
                 Direction
                 <select
@@ -629,18 +651,20 @@ export function renderNodeEditor(
               <option value="full">full</option>
             </select>
           </label>
-          <label>
-            Predicate
-            <textarea
-              value={draft.data.predicate}
-              onChange={(event) =>
-                setDraft({
-                  ...draft,
-                  data: { ...draft.data, predicate: event.target.value },
-                })
-              }
-            />
-          </label>
+          <ExpressionInput
+            label="Predicate"
+            value={draft.data.predicate}
+            document={document}
+            nodeId={draft.id}
+            multiline
+            requireBoolean
+            onChange={(predicate) =>
+              setDraft({
+                ...draft,
+                data: { ...draft.data, predicate },
+              })
+            }
+          />
         </>
       );
     case "graphInput":

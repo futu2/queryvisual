@@ -1,4 +1,5 @@
 import type { GraphNode } from "../../domain/document/types";
+import { useDocumentContext } from "../../app/state/DocumentContext";
 import {
   renderNodeEditor,
   serializeNodeEditorDraft,
@@ -14,6 +15,9 @@ export function NodeEditorModal({
   onClose: () => void;
   onSave: (node: GraphNode) => void;
 }) {
+  const {
+    state: { document },
+  } = useDocumentContext();
   const { draft, setDraft } = useEditableNode(node);
 
   return (
@@ -32,7 +36,7 @@ export function NodeEditorModal({
         </header>
 
         <section className="modal-body">
-          {renderNodeEditor(draft, setDraft)}
+          {renderNodeEditor(draft, setDraft, document)}
         </section>
 
         <footer className="modal-footer">

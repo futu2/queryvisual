@@ -1,10 +1,38 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import userEvent from "@testing-library/user-event";
 import { cleanup, render, screen } from "@testing-library/react";
+import type { GraphDocument } from "../../domain/document/types";
 import type { GraphNode } from "../../domain/document/types";
+import { DocumentProvider } from "../../app/state/DocumentContext";
 import { NodeEditorModal } from "./NodeEditorModal";
 
 afterEach(cleanup);
+
+function renderModal({
+  node,
+  document,
+  onClose = () => {},
+  onSave = () => {},
+}: {
+  node: GraphNode;
+  document?: GraphDocument;
+  onClose?: () => void;
+  onSave?: (node: GraphNode) => void;
+}) {
+  const fallbackDocument: GraphDocument = {
+    version: 1,
+    metadata: { name: "Test document" },
+    viewport: { x: 0, y: 0, zoom: 1 },
+    nodes: [node],
+    edges: [],
+  };
+
+  return render(
+    <DocumentProvider initialDocument={document ?? fallbackDocument}>
+      <NodeEditorModal node={node} onClose={onClose} onSave={onSave} />
+    </DocumentProvider>,
+  );
+}
 
 describe("NodeEditorModal", () => {
   test("saves updated select mappings", async () => {
@@ -21,7 +49,7 @@ describe("NodeEditorModal", () => {
       },
     };
 
-    render(<NodeEditorModal node={node} onClose={() => {}} onSave={onSave} />);
+    renderModal({ node, onSave });
 
     await user.clear(screen.getByLabelText("Mapping name 1"));
     await user.type(screen.getByLabelText("Mapping name 1"), "net_total");
@@ -48,7 +76,7 @@ describe("NodeEditorModal", () => {
       },
     };
 
-    render(<NodeEditorModal node={node} onClose={() => {}} onSave={onSave} />);
+    renderModal({ node, onSave });
 
     await user.click(screen.getByRole("button", { name: "Duplicate mapping 1" }));
     await user.click(screen.getByRole("button", { name: "Move mapping 3 up" }));
@@ -76,7 +104,7 @@ describe("NodeEditorModal", () => {
       },
     };
 
-    render(<NodeEditorModal node={node} onClose={() => {}} onSave={onSave} />);
+    renderModal({ node, onSave });
 
     await user.type(screen.getByLabelText("Mapping name 1"), "gross_total");
     await user.click(screen.getByRole("button", { name: "Add mapping" }));
@@ -101,7 +129,7 @@ describe("NodeEditorModal", () => {
       },
     };
 
-    render(<NodeEditorModal node={node} onClose={() => {}} onSave={() => {}} />);
+    renderModal({ node });
 
     await user.click(screen.getByRole("button", { name: "Remove mapping 1" }));
 
@@ -128,7 +156,7 @@ describe("NodeEditorModal", () => {
       },
     };
 
-    render(<NodeEditorModal node={node} onClose={() => {}} onSave={onSave} />);
+    renderModal({ node, onSave });
 
     await user.click(screen.getByRole("button", { name: "Add field" }));
     await user.type(screen.getByLabelText("Field name 2"), "status");
@@ -160,7 +188,7 @@ describe("NodeEditorModal", () => {
       },
     };
 
-    render(<NodeEditorModal node={node} onClose={() => {}} onSave={() => {}} />);
+    renderModal({ node });
 
     await user.click(screen.getByRole("button", { name: "Remove field 1" }));
 
@@ -190,7 +218,7 @@ describe("NodeEditorModal", () => {
       },
     };
 
-    render(<NodeEditorModal node={node} onClose={() => {}} onSave={onSave} />);
+    renderModal({ node, onSave });
 
     await user.click(screen.getByRole("button", { name: "Duplicate field 2" }));
     await user.clear(screen.getByLabelText("Field name 3"));
@@ -224,7 +252,7 @@ describe("NodeEditorModal", () => {
       },
     };
 
-    render(<NodeEditorModal node={node} onClose={() => {}} onSave={onSave} />);
+    renderModal({ node, onSave });
 
     await user.click(screen.getByRole("button", { name: "Duplicate field 1" }));
     await user.selectOptions(screen.getByLabelText("Field type 2"), "float");
@@ -252,7 +280,7 @@ describe("NodeEditorModal", () => {
       },
     };
 
-    render(<NodeEditorModal node={node} onClose={() => {}} onSave={onSave} />);
+    renderModal({ node, onSave });
 
     await user.click(screen.getByRole("button", { name: "Add group key" }));
     await user.type(screen.getByLabelText("Group key name 2"), "status");
@@ -297,7 +325,7 @@ describe("NodeEditorModal", () => {
       },
     };
 
-    render(<NodeEditorModal node={node} onClose={() => {}} onSave={onSave} />);
+    renderModal({ node, onSave });
 
     await user.click(screen.getByRole("button", { name: "Add group key" }));
     await user.click(screen.getByRole("button", { name: "Add aggregate" }));
@@ -326,7 +354,7 @@ describe("NodeEditorModal", () => {
       },
     };
 
-    render(<NodeEditorModal node={node} onClose={onClose} onSave={() => {}} />);
+    renderModal({ node, onClose });
 
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
@@ -347,7 +375,7 @@ describe("NodeEditorModal", () => {
       },
     };
 
-    render(<NodeEditorModal node={node} onClose={() => {}} onSave={onSave} />);
+    renderModal({ node, onSave });
 
     await user.clear(screen.getByLabelText("Offset"));
     expect((screen.getByLabelText("Offset") as HTMLInputElement).value).toBe("");
@@ -369,24 +397,32 @@ describe("NodeEditorModal", () => {
       },
     };
 
-    const { rerender } = render(
-      <NodeEditorModal node={baseNode} onClose={() => {}} onSave={() => {}} />,
-    );
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "Test document" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [baseNode],
+      edges: [],
+    };
+
+    const { rerender } = renderModal({ node: baseNode, document });
 
     await user.clear(screen.getByLabelText("Mapping name 1"));
     await user.type(screen.getByLabelText("Mapping name 1"), "net_total");
 
     rerender(
-      <NodeEditorModal
-        node={{
-          ...baseNode,
-          data: {
-            mappings: [{ name: "gross_total", expression: "total" }],
-          },
-        }}
-        onClose={() => {}}
-        onSave={() => {}}
-      />,
+      <DocumentProvider initialDocument={document}>
+        <NodeEditorModal
+          node={{
+            ...baseNode,
+            data: {
+              mappings: [{ name: "gross_total", expression: "total" }],
+            },
+          }}
+          onClose={() => {}}
+          onSave={() => {}}
+        />
+      </DocumentProvider>,
     );
 
     expect((screen.getByLabelText("Mapping name 1") as HTMLInputElement).value).toBe(
@@ -408,9 +444,7 @@ describe("NodeEditorModal", () => {
       },
     };
 
-    const { container } = render(
-      <NodeEditorModal node={node} onClose={onClose} onSave={onSave} />,
-    );
+    const { container } = renderModal({ node, onClose, onSave });
 
     const backdrop = container.querySelector(".modal-backdrop");
     if (!backdrop) {
@@ -421,5 +455,93 @@ describe("NodeEditorModal", () => {
 
     expect(onClose).toHaveBeenCalled();
     expect(onSave).not.toHaveBeenCalled();
+  });
+
+  test("shows inline predicate diagnostics and still saves while invalid", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+
+    const node: GraphNode = {
+      id: "where-invalid",
+      kind: "where",
+      label: "Where",
+      position: { x: 0, y: 0 },
+      data: { predicate: "" },
+    };
+
+    renderModal({ node, onSave });
+
+    await user.type(screen.getByLabelText("Predicate"), "1");
+
+    expect(await screen.findByText("Predicate must be boolean.")).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalled();
+    expect(onSave.mock.calls[0][0].data.predicate).toBe("1");
+  });
+
+  test("shows join scope suggestions inside the modal", async () => {
+    const user = userEvent.setup();
+
+    const left: GraphNode = {
+      id: "left-orders",
+      kind: "fromTable",
+      label: "Orders",
+      position: { x: 0, y: 0 },
+      data: {
+        tableRef: { tableName: "orders" },
+        columns: { order_id: "int" },
+      },
+    };
+
+    const right: GraphNode = {
+      id: "right-customers",
+      kind: "fromTable",
+      label: "Customers",
+      position: { x: 0, y: 0 },
+      data: {
+        tableRef: { tableName: "customers" },
+        columns: { customer_id: "int" },
+      },
+    };
+
+    const join: GraphNode = {
+      id: "join-orders-customers",
+      kind: "join",
+      label: "Join",
+      position: { x: 0, y: 0 },
+      data: { joinType: "inner", predicate: "" },
+    };
+
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "Join document" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [left, right, join],
+      edges: [
+        {
+          id: "edge-left",
+          source: left.id,
+          sourceHandle: "out",
+          target: join.id,
+          targetHandle: "left",
+        },
+        {
+          id: "edge-right",
+          source: right.id,
+          sourceHandle: "out",
+          target: join.id,
+          targetHandle: "right",
+        },
+      ],
+    };
+
+    renderModal({ node: join, document });
+
+    await user.type(screen.getByLabelText("Predicate"), "left.");
+
+    expect(await screen.findByLabelText("Suggestions")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Insert left.order_id" })).toBeTruthy();
   });
 });
