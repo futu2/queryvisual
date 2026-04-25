@@ -136,6 +136,7 @@ function singleInput(
         nodeId,
       ),
     );
+    return null;
   }
   return inEdges[0];
 }
@@ -192,6 +193,11 @@ export function validateOutput(
             ),
           );
         }
+        // Wiring must be unambiguous before we can build a meaningful expression scope.
+        if (leftEdges.length !== 1 || rightEdges.length !== 1) {
+          schemas[node.id] = {};
+          break;
+        }
         const leftSchema = schemas[left.source] ?? {};
         const rightSchema = schemas[right.source] ?? {};
         pushAnalyzerDiagnostics({
@@ -233,13 +239,17 @@ export function validateOutput(
         break;
       }
       case "select": {
-        singleInput(
+        const input = singleInput(
           inputs,
           diagnostics,
           node.id,
           "select",
           "Select nodes require one input.",
         );
+        if (!input) {
+          schemas[node.id] = {};
+          break;
+        }
         schemas[node.id] = mappingsToSchema(
           node.data.mappings,
           diagnostics,
@@ -252,13 +262,17 @@ export function validateOutput(
         break;
       }
       case "aggregation": {
-        singleInput(
+        const input = singleInput(
           inputs,
           diagnostics,
           node.id,
           "aggregation",
           "Aggregation nodes require one input.",
         );
+        if (!input) {
+          schemas[node.id] = {};
+          break;
+        }
         schemas[node.id] = {
           ...mappingsToSchema(
             node.data.groupBy,

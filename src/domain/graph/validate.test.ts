@@ -450,6 +450,10 @@ describe("validateOutput", () => {
     expect(result.diagnostics.some(diagnostic => diagnostic.code === "where.duplicate-input")).toBe(
       true,
     );
+    // Structural diagnostics should stand alone; do not leak analyzer errors when wiring is invalid.
+    expect(result.diagnostics.some(diagnostic => diagnostic.code === "where.unknown-column")).toBe(
+      false,
+    );
   });
 
   test("reports non-boolean join predicates", () => {
@@ -607,5 +611,65 @@ describe("validateOutput", () => {
     expect(
       result.diagnostics.some(diagnostic => diagnostic.code === "join.duplicate-left-input"),
     ).toBe(true);
+    // Structural diagnostics should stand alone; do not leak analyzer errors when wiring is invalid.
+    expect(result.diagnostics.some(diagnostic => diagnostic.code === "join.unknown-column")).toBe(
+      false,
+    );
+  });
+
+  test("uses correct field path refs for sort item expressions", () => {
+    const invalid: GraphDocument = {
+      version: 1,
+      metadata: { name: "Sort Field Refs" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "from-1",
+          kind: "fromTable",
+          label: "T",
+          position: { x: -200, y: 0 },
+          data: {
+            tableRef: { tableName: "t" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "sort-1",
+          kind: "sort",
+          label: "Sort",
+          position: { x: 0, y: 0 },
+          data: { items: [{ expression: "(", direction: "asc" }] },
+        },
+        {
+          id: "output-1",
+          kind: "output",
+          label: "Output",
+          position: { x: 200, y: 0 },
+          data: { outputName: "out" },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-from-sort",
+          source: "from-1",
+          sourceHandle: "out",
+          target: "sort-1",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-sort-output",
+          source: "sort-1",
+          sourceHandle: "out",
+          target: "output-1",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const result = validateOutput(invalid, "output-1");
+    const diag = result.diagnostics.find(d => d.code === "sort.invalid-expression");
+    expect(diag).toBeDefined();
+    expect(diag?.ref?.nodeId).toBe("sort-1");
+    expect(diag?.ref?.field).toBe("items.0.expression");
   });
 });
