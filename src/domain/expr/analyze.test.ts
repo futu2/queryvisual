@@ -8,6 +8,8 @@ function singleScope(): ExpressionScope {
     flatTypes: {
       "input.total": "float",
       total: "float",
+      "input.status": "string",
+      status: "string",
     },
     ambiguousBareNames: {},
     suggestions: [],
@@ -28,22 +30,32 @@ function joinScope(): ExpressionScope {
   };
 }
 
+function emptyScope(): ExpressionScope {
+  return {
+    kind: "empty",
+    flatTypes: {},
+    ambiguousBareNames: {},
+    suggestions: [],
+  };
+}
+
 describe("analyzeExpression", () => {
   test("reports unknown bare column reference in a single scope", () => {
     const result = analyzeExpression("missing", singleScope());
 
     expect(result.diagnostics).toHaveLength(1);
-    expect(result.diagnostics[0]?.code).toBe("unknown_column");
+    expect(result.diagnostics[0]?.code).toBe("expr.unknown-column");
     expect(result.diagnostics[0]?.message).toBe(
       'Unknown column "missing" in input scope.',
     );
+    expect(result.type).toBe("unknown");
   });
 
   test("reports ambiguous bare join column reference", () => {
     const result = analyzeExpression("id = 1", joinScope());
 
     expect(result.diagnostics).toHaveLength(1);
-    expect(result.diagnostics[0]?.code).toBe("ambiguous_column");
+    expect(result.diagnostics[0]?.code).toBe("expr.ambiguous-column");
     expect(result.diagnostics[0]?.message).toBe(
       'Ambiguous column "id"; use left.id or right.id.',
     );
@@ -62,7 +74,9 @@ describe("analyzeExpression", () => {
     const result = analyzeExpression("1 $ 2", singleScope());
 
     expect(result.diagnostics).toHaveLength(1);
-    expect(result.diagnostics[0]?.code).toBe("parse_error");
+    expect(result.diagnostics[0]?.code).toBe("expr.parse-error");
+    expect(result.diagnostics[0]?.message).toBe("Invalid expression.");
+    expect(result.type).toBe("unknown");
   });
 
   test("requireBoolean reports predicate not boolean", () => {
@@ -71,8 +85,27 @@ describe("analyzeExpression", () => {
     });
 
     expect(result.diagnostics).toHaveLength(1);
-    expect(result.diagnostics[0]?.code).toBe("predicate_not_boolean");
-    expect(result.diagnostics[0]?.message).toBe("Predicate must be boolean.");
+    expect(result.diagnostics[0]?.code).toBe("expr.non-boolean");
+    expect(result.type).toBe("int");
+  });
+
+  test("unknown column messages use the empty-scope wording for empty scopes", () => {
+    const result = analyzeExpression("missing", emptyScope());
+
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]?.code).toBe("expr.unknown-column");
+    expect(result.diagnostics[0]?.message).toBe(
+      'Unknown column "missing" in scope.',
+    );
+  });
+
+  test("requireBoolean still fails when inferred type is unknown and there are no other diagnostics", () => {
+    const result = analyzeExpression("total + status", singleScope(), {
+      requireBoolean: true,
+    });
+
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]?.code).toBe("expr.non-boolean");
+    expect(result.type).toBe("unknown");
   });
 });
-

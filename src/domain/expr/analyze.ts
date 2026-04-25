@@ -8,24 +8,24 @@ export type AnalyzeExpressionOptions = {
   requireBoolean?: boolean;
 };
 
-export type ExpressionDiagnosticCode =
-  | "parse_error"
-  | "unknown_column"
-  | "ambiguous_column"
-  | "predicate_not_boolean";
+export type ExpressionAnalysisDiagnosticCode =
+  | "expr.parse-error"
+  | "expr.unknown-column"
+  | "expr.ambiguous-column"
+  | "expr.non-boolean";
 
-export type ExpressionDiagnostic = {
-  code: ExpressionDiagnosticCode;
+export type ExpressionAnalysisDiagnostic = {
+  code: ExpressionAnalysisDiagnosticCode;
   message: string;
   // Optional structured fields for future UI/UX use.
   column?: string;
   alternatives?: string[];
 };
 
-export type AnalyzeExpressionResult = {
+export type ExpressionAnalysis = {
   ast: Expr | null;
-  type: ColumnType | null;
-  diagnostics: ExpressionDiagnostic[];
+  type: ColumnType;
+  diagnostics: ExpressionAnalysisDiagnostic[];
 };
 
 function collectColumnPaths(expr: Expr, out: string[][]) {
@@ -62,6 +62,9 @@ function unknownColumnMessage(scope: ExpressionScope, name: string) {
   if (scope.kind === "join") {
     return `Unknown column "${name}" in join scope.`;
   }
+  if (scope.kind === "empty") {
+    return `Unknown column "${name}" in scope.`;
+  }
   return `Unknown column "${name}" in input scope.`;
 }
 
@@ -76,20 +79,19 @@ export function analyzeExpression(
   expression: string,
   scope: ExpressionScope,
   options: AnalyzeExpressionOptions = {},
-): AnalyzeExpressionResult {
+): ExpressionAnalysis {
   let ast: Expr;
   try {
     ast = parseExpression(expression);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
     return {
       ast: null,
-      type: null,
-      diagnostics: [{ code: "parse_error", message }],
+      type: "unknown",
+      diagnostics: [{ code: "expr.parse-error", message: "Invalid expression." }],
     };
   }
 
-  const diagnostics: ExpressionDiagnostic[] = [];
+  const diagnostics: ExpressionAnalysisDiagnostic[] = [];
 
   const columnPaths: string[][] = [];
   collectColumnPaths(ast, columnPaths);
@@ -103,7 +105,7 @@ export function analyzeExpression(
       const alternatives = scope.ambiguousBareNames[bare];
       if (alternatives) {
         diagnostics.push({
-          code: "ambiguous_column",
+          code: "expr.ambiguous-column",
           message: ambiguousColumnMessage(bare, alternatives),
           column: bare,
           alternatives,
@@ -113,7 +115,7 @@ export function analyzeExpression(
     }
 
     diagnostics.push({
-      code: "unknown_column",
+      code: "expr.unknown-column",
       message: unknownColumnMessage(scope, key),
       column: key,
     });
@@ -121,13 +123,12 @@ export function analyzeExpression(
 
   const type = inferExpressionType(ast, scope.flatTypes);
 
-  if (options.requireBoolean && type !== "boolean" && type !== "unknown") {
+  if (options.requireBoolean && diagnostics.length === 0 && type !== "boolean") {
     diagnostics.push({
-      code: "predicate_not_boolean",
+      code: "expr.non-boolean",
       message: "Predicate must be boolean.",
     });
   }
 
   return { ast, type, diagnostics };
 }
-
