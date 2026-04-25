@@ -1,5 +1,9 @@
 import type { GraphNode } from "../../domain/document/types";
-import { renderNodeEditor, useEditableNode } from "./nodeEditors";
+import {
+  renderNodeEditor,
+  serializeNodeEditorDraft,
+  useEditableNode,
+} from "./nodeEditors";
 
 export function NodeEditorModal({
   node,
@@ -42,7 +46,7 @@ export function NodeEditorModal({
           <button
             type="button"
             className="solid-button"
-            onClick={() => onSave(draft)}
+            onClick={() => onSave(serializeNodeEditorDraft(draft))}
           >
             Save
           </button>

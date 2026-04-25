@@ -31,6 +31,95 @@ describe("NodeEditorModal", () => {
     expect(onSave.mock.calls[0][0].data.mappings[0].name).toBe("net_total");
   });
 
+  test("adds fromTable field rows and strips blank placeholders on save", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+
+    const node: GraphNode = {
+      id: "from-orders",
+      kind: "fromTable",
+      label: "Orders",
+      position: { x: 0, y: 0 },
+      data: {
+        tableRef: { schemaName: "sales", tableName: "orders" },
+        columns: { order_id: "int" },
+      },
+    };
+
+    render(<NodeEditorModal node={node} onClose={() => {}} onSave={onSave} />);
+
+    await user.click(screen.getByRole("button", { name: "Add field" }));
+    await user.type(screen.getByLabelText("Field name 2"), "status");
+    await user.selectOptions(screen.getByLabelText("Field type 2"), "string");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalled();
+    expect(onSave.mock.calls[0][0].data.columns).toEqual({
+      order_id: "int",
+      status: "string",
+    });
+  });
+
+  test("keeps one blank fromTable field row when removing the last row", async () => {
+    const user = userEvent.setup();
+
+    const node: GraphNode = {
+      id: "from-orders",
+      kind: "fromTable",
+      label: "Orders",
+      position: { x: 0, y: 0 },
+      data: {
+        tableRef: { tableName: "orders" },
+        columns: { order_id: "int" },
+      },
+    };
+
+    render(<NodeEditorModal node={node} onClose={() => {}} onSave={() => {}} />);
+
+    await user.click(screen.getByRole("button", { name: "Remove field 1" }));
+
+    expect((screen.getByLabelText("Field name 1") as HTMLInputElement).value).toBe(
+      "",
+    );
+    expect((screen.getByLabelText("Field type 1") as HTMLSelectElement).value).toBe(
+      "string",
+    );
+  });
+
+  test("duplicates and reorders fromTable field rows before save", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+
+    const node: GraphNode = {
+      id: "from-orders",
+      kind: "fromTable",
+      label: "Orders",
+      position: { x: 0, y: 0 },
+      data: {
+        tableRef: { tableName: "orders" },
+        columns: {
+          order_id: "int",
+          status: "string",
+        },
+      },
+    };
+
+    render(<NodeEditorModal node={node} onClose={() => {}} onSave={onSave} />);
+
+    await user.click(screen.getByRole("button", { name: "Duplicate field 2" }));
+    await user.clear(screen.getByLabelText("Field name 3"));
+    await user.type(screen.getByLabelText("Field name 3"), "customer_id");
+    await user.click(screen.getByRole("button", { name: "Move field 3 up" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalled();
+    expect(Object.entries(onSave.mock.calls[0][0].data.columns)).toEqual([
+      ["order_id", "int"],
+      ["customer_id", "string"],
+      ["status", "string"],
+    ]);
+  });
+
   test("closes when cancel is clicked", async () => {
     const user = userEvent.setup();
     const onClose = mock();

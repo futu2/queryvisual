@@ -4,7 +4,230 @@ import type {
   NamedExpression,
   SortItem,
 } from "../../domain/document/types";
-import type { ColumnMap, ColumnType } from "../../domain/schema/types";
+import type { ColumnMap, ColumnType, TableRef } from "../../domain/schema/types";
+
+type FieldRow = {
+  name: string;
+  type: ColumnType;
+};
+
+type FromTableNode = Extract<GraphNode, { kind: "fromTable" }>;
+
+type FromTableEditorDraft = Omit<FromTableNode, "data"> & {
+  data: {
+    tableRef: TableRef;
+    fieldRows: FieldRow[];
+  };
+};
+
+type EditableNodeDraft =
+  | Exclude<GraphNode, FromTableNode>
+  | FromTableEditorDraft;
+
+const columnTypes: ColumnType[] = [
+  "boolean",
+  "int",
+  "float",
+  "string",
+  "date",
+  "timestamp",
+  "null",
+  "unknown",
+];
+
+function blankFieldRow(): FieldRow {
+  return { name: "", type: "string" };
+}
+
+function ensureAtLeastOneRow<T>(rows: T[], createBlank: () => T) {
+  return rows.length > 0 ? rows : [createBlank()];
+}
+
+function moveRow<T>(rows: T[], index: number, direction: -1 | 1) {
+  const targetIndex = index + direction;
+  if (targetIndex < 0 || targetIndex >= rows.length) {
+    return rows;
+  }
+
+  const next = [...rows];
+  [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+  return next;
+}
+
+function duplicateRow<T>(rows: T[], index: number, cloneRow: (row: T) => T) {
+  if (!rows[index]) {
+    return rows;
+  }
+
+  return [
+    ...rows.slice(0, index + 1),
+    cloneRow(rows[index]),
+    ...rows.slice(index + 1),
+  ];
+}
+
+function removeRow<T>(rows: T[], index: number, createBlank: () => T) {
+  const next = rows.filter((_, rowIndex) => rowIndex !== index);
+  return ensureAtLeastOneRow(next, createBlank);
+}
+
+function RowActionButtons({
+  itemName,
+  index,
+  rowCount,
+  onMoveUp,
+  onMoveDown,
+  onDuplicate,
+  onRemove,
+}: {
+  itemName: string;
+  index: number;
+  rowCount: number;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onDuplicate: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="row-editor-actions">
+      <button
+        type="button"
+        className="row-action-button"
+        aria-label={`Move ${itemName} ${index + 1} up`}
+        disabled={index === 0}
+        onClick={onMoveUp}
+      >
+        Up
+      </button>
+      <button
+        type="button"
+        className="row-action-button"
+        aria-label={`Move ${itemName} ${index + 1} down`}
+        disabled={index === rowCount - 1}
+        onClick={onMoveDown}
+      >
+        Down
+      </button>
+      <button
+        type="button"
+        className="row-action-button"
+        aria-label={`Duplicate ${itemName} ${index + 1}`}
+        onClick={onDuplicate}
+      >
+        Duplicate
+      </button>
+      <button
+        type="button"
+        className="row-action-button"
+        aria-label={`Remove ${itemName} ${index + 1}`}
+        onClick={onRemove}
+      >
+        Remove
+      </button>
+    </div>
+  );
+}
+
+function FromTableFieldRows({
+  rows,
+  onChange,
+}: {
+  rows: FieldRow[];
+  onChange: (rows: FieldRow[]) => void;
+}) {
+  return (
+    <div className="editor-stack">
+      {rows.map((row, index) => (
+        <div key={index} className="mapping-row">
+          <label>
+            {`Field name ${index + 1}`}
+            <input
+              value={row.name}
+              onChange={(event) => {
+                const next = [...rows];
+                next[index] = { ...row, name: event.target.value };
+                onChange(next);
+              }}
+            />
+          </label>
+          <label>
+            {`Field type ${index + 1}`}
+            <select
+              value={row.type}
+              onChange={(event) => {
+                const next = [...rows];
+                next[index] = { ...row, type: event.target.value as ColumnType };
+                onChange(next);
+              }}
+            >
+              {columnTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </label>
+          <RowActionButtons
+            itemName="field"
+            index={index}
+            rowCount={rows.length}
+            onMoveUp={() => onChange(moveRow(rows, index, -1))}
+            onMoveDown={() => onChange(moveRow(rows, index, 1))}
+            onDuplicate={() => onChange(duplicateRow(rows, index, (item) => ({ ...item })))}
+            onRemove={() => onChange(removeRow(rows, index, blankFieldRow))}
+          />
+        </div>
+      ))}
+
+      <button
+        type="button"
+        className="row-add-button"
+        onClick={() => onChange([...rows, blankFieldRow()])}
+      >
+        Add field
+      </button>
+    </div>
+  );
+}
+
+function toEditableNodeDraft(node: GraphNode): EditableNodeDraft {
+  if (node.kind !== "fromTable") {
+    return node;
+  }
+
+  const fieldRows = ensureAtLeastOneRow(
+    Object.entries(node.data.columns).map(([name, type]) => ({ name, type })),
+    blankFieldRow,
+  );
+
+  return {
+    ...node,
+    data: {
+      tableRef: node.data.tableRef,
+      fieldRows,
+    },
+  };
+}
+
+export function serializeNodeEditorDraft(draft: EditableNodeDraft): GraphNode {
+  if (draft.kind !== "fromTable") {
+    return draft;
+  }
+
+  const columns = Object.fromEntries(
+    draft.data.fieldRows
+      .filter((row) => row.name.trim() !== "")
+      .map((row) => [row.name, row.type]),
+  ) as ColumnMap;
+
+  return {
+    ...draft,
+    data: {
+      tableRef: draft.data.tableRef,
+      columns,
+    },
+  };
+}
 
 function ColumnMapEditor({
   columns,
@@ -91,18 +314,20 @@ function MappingRows({
 }
 
 export function useEditableNode(node: GraphNode) {
-  const [draft, setDraft] = useState<GraphNode>(node);
+  const [draft, setDraft] = useState<EditableNodeDraft>(() =>
+    toEditableNodeDraft(node),
+  );
 
   useEffect(() => {
-    setDraft(node);
+    setDraft(toEditableNodeDraft(node));
   }, [node.id]);
 
   return { draft, setDraft };
 }
 
 export function renderNodeEditor(
-  draft: GraphNode,
-  setDraft: (node: GraphNode) => void,
+  draft: EditableNodeDraft,
+  setDraft: (node: EditableNodeDraft) => void,
 ) {
   switch (draft.kind) {
     case "fromTable":
@@ -130,10 +355,10 @@ export function renderNodeEditor(
               }}
             />
           </label>
-          <ColumnMapEditor
-            columns={draft.data.columns}
-            onChange={(columns) =>
-              setDraft({ ...draft, data: { ...draft.data, columns } })
+          <FromTableFieldRows
+            rows={draft.data.fieldRows}
+            onChange={(fieldRows) =>
+              setDraft({ ...draft, data: { ...draft.data, fieldRows } })
             }
           />
         </>
