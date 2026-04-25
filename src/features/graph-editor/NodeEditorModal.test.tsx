@@ -88,6 +88,31 @@ describe("NodeEditorModal", () => {
     ]);
   });
 
+  test("keeps one blank select mapping row when removing the last row", async () => {
+    const user = userEvent.setup();
+
+    const node: GraphNode = {
+      id: "select-orders",
+      kind: "select",
+      label: "Project",
+      position: { x: 0, y: 0 },
+      data: {
+        mappings: [{ name: "gross_total", expression: "total" }],
+      },
+    };
+
+    render(<NodeEditorModal node={node} onClose={() => {}} onSave={() => {}} />);
+
+    await user.click(screen.getByRole("button", { name: "Remove mapping 1" }));
+
+    expect((screen.getByLabelText("Mapping name 1") as HTMLInputElement).value).toBe(
+      "",
+    );
+    expect((screen.getByLabelText("Expression") as HTMLTextAreaElement).value).toBe(
+      "",
+    );
+  });
+
   test("adds fromTable field rows and strips blank placeholders on save", async () => {
     const user = userEvent.setup();
     const onSave = mock();
