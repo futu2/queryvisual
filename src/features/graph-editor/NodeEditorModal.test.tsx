@@ -51,6 +51,10 @@ describe("NodeEditorModal", () => {
     await user.click(screen.getByRole("button", { name: "Add field" }));
     await user.type(screen.getByLabelText("Field name 2"), "status");
     await user.selectOptions(screen.getByLabelText("Field type 2"), "string");
+    await user.click(screen.getByRole("button", { name: "Add field" }));
+    expect((screen.getByLabelText("Field name 3") as HTMLInputElement).value).toBe(
+      "",
+    );
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(onSave).toHaveBeenCalled();
