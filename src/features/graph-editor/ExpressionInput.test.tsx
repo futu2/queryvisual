@@ -3,7 +3,31 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import type { GraphDocument } from "../../domain/document/types";
-import { ExpressionInput } from "./ExpressionInput";
+
+// Scope suggestions have a contract: `key` is a stable identifier, while `insertText`
+// is the completion text. The real scope builder currently sets them equal, so this
+// test file intentionally breaks that equality to ensure ExpressionInput filters by
+// `insertText` rather than `key`.
+const realExpressionScope = await import("../../domain/graph/expressionScope");
+const realBuildExpressionScope = realExpressionScope.buildExpressionScope;
+
+mock.module("../../domain/graph/expressionScope", () => ({
+  ...realExpressionScope,
+  buildExpressionScope: (
+    ...args: Parameters<typeof realExpressionScope.buildExpressionScope>
+  ) => {
+    const scope = realBuildExpressionScope(...args);
+    return {
+      ...scope,
+      suggestions: scope.suggestions.map((sugg) => ({
+        ...sugg,
+        key: `stable:${sugg.key}`,
+      })),
+    };
+  },
+}));
+
+const { ExpressionInput } = await import("./ExpressionInput");
 
 afterEach(cleanup);
 

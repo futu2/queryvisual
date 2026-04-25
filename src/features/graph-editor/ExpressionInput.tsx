@@ -69,7 +69,7 @@ export function ExpressionInput({
   const token = useMemo(() => getTokenPrefixAt(value, caret), [value, caret]);
   const suggestions = useMemo(() => {
     if (token.prefix.trim() === "") return [];
-    return scope.suggestions.filter((sugg) => sugg.key.startsWith(token.prefix));
+    return scope.suggestions.filter((sugg) => sugg.insertText.startsWith(token.prefix));
   }, [scope.suggestions, token.prefix]);
 
   function updateCaretFromTarget(target: HTMLInputElement | HTMLTextAreaElement) {
