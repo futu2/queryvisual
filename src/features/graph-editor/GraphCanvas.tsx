@@ -4,11 +4,17 @@ import {
   MiniMap,
   ReactFlow,
   type Connection,
+  type NodeChange,
   type NodeMouseHandler,
 } from "@xyflow/react";
+import { useEffect, useMemo, useState } from "react";
 import { useDocumentContext } from "../../app/state/DocumentContext";
 import type { Diagnostic } from "../../domain/diagnostics/types";
-import { toFlowEdges, toFlowNodes } from "./flowAdapter";
+import {
+  toFlowEdges,
+  toFlowNodes,
+  type FlowNodeRuntime,
+} from "./flowAdapter";
 import { QueryNode } from "./nodes/QueryNode";
 
 const nodeTypes = {
@@ -17,12 +23,37 @@ const nodeTypes = {
 
 export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
   const { state, dispatch } = useDocumentContext();
-  const nodes = toFlowNodes(
-    state.document,
-    diagnostics,
-    state.selectedNodeId,
+  const [nodeRuntimeById, setNodeRuntimeById] = useState<
+    Record<string, FlowNodeRuntime>
+  >({});
+
+  useEffect(() => {
+    const liveNodeIds = new Set(state.document.nodes.map((node) => node.id));
+
+    setNodeRuntimeById((current) => {
+      const nextEntries = Object.entries(current).filter(([nodeId]) =>
+        liveNodeIds.has(nodeId),
+      );
+
+      if (nextEntries.length === Object.keys(current).length) {
+        return current;
+      }
+
+      return Object.fromEntries(nextEntries);
+    });
+  }, [state.document.nodes]);
+
+  const nodes = useMemo(
+    () =>
+      toFlowNodes(
+        state.document,
+        diagnostics,
+        state.selectedNodeId,
+        nodeRuntimeById,
+      ),
+    [diagnostics, nodeRuntimeById, state.document, state.selectedNodeId],
   );
-  const edges = toFlowEdges(state.document);
+  const edges = useMemo(() => toFlowEdges(state.document), [state.document]);
 
   const onConnect = (connection: Connection) => {
     if (
@@ -54,12 +85,36 @@ export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
     }
   };
 
-  const syncNodePosition: NodeMouseHandler = (_, node) => {
-    dispatch({
-      type: "set-node-position",
-      nodeId: node.id,
-      position: node.position,
-    });
+  const onNodesChange = (changes: NodeChange[]) => {
+    let runtimeChanged = false;
+    const runtimeUpdates: Record<string, FlowNodeRuntime> = {};
+
+    for (const change of changes) {
+      if (change.type === "dimensions" && change.dimensions) {
+        runtimeChanged = true;
+        runtimeUpdates[change.id] = {
+          ...(runtimeUpdates[change.id] ?? nodeRuntimeById[change.id]),
+          measured: change.dimensions,
+        };
+      }
+
+      if (change.type === "position" && change.position) {
+        dispatch({
+          type: "set-node-position",
+          nodeId: change.id,
+          position: change.position,
+        });
+      }
+    }
+
+    if (!runtimeChanged) {
+      return;
+    }
+
+    setNodeRuntimeById((current) => ({
+      ...current,
+      ...runtimeUpdates,
+    }));
   };
 
   return (
@@ -75,8 +130,7 @@ export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
           dispatch({ type: "select-node", nodeId: null });
           dispatch({ type: "open-node-editor", nodeId: null });
         }}
-        onNodeDrag={syncNodePosition}
-        onNodeDragStop={syncNodePosition}
+        onNodesChange={onNodesChange}
         onViewportChange={(viewport) => dispatch({ type: "set-viewport", viewport })}
       >
         <Background />

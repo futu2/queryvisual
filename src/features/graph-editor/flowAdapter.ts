@@ -7,12 +7,24 @@ export interface FlowNodeData {
   diagnostics: Diagnostic[];
 }
 
+export interface FlowNodeRuntime {
+  measured?: {
+    width: number;
+    height: number;
+  };
+  width?: number;
+  height?: number;
+  dragging?: boolean;
+}
+
 export function toFlowNodes(
   document: GraphDocument,
   diagnostics: Diagnostic[],
   selectedNodeId: string | null,
+  runtimeByNodeId: Record<string, FlowNodeRuntime> = {},
 ): Array<Node<FlowNodeData>> {
   return document.nodes.map((node) => ({
+    ...runtimeByNodeId[node.id],
     id: node.id,
     type: "queryNode",
     position: node.position,

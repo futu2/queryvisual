@@ -39,7 +39,7 @@ afterEach(() => {
 });
 
 describe("GraphCanvas", () => {
-  test("updates node position continuously during drag", () => {
+  test("updates node position from React Flow node changes during drag", () => {
     render(
       <DocumentProvider initialDocument={createSampleDocument()}>
         <GraphCanvas diagnostics={[]} />
@@ -49,18 +49,69 @@ describe("GraphCanvas", () => {
 
     expect(screen.getByTestId("from-orders-position").textContent).toBe("120,140");
 
-    const onNodeDrag = reactFlowProps?.onNodeDrag;
-    if (typeof onNodeDrag !== "function") {
-      throw new Error("Missing onNodeDrag handler");
+    const onNodesChange = reactFlowProps?.onNodesChange;
+    if (typeof onNodesChange !== "function") {
+      throw new Error("Missing onNodesChange handler");
     }
 
     act(() => {
-      onNodeDrag(undefined, {
-        id: "from-orders",
-        position: { x: 240, y: 300 },
-      });
+      onNodesChange([
+        {
+          id: "from-orders",
+          type: "position",
+          position: { x: 240, y: 300 },
+          dragging: true,
+        },
+      ]);
     });
 
     expect(screen.getByTestId("from-orders-position").textContent).toBe("240,300");
+  });
+
+  test("preserves measured node dimensions across drag updates", () => {
+    render(
+      <DocumentProvider initialDocument={createSampleDocument()}>
+        <GraphCanvas diagnostics={[]} />
+      </DocumentProvider>,
+    );
+
+    const onNodesChange = reactFlowProps?.onNodesChange;
+    if (typeof onNodesChange !== "function") {
+      throw new Error("Missing onNodesChange handler");
+    }
+
+    act(() => {
+      onNodesChange([
+        {
+          id: "from-orders",
+          type: "dimensions",
+          dimensions: { width: 180, height: 86 },
+        },
+      ]);
+    });
+
+    act(() => {
+      onNodesChange([
+        {
+          id: "from-orders",
+          type: "position",
+          position: { x: 240, y: 300 },
+          dragging: true,
+        },
+      ]);
+    });
+
+    const nodes = Array.isArray(reactFlowProps?.nodes) ? reactFlowProps.nodes : [];
+    const fromOrders = nodes.find(
+      (node) =>
+        typeof node === "object" &&
+        node !== null &&
+        "id" in node &&
+        node.id === "from-orders",
+    );
+
+    expect(fromOrders).toMatchObject({
+      measured: { width: 180, height: 86 },
+    });
   });
 });
