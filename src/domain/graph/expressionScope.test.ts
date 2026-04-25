@@ -96,6 +96,68 @@ describe("buildExpressionScope", () => {
     expect(rightId?.type).toBe("int");
   });
 
+  test("join scope suggests unique bare column names when unambiguous", () => {
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "Join Bare Names Sample" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "from-left",
+          kind: "fromTable",
+          label: "Left",
+          position: { x: -200, y: 0 },
+          data: {
+            tableRef: { tableName: "left_table" },
+            columns: { id: "int", total: "float" },
+          },
+        },
+        {
+          id: "from-right",
+          kind: "fromTable",
+          label: "Right",
+          position: { x: -200, y: 200 },
+          data: {
+            tableRef: { tableName: "right_table" },
+            columns: { id: "int", name: "string" },
+          },
+        },
+        {
+          id: "join-1",
+          kind: "join",
+          label: "Join",
+          position: { x: 0, y: 100 },
+          data: { joinType: "inner", predicate: "left.id = right.id" },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-left-join",
+          source: "from-left",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "left",
+        },
+        {
+          id: "edge-right-join",
+          source: "from-right",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "right",
+        },
+      ],
+    };
+
+    const scope = buildExpressionScope(document, "join-1");
+    expect(scope.kind).toBe("join");
+    expect(scope.flatTypes.total).toBe("float");
+    expect(scope.flatTypes.name).toBe("string");
+
+    const keys = scope.suggestions.map(s => s.key);
+    expect(keys).toContain("total");
+    expect(keys).toContain("name");
+  });
+
   test("downstream single-input consumers of a join preserve ambiguity semantics (no reintroduced bare names)", () => {
     const document: GraphDocument = {
       version: 1,
@@ -475,6 +537,144 @@ describe("buildExpressionScope", () => {
     expect(missing.flatTypes).toEqual({});
     expect(missing.ambiguousBareNames).toEqual({});
     expect(missing.suggestions).toEqual([]);
+  });
+
+  test("single-input nodes with duplicate in edges fail safe to empty scope", () => {
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "Duplicate In Edge Sample" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "from-1",
+          kind: "fromTable",
+          label: "A",
+          position: { x: -200, y: 0 },
+          data: {
+            tableRef: { tableName: "a" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "from-2",
+          kind: "fromTable",
+          label: "B",
+          position: { x: -200, y: 200 },
+          data: {
+            tableRef: { tableName: "b" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "where-1",
+          kind: "where",
+          label: "Where",
+          position: { x: 0, y: 100 },
+          data: { predicate: "id = 1" },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-1",
+          source: "from-1",
+          sourceHandle: "out",
+          target: "where-1",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-2",
+          source: "from-2",
+          sourceHandle: "out",
+          target: "where-1",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const scope = buildExpressionScope(document, "where-1");
+    expect(scope.kind).toBe("empty");
+    expect(scope.flatTypes).toEqual({});
+    expect(scope.suggestions).toEqual([]);
+  });
+
+  test("join nodes with duplicate handle edges fail safe for that side", () => {
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "Duplicate Join Edge Sample" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "from-left-1",
+          kind: "fromTable",
+          label: "Left 1",
+          position: { x: -200, y: 0 },
+          data: {
+            tableRef: { tableName: "l1" },
+            columns: { id: "int", only_left_1: "int" },
+          },
+        },
+        {
+          id: "from-left-2",
+          kind: "fromTable",
+          label: "Left 2",
+          position: { x: -200, y: 100 },
+          data: {
+            tableRef: { tableName: "l2" },
+            columns: { id: "int", only_left_2: "int" },
+          },
+        },
+        {
+          id: "from-right",
+          kind: "fromTable",
+          label: "Right",
+          position: { x: -200, y: 200 },
+          data: {
+            tableRef: { tableName: "r" },
+            columns: { rid: "int" },
+          },
+        },
+        {
+          id: "join-1",
+          kind: "join",
+          label: "Join",
+          position: { x: 0, y: 100 },
+          data: { joinType: "inner", predicate: "true" },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-left-1",
+          source: "from-left-1",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "left",
+        },
+        {
+          id: "edge-left-2",
+          source: "from-left-2",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "left",
+        },
+        {
+          id: "edge-right",
+          source: "from-right",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "right",
+        },
+      ],
+    };
+
+    const scope = buildExpressionScope(document, "join-1");
+    expect(scope.kind).toBe("join");
+
+    const keys = scope.suggestions.map(s => s.key);
+    expect(keys).not.toContain("left.");
+    expect(keys).toContain("right.");
+    expect(scope.flatTypes["right.rid"]).toBe("int");
+    expect(scope.flatTypes["left.only_left_1"]).toBeUndefined();
+    expect(scope.flatTypes["left.only_left_2"]).toBeUndefined();
   });
 });
 

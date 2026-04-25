@@ -1,6 +1,8 @@
 import type { GraphDocument, GraphNode } from "../document/types";
 import type { ColumnMap, ColumnType } from "../schema/types";
 
+type NodeKind = GraphNode["kind"];
+
 export type ExpressionScopeSuggestion = {
   key: string;
   insertText: string;
@@ -24,8 +26,22 @@ function incomingEdges(document: GraphDocument, nodeId: string) {
   return document.edges.filter(edge => edge.target === nodeId);
 }
 
+function isForwardingNodeKind(kind: NodeKind) {
+  return kind === "where" || kind === "sort" || kind === "limit" || kind === "output";
+}
+
+function uniqueIncomingEdge(
+  document: GraphDocument,
+  nodeId: string,
+  targetHandle: "in" | "left" | "right",
+) {
+  const matches = incomingEdges(document, nodeId).filter(edge => edge.targetHandle === targetHandle);
+  if (matches.length !== 1) return null;
+  return matches[0];
+}
+
 function singleInputEdge(document: GraphDocument, nodeId: string) {
-  return incomingEdges(document, nodeId).find(edge => edge.targetHandle === "in") ?? null;
+  return uniqueIncomingEdge(document, nodeId, "in");
 }
 
 function resolveNodeSchemaInternal(
@@ -52,9 +68,8 @@ function resolveNodeSchemaInternal(
       schema = node.data.columns ?? {};
       break;
     case "join": {
-      const inputs = incomingEdges(document, nodeId);
-      const left = inputs.find(edge => edge.targetHandle === "left") ?? null;
-      const right = inputs.find(edge => edge.targetHandle === "right") ?? null;
+      const left = uniqueIncomingEdge(document, nodeId, "left");
+      const right = uniqueIncomingEdge(document, nodeId, "right");
       const leftSchema = left ? resolveNodeSchemaInternal(document, left.source, cache, visiting) : {};
       const rightSchema = right ? resolveNodeSchemaInternal(document, right.source, cache, visiting) : {};
       schema = { ...leftSchema, ...rightSchema };
@@ -125,9 +140,8 @@ function buildJoinDerivedScope(
   document: GraphDocument,
   joinNodeId: string,
 ): ExpressionScope {
-  const inputs = incomingEdges(document, joinNodeId);
-  const leftEdge = inputs.find(edge => edge.targetHandle === "left") ?? null;
-  const rightEdge = inputs.find(edge => edge.targetHandle === "right") ?? null;
+  const leftEdge = uniqueIncomingEdge(document, joinNodeId, "left");
+  const rightEdge = uniqueIncomingEdge(document, joinNodeId, "right");
   const byId = nodesById(document);
   const leftUsable = !!(leftEdge && byId[leftEdge.source]);
   const rightUsable = !!(rightEdge && byId[rightEdge.source]);
@@ -187,18 +201,9 @@ function resolveEffectiveInputNodeId(
     const node = nodesById(document)[currentId];
     if (!node) return null;
 
-    switch (node.kind) {
-      case "where":
-      case "sort":
-      case "limit":
-      case "output": {
-        const inEdge = singleInputEdge(document, currentId);
-        currentId = inEdge?.source ?? null;
-        continue;
-      }
-      default:
-        return currentId;
-    }
+    if (!isForwardingNodeKind(node.kind)) return currentId;
+    const inEdge = singleInputEdge(document, currentId);
+    currentId = inEdge?.source ?? null;
   }
   return null;
 }
