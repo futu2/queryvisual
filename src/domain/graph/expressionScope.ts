@@ -6,11 +6,11 @@ export type ExpressionScopeSuggestion = {
   insertText: string;
   label: string;
   detail: string;
-  type: "namespace" | "column";
+  type: ColumnType | "namespace";
 };
 
 export type ExpressionScope = {
-  kind: "single" | "join";
+  kind: "empty" | "single" | "join";
   flatTypes: ColumnMap;
   ambiguousBareNames: Record<string, string[]>;
   suggestions: ExpressionScopeSuggestion[];
@@ -97,6 +97,10 @@ export function resolveNodeSchema(document: GraphDocument, nodeId: string): Colu
   return resolveNodeSchemaInternal(document, nodeId, new Map(), new Set());
 }
 
+function emptyScope(): ExpressionScope {
+  return { kind: "empty", flatTypes: {}, ambiguousBareNames: {}, suggestions: [] };
+}
+
 function namespaceSuggestion(key: string): ExpressionScopeSuggestion {
   return {
     key,
@@ -113,7 +117,7 @@ function columnSuggestion(key: string, columnType: ColumnType): ExpressionScopeS
     insertText: key,
     label: key,
     detail: columnType,
-    type: "column",
+    type: columnType,
   };
 }
 
@@ -197,7 +201,7 @@ function resolveEffectiveInputNodeId(
 export function buildExpressionScope(document: GraphDocument, nodeId: string): ExpressionScope {
   const node = nodesById(document)[nodeId];
   if (!node) {
-    return { kind: "single", flatTypes: {}, ambiguousBareNames: {}, suggestions: [] };
+    return emptyScope();
   }
 
   if (node.kind === "join") {
@@ -206,23 +210,23 @@ export function buildExpressionScope(document: GraphDocument, nodeId: string): E
 
   // Zero-input nodes should not expose misleading "input." namespaces.
   if (node.kind === "graphInput" || node.kind === "fromTable") {
-    return { kind: "single", flatTypes: {}, ambiguousBareNames: {}, suggestions: [] };
+    return emptyScope();
   }
 
   const input = singleInputEdge(document, nodeId);
   if (!input) {
     // Missing edges should be safe and return an empty scope.
-    return { kind: "single", flatTypes: {}, ambiguousBareNames: {}, suggestions: [] };
+    return emptyScope();
   }
 
   const effectiveInputId = resolveEffectiveInputNodeId(document, input.source);
   if (!effectiveInputId) {
-    return { kind: "single", flatTypes: {}, ambiguousBareNames: {}, suggestions: [] };
+    return emptyScope();
   }
   // If the upstream node is a join, preserve join ambiguity semantics downstream.
   const effectiveInputNode = nodesById(document)[effectiveInputId];
   if (!effectiveInputNode) {
-    return { kind: "single", flatTypes: {}, ambiguousBareNames: {}, suggestions: [] };
+    return emptyScope();
   }
   if (effectiveInputNode.kind === "join") {
     return buildJoinDerivedScope(document, effectiveInputNode.id);

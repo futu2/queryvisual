@@ -18,6 +18,9 @@ describe("buildExpressionScope", () => {
     expect(keys).toContain("input.");
     expect(keys).toContain("input.total");
     expect(keys).toContain("total");
+
+    const inputTotal = scope.suggestions.find(s => s.key === "input.total");
+    expect(inputTotal?.type).toBe("float");
   });
 
   test("join scope exposes left/right qualified names and marks duplicate bare names as ambiguous", () => {
@@ -86,6 +89,11 @@ describe("buildExpressionScope", () => {
     expect(keys).not.toContain("id");
     expect(keys).toContain("left.id");
     expect(keys).toContain("right.id");
+
+    const leftId = scope.suggestions.find(s => s.key === "left.id");
+    const rightId = scope.suggestions.find(s => s.key === "right.id");
+    expect(leftId?.type).toBe("int");
+    expect(rightId?.type).toBe("int");
   });
 
   test("downstream single-input consumers of a join preserve ambiguity semantics (no reintroduced bare names)", () => {
@@ -405,6 +413,15 @@ describe("buildExpressionScope", () => {
     expect(keys).toContain("left.id");
     expect(keys).toContain("right.id");
   });
+
+  test("returns an empty scope kind for missing nodes and other safe-empty cases", () => {
+    const document = createSampleDocument();
+    const missing = buildExpressionScope(document, "missing-node");
+    expect(missing.kind).toBe("empty");
+    expect(missing.flatTypes).toEqual({});
+    expect(missing.ambiguousBareNames).toEqual({});
+    expect(missing.suggestions).toEqual([]);
+  });
 });
 
 describe("resolveNodeSchema", () => {
@@ -566,10 +583,14 @@ describe("namespace suggestions", () => {
     const fromScope = buildExpressionScope(document, "from-t");
     const graphInputScope = buildExpressionScope(document, "graph-in");
 
+    expect(fromScope.kind).toBe("empty");
     expect(fromScope.flatTypes).toEqual({});
+    expect(fromScope.suggestions).toEqual([]);
     expect(fromScope.suggestions.map(s => s.key)).not.toContain("input.");
 
+    expect(graphInputScope.kind).toBe("empty");
     expect(graphInputScope.flatTypes).toEqual({});
+    expect(graphInputScope.suggestions).toEqual([]);
     expect(graphInputScope.suggestions.map(s => s.key)).not.toContain("input.");
   });
 
@@ -591,6 +612,7 @@ describe("namespace suggestions", () => {
     };
 
     const scope = buildExpressionScope(document, "where-1");
+    expect(scope.kind).toBe("empty");
     expect(scope.flatTypes).toEqual({});
     expect(scope.suggestions).toEqual([]);
   });
