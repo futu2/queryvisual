@@ -80,9 +80,12 @@ function removeRow<T>(rows: T[], index: number, createBlank: () => T) {
 }
 
 function sanitizeNamedExpressions(rows: NamedExpression[]) {
-  return rows.filter(
-    (row) => row.name.trim() !== "" || row.expression.trim() !== "",
-  );
+  return rows
+    .map((row) => ({
+      name: row.name.trim(),
+      expression: row.expression.trim(),
+    }))
+    .filter((row) => row.name !== "" || row.expression !== "");
 }
 
 function RowActionButtons({

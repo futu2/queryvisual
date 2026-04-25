@@ -282,6 +282,36 @@ describe("NodeEditorModal", () => {
     ]);
   });
 
+  test("trims aggregation group keys and aggregates on save", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+
+    const node: GraphNode = {
+      id: "agg-orders-trim",
+      kind: "aggregation",
+      label: "Aggregate",
+      position: { x: 0, y: 0 },
+      data: {
+        groupBy: [{ name: "  customer_id  ", expression: "  customer_id  " }],
+        aggregates: [{ name: "  gross_total  ", expression: "  sum(total)  " }],
+      },
+    };
+
+    render(<NodeEditorModal node={node} onClose={() => {}} onSave={onSave} />);
+
+    await user.click(screen.getByRole("button", { name: "Add group key" }));
+    await user.click(screen.getByRole("button", { name: "Add aggregate" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalled();
+    expect(onSave.mock.calls[0][0].data.groupBy).toEqual([
+      { name: "customer_id", expression: "customer_id" },
+    ]);
+    expect(onSave.mock.calls[0][0].data.aggregates).toEqual([
+      { name: "gross_total", expression: "sum(total)" },
+    ]);
+  });
+
   test("closes when cancel is clicked", async () => {
     const user = userEvent.setup();
     const onClose = mock();
