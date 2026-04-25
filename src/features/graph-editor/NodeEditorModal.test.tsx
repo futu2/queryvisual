@@ -124,6 +124,37 @@ describe("NodeEditorModal", () => {
     ]);
   });
 
+  test("saves duplicate fromTable field names with last-write-wins semantics", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+
+    const node: GraphNode = {
+      id: "from-orders",
+      kind: "fromTable",
+      label: "Orders",
+      position: { x: 0, y: 0 },
+      data: {
+        tableRef: { tableName: "orders" },
+        columns: {
+          order_id: "int",
+          status: "string",
+        },
+      },
+    };
+
+    render(<NodeEditorModal node={node} onClose={() => {}} onSave={onSave} />);
+
+    await user.click(screen.getByRole("button", { name: "Duplicate field 1" }));
+    await user.selectOptions(screen.getByLabelText("Field type 2"), "float");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalled();
+    expect(Object.entries(onSave.mock.calls[0][0].data.columns)).toEqual([
+      ["order_id", "float"],
+      ["status", "string"],
+    ]);
+  });
+
   test("closes when cancel is clicked", async () => {
     const user = userEvent.setup();
     const onClose = mock();
