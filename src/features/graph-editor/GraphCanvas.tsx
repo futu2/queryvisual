@@ -54,6 +54,14 @@ export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
     }
   };
 
+  const syncNodePosition: NodeMouseHandler = (_, node) => {
+    dispatch({
+      type: "set-node-position",
+      nodeId: node.id,
+      position: node.position,
+    });
+  };
+
   return (
     <div style={{ width: "100%", minHeight: 520, flex: 1 }}>
       <ReactFlow
@@ -67,13 +75,8 @@ export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
           dispatch({ type: "select-node", nodeId: null });
           dispatch({ type: "open-node-editor", nodeId: null });
         }}
-        onNodeDragStop={(_, node) =>
-          dispatch({
-            type: "set-node-position",
-            nodeId: node.id,
-            position: node.position,
-          })
-        }
+        onNodeDrag={syncNodePosition}
+        onNodeDragStop={syncNodePosition}
         onViewportChange={(viewport) => dispatch({ type: "set-viewport", viewport })}
       >
         <Background />
