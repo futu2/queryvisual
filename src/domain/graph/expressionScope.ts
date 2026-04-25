@@ -163,6 +163,37 @@ function buildJoinDerivedScope(
   return { kind: "join", flatTypes, ambiguousBareNames, suggestions };
 }
 
+function resolveEffectiveInputNodeId(
+  document: GraphDocument,
+  startNodeId: string,
+): string | null {
+  // Walk upstream through pass-through nodes to preserve join ambiguity semantics
+  // for deep single-input chains (e.g. join -> where -> sort).
+  let currentId: string | null = startNodeId;
+  const seen = new Set<string>();
+  while (currentId) {
+    if (seen.has(currentId)) return currentId;
+    seen.add(currentId);
+
+    const node = nodesById(document)[currentId];
+    if (!node) return null;
+
+    switch (node.kind) {
+      case "where":
+      case "sort":
+      case "limit":
+      case "output": {
+        const inEdge = singleInputEdge(document, currentId);
+        currentId = inEdge?.source ?? null;
+        continue;
+      }
+      default:
+        return currentId;
+    }
+  }
+  return null;
+}
+
 export function buildExpressionScope(document: GraphDocument, nodeId: string): ExpressionScope {
   const node = nodesById(document)[nodeId];
   if (!node) {
@@ -184,16 +215,20 @@ export function buildExpressionScope(document: GraphDocument, nodeId: string): E
     return { kind: "single", flatTypes: {}, ambiguousBareNames: {}, suggestions: [] };
   }
 
-  const inputNode = nodesById(document)[input.source];
-  if (!inputNode) {
+  const effectiveInputId = resolveEffectiveInputNodeId(document, input.source);
+  if (!effectiveInputId) {
     return { kind: "single", flatTypes: {}, ambiguousBareNames: {}, suggestions: [] };
   }
   // If the upstream node is a join, preserve join ambiguity semantics downstream.
-  if (inputNode.kind === "join") {
-    return buildJoinDerivedScope(document, inputNode.id);
+  const effectiveInputNode = nodesById(document)[effectiveInputId];
+  if (!effectiveInputNode) {
+    return { kind: "single", flatTypes: {}, ambiguousBareNames: {}, suggestions: [] };
+  }
+  if (effectiveInputNode.kind === "join") {
+    return buildJoinDerivedScope(document, effectiveInputNode.id);
   }
 
-  const schema = resolveNodeSchema(document, input.source);
+  const schema = resolveNodeSchema(document, effectiveInputId);
 
   const flatTypes: ColumnMap = {};
   const suggestions: ExpressionScopeSuggestion[] = [namespaceSuggestion("input.")];

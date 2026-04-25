@@ -211,6 +211,200 @@ describe("buildExpressionScope", () => {
     expect(keys).toContain("left.");
     expect(keys).not.toContain("right.");
   });
+
+  test("multi-hop downstream nodes preserve join semantics: join -> where -> sort", () => {
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "Join Where Sort Sample" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "from-left",
+          kind: "fromTable",
+          label: "Left",
+          position: { x: -200, y: 0 },
+          data: {
+            tableRef: { tableName: "left_table" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "from-right",
+          kind: "fromTable",
+          label: "Right",
+          position: { x: -200, y: 200 },
+          data: {
+            tableRef: { tableName: "right_table" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "join-1",
+          kind: "join",
+          label: "Join",
+          position: { x: 0, y: 100 },
+          data: { joinType: "inner", predicate: "left.id = right.id" },
+        },
+        {
+          id: "where-1",
+          kind: "where",
+          label: "Where",
+          position: { x: 200, y: 100 },
+          data: { predicate: "left.id = 1" },
+        },
+        {
+          id: "sort-1",
+          kind: "sort",
+          label: "Sort",
+          position: { x: 400, y: 100 },
+          data: { items: [{ expression: "left.id", direction: "asc" }] },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-left-join",
+          source: "from-left",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "left",
+        },
+        {
+          id: "edge-right-join",
+          source: "from-right",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "right",
+        },
+        {
+          id: "edge-join-where",
+          source: "join-1",
+          sourceHandle: "out",
+          target: "where-1",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-where-sort",
+          source: "where-1",
+          sourceHandle: "out",
+          target: "sort-1",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const scope = buildExpressionScope(document, "sort-1");
+
+    expect(scope.kind).toBe("join");
+    expect(scope.flatTypes["left.id"]).toBe("int");
+    expect(scope.flatTypes["right.id"]).toBe("int");
+    expect(scope.flatTypes.id).toBeUndefined();
+    expect(scope.ambiguousBareNames.id).toEqual(["left.id", "right.id"]);
+
+    const keys = scope.suggestions.map(s => s.key);
+    expect(keys).toContain("left.");
+    expect(keys).toContain("right.");
+    expect(keys).not.toContain("input.");
+    expect(keys).not.toContain("id");
+    expect(keys).toContain("left.id");
+    expect(keys).toContain("right.id");
+  });
+
+  test("multi-hop downstream nodes preserve join semantics: join -> where -> select", () => {
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "Join Where Select Sample" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "from-left",
+          kind: "fromTable",
+          label: "Left",
+          position: { x: -200, y: 0 },
+          data: {
+            tableRef: { tableName: "left_table" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "from-right",
+          kind: "fromTable",
+          label: "Right",
+          position: { x: -200, y: 200 },
+          data: {
+            tableRef: { tableName: "right_table" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "join-1",
+          kind: "join",
+          label: "Join",
+          position: { x: 0, y: 100 },
+          data: { joinType: "inner", predicate: "left.id = right.id" },
+        },
+        {
+          id: "where-1",
+          kind: "where",
+          label: "Where",
+          position: { x: 200, y: 100 },
+          data: { predicate: "left.id = 1" },
+        },
+        {
+          id: "select-1",
+          kind: "select",
+          label: "Select",
+          position: { x: 400, y: 100 },
+          data: { mappings: [{ name: "x", expression: "left.id" }] },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-left-join",
+          source: "from-left",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "left",
+        },
+        {
+          id: "edge-right-join",
+          source: "from-right",
+          sourceHandle: "out",
+          target: "join-1",
+          targetHandle: "right",
+        },
+        {
+          id: "edge-join-where",
+          source: "join-1",
+          sourceHandle: "out",
+          target: "where-1",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-where-select",
+          source: "where-1",
+          sourceHandle: "out",
+          target: "select-1",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const scope = buildExpressionScope(document, "select-1");
+
+    expect(scope.kind).toBe("join");
+    expect(scope.flatTypes["left.id"]).toBe("int");
+    expect(scope.flatTypes["right.id"]).toBe("int");
+    expect(scope.flatTypes.id).toBeUndefined();
+    expect(scope.ambiguousBareNames.id).toEqual(["left.id", "right.id"]);
+
+    const keys = scope.suggestions.map(s => s.key);
+    expect(keys).toContain("left.");
+    expect(keys).toContain("right.");
+    expect(keys).not.toContain("input.");
+    expect(keys).not.toContain("id");
+    expect(keys).toContain("left.id");
+    expect(keys).toContain("right.id");
+  });
 });
 
 describe("resolveNodeSchema", () => {
