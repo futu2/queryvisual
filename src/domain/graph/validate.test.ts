@@ -456,6 +456,201 @@ describe("validateOutput", () => {
     );
   });
 
+  test("does not leak analyzer diagnostics downstream of a join with duplicate-side wiring", () => {
+    const invalid: GraphDocument = {
+      version: 1,
+      metadata: { name: "Downstream Of Duplicate Join Side" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "left-a",
+          kind: "fromTable",
+          label: "Left A",
+          position: { x: -300, y: 0 },
+          data: {
+            tableRef: { tableName: "left_a" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "left-b",
+          kind: "fromTable",
+          label: "Left B",
+          position: { x: -300, y: 200 },
+          data: {
+            tableRef: { tableName: "left_b" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "right-a",
+          kind: "fromTable",
+          label: "Right A",
+          position: { x: -300, y: 400 },
+          data: {
+            tableRef: { tableName: "right_a" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "join-dup",
+          kind: "join",
+          label: "Join",
+          position: { x: 0, y: 200 },
+          data: { joinType: "inner", predicate: "left.id = right.id" },
+        },
+        {
+          id: "where-after",
+          kind: "where",
+          label: "Where",
+          position: { x: 200, y: 200 },
+          data: { predicate: "left.id = right.id" },
+        },
+        {
+          id: "output-1",
+          kind: "output",
+          label: "Output",
+          position: { x: 400, y: 200 },
+          data: { outputName: "out" },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-left-a-join",
+          source: "left-a",
+          sourceHandle: "out",
+          target: "join-dup",
+          targetHandle: "left",
+        },
+        {
+          id: "edge-left-b-join",
+          source: "left-b",
+          sourceHandle: "out",
+          target: "join-dup",
+          targetHandle: "left",
+        },
+        {
+          id: "edge-right-a-join",
+          source: "right-a",
+          sourceHandle: "out",
+          target: "join-dup",
+          targetHandle: "right",
+        },
+        {
+          id: "edge-join-where",
+          source: "join-dup",
+          sourceHandle: "out",
+          target: "where-after",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-where-output",
+          source: "where-after",
+          sourceHandle: "out",
+          target: "output-1",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const result = validateOutput(invalid, "output-1");
+    expect(
+      result.diagnostics.some(diagnostic => diagnostic.code === "join.duplicate-left-input"),
+    ).toBe(true);
+    expect(result.diagnostics.some(diagnostic => diagnostic.code === "where.unknown-column")).toBe(
+      false,
+    );
+  });
+
+  test("does not leak analyzer diagnostics downstream of a where with duplicate single-input wiring", () => {
+    const invalid: GraphDocument = {
+      version: 1,
+      metadata: { name: "Downstream Of Duplicate Where Input" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "from-1",
+          kind: "fromTable",
+          label: "T1",
+          position: { x: -200, y: 0 },
+          data: {
+            tableRef: { tableName: "t1" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "from-2",
+          kind: "fromTable",
+          label: "T2",
+          position: { x: -200, y: 200 },
+          data: {
+            tableRef: { tableName: "t2" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "where-dup",
+          kind: "where",
+          label: "Where",
+          position: { x: 0, y: 100 },
+          data: { predicate: "id = 1" },
+        },
+        {
+          id: "select-after",
+          kind: "select",
+          label: "Select",
+          position: { x: 200, y: 100 },
+          data: { mappings: [{ name: "x", expression: "id" }] },
+        },
+        {
+          id: "output-1",
+          kind: "output",
+          label: "Output",
+          position: { x: 400, y: 100 },
+          data: { outputName: "out" },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-1",
+          source: "from-1",
+          sourceHandle: "out",
+          target: "where-dup",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-2",
+          source: "from-2",
+          sourceHandle: "out",
+          target: "where-dup",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-where-select",
+          source: "where-dup",
+          sourceHandle: "out",
+          target: "select-after",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-select-output",
+          source: "select-after",
+          sourceHandle: "out",
+          target: "output-1",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const result = validateOutput(invalid, "output-1");
+    expect(result.diagnostics.some(diagnostic => diagnostic.code === "where.duplicate-input")).toBe(
+      true,
+    );
+    expect(result.diagnostics.some(diagnostic => diagnostic.code === "select.unknown-column")).toBe(
+      false,
+    );
+  });
+
   test("reports non-boolean join predicates", () => {
     const invalid: GraphDocument = {
       ...createSampleDocument(),
@@ -671,5 +866,64 @@ describe("validateOutput", () => {
     expect(diag).toBeDefined();
     expect(diag?.ref?.nodeId).toBe("sort-1");
     expect(diag?.ref?.field).toBe("items.0.expression");
+  });
+
+  test("uses correct field path refs for aggregation groupBy expressions", () => {
+    const invalid: GraphDocument = {
+      version: 1,
+      metadata: { name: "Aggregation Field Refs" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "from-1",
+          kind: "fromTable",
+          label: "T",
+          position: { x: -200, y: 0 },
+          data: {
+            tableRef: { tableName: "t" },
+            columns: { id: "int" },
+          },
+        },
+        {
+          id: "agg-1",
+          kind: "aggregation",
+          label: "Agg",
+          position: { x: 0, y: 0 },
+          data: {
+            groupBy: [{ name: "g", expression: "(" }],
+            aggregates: [{ name: "c", expression: "count(1)" }],
+          },
+        },
+        {
+          id: "output-1",
+          kind: "output",
+          label: "Output",
+          position: { x: 200, y: 0 },
+          data: { outputName: "out" },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-from-agg",
+          source: "from-1",
+          sourceHandle: "out",
+          target: "agg-1",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-agg-output",
+          source: "agg-1",
+          sourceHandle: "out",
+          target: "output-1",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const result = validateOutput(invalid, "output-1");
+    const diag = result.diagnostics.find(d => d.code === "aggregation.invalid-expression");
+    expect(diag).toBeDefined();
+    expect(diag?.ref?.nodeId).toBe("agg-1");
+    expect(diag?.ref?.field).toBe("groupBy.0.expression");
   });
 });

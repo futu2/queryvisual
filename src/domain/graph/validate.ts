@@ -149,6 +149,10 @@ export function validateOutput(
   const orderedNodes = orderedReachableNodes(document, outputId);
   const diagnostics: Diagnostic[] = [];
   const schemas: Record<string, ColumnMap> = {};
+  // Tracks nodes whose output schema/scope is not trustworthy due to structural issues
+  // (missing/duplicate wiring) either on the node itself or upstream. Downstream consumers
+  // should not emit analyzer diagnostics based on these broken scopes.
+  const invalidStructure = new Set<string>();
 
   for (const node of orderedNodes) {
     const inputs = incomingEdges(document, node.id);
@@ -173,6 +177,7 @@ export function validateOutput(
             ),
           );
           schemas[node.id] = {};
+          invalidStructure.add(node.id);
           break;
         }
         if (leftEdges.length > 1) {
@@ -196,6 +201,14 @@ export function validateOutput(
         // Wiring must be unambiguous before we can build a meaningful expression scope.
         if (leftEdges.length !== 1 || rightEdges.length !== 1) {
           schemas[node.id] = {};
+          invalidStructure.add(node.id);
+          break;
+        }
+        // If either required input is already structurally invalid upstream, suppress analyzer
+        // diagnostics here and downstream (scope would be misleading).
+        if (invalidStructure.has(left.source) || invalidStructure.has(right.source)) {
+          schemas[node.id] = {};
+          invalidStructure.add(node.id);
           break;
         }
         const leftSchema = schemas[left.source] ?? {};
@@ -223,6 +236,12 @@ export function validateOutput(
         );
         if (!input) {
           schemas[node.id] = {};
+          invalidStructure.add(node.id);
+          break;
+        }
+        if (invalidStructure.has(input.source)) {
+          schemas[node.id] = {};
+          invalidStructure.add(node.id);
           break;
         }
         pushAnalyzerDiagnostics({
@@ -248,6 +267,12 @@ export function validateOutput(
         );
         if (!input) {
           schemas[node.id] = {};
+          invalidStructure.add(node.id);
+          break;
+        }
+        if (invalidStructure.has(input.source)) {
+          schemas[node.id] = {};
+          invalidStructure.add(node.id);
           break;
         }
         schemas[node.id] = mappingsToSchema(
@@ -271,6 +296,12 @@ export function validateOutput(
         );
         if (!input) {
           schemas[node.id] = {};
+          invalidStructure.add(node.id);
+          break;
+        }
+        if (invalidStructure.has(input.source)) {
+          schemas[node.id] = {};
+          invalidStructure.add(node.id);
           break;
         }
         schemas[node.id] = {
@@ -305,6 +336,12 @@ export function validateOutput(
         );
         if (!input) {
           schemas[node.id] = {};
+          invalidStructure.add(node.id);
+          break;
+        }
+        if (invalidStructure.has(input.source)) {
+          schemas[node.id] = {};
+          invalidStructure.add(node.id);
           break;
         }
         for (const [index, item] of node.data.items.entries()) {
@@ -331,6 +368,12 @@ export function validateOutput(
         );
         if (!input) {
           schemas[node.id] = {};
+          invalidStructure.add(node.id);
+          break;
+        }
+        if (invalidStructure.has(input.source)) {
+          schemas[node.id] = {};
+          invalidStructure.add(node.id);
           break;
         }
         schemas[node.id] = schemas[input.source] ?? {};
@@ -346,6 +389,12 @@ export function validateOutput(
         );
         if (!input) {
           schemas[node.id] = {};
+          invalidStructure.add(node.id);
+          break;
+        }
+        if (invalidStructure.has(input.source)) {
+          schemas[node.id] = {};
+          invalidStructure.add(node.id);
           break;
         }
         schemas[node.id] = schemas[input.source] ?? {};
