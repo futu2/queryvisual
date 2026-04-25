@@ -28,6 +28,13 @@ export type ExpressionAnalysis = {
   diagnostics: ExpressionAnalysisDiagnostic[];
 };
 
+function hasAnyColumnDiagnostics(diagnostics: ExpressionAnalysisDiagnostic[]) {
+  return diagnostics.some(
+    diag =>
+      diag.code === "expr.unknown-column" || diag.code === "expr.ambiguous-column",
+  );
+}
+
 function collectColumnPaths(expr: Expr, out: string[][]) {
   switch (expr.kind) {
     case "column":
@@ -94,6 +101,7 @@ export function analyzeExpression(
   }
 
   const diagnostics: ExpressionAnalysisDiagnostic[] = [];
+  const diagnosticKeys = new Set<string>();
 
   const columnPaths: string[][] = [];
   collectColumnPaths(ast, columnPaths);
@@ -106,6 +114,9 @@ export function analyzeExpression(
     if (bare) {
       const alternatives = scope.ambiguousBareNames[bare];
       if (alternatives) {
+        const diagKey = `expr.ambiguous-column:${bare}:${alternatives.join("|")}`;
+        if (diagnosticKeys.has(diagKey)) continue;
+        diagnosticKeys.add(diagKey);
         diagnostics.push({
           code: "expr.ambiguous-column",
           message: ambiguousColumnMessage(bare, alternatives),
@@ -116,6 +127,9 @@ export function analyzeExpression(
       }
     }
 
+    const diagKey = `expr.unknown-column:${key}`;
+    if (diagnosticKeys.has(diagKey)) continue;
+    diagnosticKeys.add(diagKey);
     diagnostics.push({
       code: "expr.unknown-column",
       message: unknownColumnMessage(scope, key),
@@ -123,7 +137,11 @@ export function analyzeExpression(
     });
   }
 
-  const type = inferExpressionType(ast, scope.flatTypes);
+  // If we already know column resolution failed, do not report a misleading concrete type.
+  const inferredType = inferExpressionType(ast, scope.flatTypes);
+  const type: ColumnType = hasAnyColumnDiagnostics(diagnostics)
+    ? "unknown"
+    : inferredType;
 
   if (options.requireBoolean && diagnostics.length === 0 && type !== "boolean") {
     diagnostics.push({

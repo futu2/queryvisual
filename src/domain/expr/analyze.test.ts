@@ -108,4 +108,25 @@ describe("analyzeExpression", () => {
     expect(result.diagnostics[0]?.code).toBe("expr.non-boolean");
     expect(result.type).toBe("unknown");
   });
+
+  test("does not return a concrete type when a qualified column reference is unknown", () => {
+    const result = analyzeExpression("foo.total + 1", singleScope());
+
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]?.code).toBe("expr.unknown-column");
+    expect(result.diagnostics[0]?.message).toBe(
+      'Unknown column "foo.total" in input scope.',
+    );
+    expect(result.type).toBe("unknown");
+  });
+
+  test("dedupes repeated unknown column diagnostics for the same reference", () => {
+    const result = analyzeExpression("missing + missing", singleScope());
+
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]?.code).toBe("expr.unknown-column");
+    expect(result.diagnostics[0]?.message).toBe(
+      'Unknown column "missing" in input scope.',
+    );
+  });
 });
