@@ -39,8 +39,16 @@ function blankFieldRow(): FieldRow {
   return { name: "", type: "string" };
 }
 
+function blankNamedExpression(): NamedExpression {
+  return { name: "", expression: "" };
+}
+
 function ensureAtLeastOneRow<T>(rows: T[], createBlank: () => T) {
   return rows.length > 0 ? rows : [createBlank()];
+}
+
+function addRow<T>(rows: T[], createBlank: () => T) {
+  return [...rows, createBlank()];
 }
 
 function moveRow<T>(rows: T[], index: number, direction: -1 | 1) {
@@ -69,6 +77,12 @@ function duplicateRow<T>(rows: T[], index: number, cloneRow: (row: T) => T) {
 function removeRow<T>(rows: T[], index: number, createBlank: () => T) {
   const next = rows.filter((_, rowIndex) => rowIndex !== index);
   return ensureAtLeastOneRow(next, createBlank);
+}
+
+function sanitizeNamedExpressions(rows: NamedExpression[]) {
+  return rows.filter(
+    (row) => row.name.trim() !== "" || row.expression.trim() !== "",
+  );
 }
 
 function RowActionButtons({
@@ -182,7 +196,7 @@ function FromTableFieldRows({
       <button
         type="button"
         className="row-add-button"
-        onClick={() => onChange([...rows, blankFieldRow()])}
+        onClick={() => onChange(addRow(rows, blankFieldRow))}
       >
         Add field
       </button>
@@ -191,6 +205,15 @@ function FromTableFieldRows({
 }
 
 function toEditableNodeDraft(node: GraphNode): EditableNodeDraft {
+  if (node.kind === "select") {
+    return {
+      ...node,
+      data: {
+        mappings: ensureAtLeastOneRow(node.data.mappings, blankNamedExpression),
+      },
+    };
+  }
+
   if (node.kind !== "fromTable") {
     return node;
   }
@@ -210,6 +233,15 @@ function toEditableNodeDraft(node: GraphNode): EditableNodeDraft {
 }
 
 export function serializeNodeEditorDraft(draft: EditableNodeDraft): GraphNode {
+  if (draft.kind === "select") {
+    return {
+      ...draft,
+      data: {
+        mappings: sanitizeNamedExpressions(draft.data.mappings),
+      },
+    };
+  }
+
   if (draft.kind !== "fromTable") {
     return draft;
   }
@@ -227,6 +259,63 @@ export function serializeNodeEditorDraft(draft: EditableNodeDraft): GraphNode {
       columns,
     },
   };
+}
+
+function SelectMappingRows({
+  rows,
+  onChange,
+}: {
+  rows: NamedExpression[];
+  onChange: (rows: NamedExpression[]) => void;
+}) {
+  return (
+    <div className="editor-stack">
+      {rows.map((row, index) => (
+        <div key={index} className="mapping-row">
+          <label>
+            {`Mapping name ${index + 1}`}
+            <input
+              value={row.name}
+              onChange={(event) => {
+                const next = [...rows];
+                next[index] = { ...row, name: event.target.value };
+                onChange(next);
+              }}
+            />
+          </label>
+          <label>
+            Expression
+            <textarea
+              value={row.expression}
+              onChange={(event) => {
+                const next = [...rows];
+                next[index] = { ...row, expression: event.target.value };
+                onChange(next);
+              }}
+            />
+          </label>
+          <RowActionButtons
+            itemName="mapping"
+            index={index}
+            rowCount={rows.length}
+            onMoveUp={() => onChange(moveRow(rows, index, -1))}
+            onMoveDown={() => onChange(moveRow(rows, index, 1))}
+            onDuplicate={() =>
+              onChange(duplicateRow(rows, index, (item) => ({ ...item })))
+            }
+            onRemove={() => onChange(removeRow(rows, index, blankNamedExpression))}
+          />
+        </div>
+      ))}
+      <button
+        type="button"
+        className="row-add-button"
+        onClick={() => onChange(addRow(rows, blankNamedExpression))}
+      >
+        Add mapping
+      </button>
+    </div>
+  );
 }
 
 function ColumnMapEditor({
@@ -377,7 +466,7 @@ export function renderNodeEditor(
       );
     case "select":
       return (
-        <MappingRows
+        <SelectMappingRows
           rows={draft.data.mappings}
           onChange={(rows) =>
             setDraft({ ...draft, data: { mappings: rows } })

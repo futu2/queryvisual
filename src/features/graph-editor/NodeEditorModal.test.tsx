@@ -31,6 +31,63 @@ describe("NodeEditorModal", () => {
     expect(onSave.mock.calls[0][0].data.mappings[0].name).toBe("net_total");
   });
 
+  test("duplicates and reorders select mappings before save", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+
+    const node: GraphNode = {
+      id: "select-orders",
+      kind: "select",
+      label: "Project",
+      position: { x: 0, y: 0 },
+      data: {
+        mappings: [
+          { name: "gross_total", expression: "total" },
+          { name: "status_text", expression: "status" },
+        ],
+      },
+    };
+
+    render(<NodeEditorModal node={node} onClose={() => {}} onSave={onSave} />);
+
+    await user.click(screen.getByRole("button", { name: "Duplicate mapping 1" }));
+    await user.click(screen.getByRole("button", { name: "Move mapping 3 up" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalled();
+    expect(onSave.mock.calls[0][0].data.mappings).toEqual([
+      { name: "gross_total", expression: "total" },
+      { name: "status_text", expression: "status" },
+      { name: "gross_total", expression: "total" },
+    ]);
+  });
+
+  test("strips blank select placeholders but preserves partially filled mappings", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+
+    const node: GraphNode = {
+      id: "select-orders",
+      kind: "select",
+      label: "Project",
+      position: { x: 0, y: 0 },
+      data: {
+        mappings: [],
+      },
+    };
+
+    render(<NodeEditorModal node={node} onClose={() => {}} onSave={onSave} />);
+
+    await user.type(screen.getByLabelText("Mapping name 1"), "gross_total");
+    await user.click(screen.getByRole("button", { name: "Add mapping" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalled();
+    expect(onSave.mock.calls[0][0].data.mappings).toEqual([
+      { name: "gross_total", expression: "" },
+    ]);
+  });
+
   test("adds fromTable field rows and strips blank placeholders on save", async () => {
     const user = userEvent.setup();
     const onSave = mock();
