@@ -87,7 +87,9 @@ export function analyzeExpression(
     return {
       ast: null,
       type: "unknown",
-      diagnostics: [{ code: "expr.parse-error", message: "Invalid expression." }],
+      diagnostics: [
+        { code: "expr.parse-error", message: "Expression could not be parsed." },
+      ],
     };
   }
 

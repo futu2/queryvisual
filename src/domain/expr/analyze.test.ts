@@ -75,7 +75,7 @@ describe("analyzeExpression", () => {
 
     expect(result.diagnostics).toHaveLength(1);
     expect(result.diagnostics[0]?.code).toBe("expr.parse-error");
-    expect(result.diagnostics[0]?.message).toBe("Invalid expression.");
+    expect(result.diagnostics[0]?.message).toBe("Expression could not be parsed.");
     expect(result.type).toBe("unknown");
   });
 
