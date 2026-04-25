@@ -333,10 +333,10 @@ describe("NodeEditorModal", () => {
 
     expect(onSave).toHaveBeenCalled();
     expect(onSave.mock.calls[0][0].data.groupBy).toEqual([
-      { name: "customer_id", expression: "customer_id" },
+      { name: "customer_id", expression: "  customer_id  " },
     ]);
     expect(onSave.mock.calls[0][0].data.aggregates).toEqual([
-      { name: "gross_total", expression: "sum(total)" },
+      { name: "gross_total", expression: "  sum(total)  " },
     ]);
   });
 
@@ -455,6 +455,30 @@ describe("NodeEditorModal", () => {
 
     expect(onClose).toHaveBeenCalled();
     expect(onSave).not.toHaveBeenCalled();
+  });
+
+  test("preserves raw expression text (no trimming) when saving select mappings", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+
+    const node: GraphNode = {
+      id: "select-preserve-expression",
+      kind: "select",
+      label: "Project",
+      position: { x: 0, y: 0 },
+      data: {
+        mappings: [{ name: "gross_total", expression: " ( " }],
+      },
+    };
+
+    renderModal({ node, onSave });
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalled();
+    expect(onSave.mock.calls[0][0].data.mappings).toEqual([
+      { name: "gross_total", expression: " ( " },
+    ]);
   });
 
   test("shows inline predicate diagnostics and still saves while invalid", async () => {

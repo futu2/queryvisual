@@ -62,9 +62,6 @@ export function ExpressionInput({
 
   const scope = useMemo(() => buildExpressionScope(document, nodeId), [document, nodeId]);
   const analysis: ExpressionAnalysis = useMemo(() => {
-    if (value.trim() === "") {
-      return { ast: null, type: "unknown", diagnostics: [] };
-    }
     return analyzeExpression(value, scope, { requireBoolean });
   }, [value, scope, requireBoolean]);
 

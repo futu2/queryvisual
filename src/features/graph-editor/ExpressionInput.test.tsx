@@ -277,7 +277,7 @@ describe("ExpressionInput", () => {
     expect(screen.getByText("Predicate must be boolean.")).toBeTruthy();
   });
 
-  test("does not show diagnostics for an empty/pristine expression", async () => {
+  test("shows compiler-aligned diagnostics for an empty expression", async () => {
     const document: GraphDocument = {
       ...makeBaseDocument(),
       nodes: [
@@ -318,8 +318,8 @@ describe("ExpressionInput", () => {
       />,
     );
 
-    expect(screen.queryByLabelText("Diagnostics")).toBeNull();
-    expect(screen.queryByText("Expression could not be parsed.")).toBeNull();
+    expect(screen.getByLabelText("Diagnostics")).toBeTruthy();
+    expect(screen.getByText("Expression could not be parsed.")).toBeTruthy();
   });
 
   test("renders inline diagnostics for invalid expressions", async () => {

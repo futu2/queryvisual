@@ -85,9 +85,10 @@ function sanitizeNamedExpressions(rows: NamedExpression[]) {
   return rows
     .map((row) => ({
       name: row.name.trim(),
-      expression: row.expression.trim(),
+      // Preserve expression text exactly as entered; diagnostics handle invalid values.
+      expression: row.expression,
     }))
-    .filter((row) => row.name !== "" || row.expression !== "");
+    .filter((row) => row.name !== "" || row.expression.trim() !== "");
 }
 
 function RowActionButtons({
