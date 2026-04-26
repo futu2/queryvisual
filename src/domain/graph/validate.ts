@@ -163,6 +163,19 @@ export function validateOutput(
       case "fromTable":
         schemas[node.id] = node.data.columns;
         break;
+      case "subgraph": {
+        diagnostics.push(
+          diagnostic(
+            "subgraph.unsupported",
+            "Subgraph nodes are not supported yet.",
+            node.id,
+            "graphId",
+          ),
+        );
+        schemas[node.id] = {};
+        invalidStructure.add(node.id);
+        break;
+      }
       case "join": {
         const leftEdges = inputs.filter(edge => edge.targetHandle === "left");
         const rightEdges = inputs.filter(edge => edge.targetHandle === "right");
