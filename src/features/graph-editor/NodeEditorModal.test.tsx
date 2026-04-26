@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import userEvent from "@testing-library/user-event";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { GraphDocument } from "../../domain/document/types";
 import type { GraphNode } from "../../domain/document/types";
 import { DocumentProvider } from "../../app/state/DocumentContext";
@@ -112,11 +112,16 @@ describe("NodeEditorModal", () => {
 
     const firstCard = screen.getByTestId("mapping-row-card-1");
     const thirdCard = screen.getByTestId("mapping-row-card-3");
+    const firstHandle = within(firstCard).getByRole("button", {
+      name: "Drag mapping 1",
+    });
 
     expect(firstCard.tagName).toBe("SECTION");
     expect(firstCard.className).toContain("row-card");
+    expect(firstCard.getAttribute("draggable")).not.toBe("true");
+    expect(firstHandle.getAttribute("draggable")).toBe("true");
 
-    fireEvent.dragStart(firstCard);
+    fireEvent.dragStart(firstHandle);
     fireEvent.dragOver(thirdCard);
     fireEvent.drop(thirdCard);
 
@@ -394,11 +399,16 @@ describe("NodeEditorModal", () => {
 
     const firstCard = screen.getByTestId("sort-row-card-1");
     const thirdCard = screen.getByTestId("sort-row-card-3");
+    const firstHandle = within(firstCard).getByRole("button", {
+      name: "Drag sort item 1",
+    });
 
     expect(firstCard.tagName).toBe("SECTION");
     expect(firstCard.className).toContain("row-card");
+    expect(firstCard.getAttribute("draggable")).not.toBe("true");
+    expect(firstHandle.getAttribute("draggable")).toBe("true");
 
-    fireEvent.dragStart(firstCard);
+    fireEvent.dragStart(firstHandle);
     fireEvent.dragOver(thirdCard);
     fireEvent.drop(thirdCard);
 

@@ -11,13 +11,13 @@ import { RowActionBar } from "./RowActionBar";
 import { RowCard } from "./RowCard";
 import {
   addDraftRow,
-  DraftRow,
   duplicateDraftRow,
   ensureDraftRows,
   moveDraftRow,
   removeDraftRow,
   stripDraftRows,
 } from "./rowDrafts";
+import type { DraftRow } from "./rowDrafts";
 
 type FieldRow = {
   name: string;
@@ -489,11 +489,11 @@ function SelectMappingRows({
   schemaOverrides,
   onChange,
 }: {
-  rows: NamedExpression[];
+  rows: NamedExpressionDraftRow[];
   document: GraphDocument;
   nodeId: string;
   schemaOverrides?: Record<string, ColumnMap>;
-  onChange: (rows: NamedExpression[]) => void;
+  onChange: (rows: NamedExpressionDraftRow[]) => void;
 }) {
   return (
     <NamedExpressionRows

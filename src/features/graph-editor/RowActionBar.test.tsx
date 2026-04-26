@@ -143,12 +143,15 @@ describe("RowCard", () => {
     );
 
     const section = container.querySelector("section");
+    const dragHandle = screen.getByRole("button", { name: "Drag field 2" });
     expect(section).toBeTruthy();
+    expect(section?.getAttribute("draggable")).not.toBe("true");
+    expect(dragHandle.getAttribute("draggable")).toBe("true");
     const dragStartEvent = new Event("dragstart", { bubbles: true, cancelable: true });
     const dragOverEvent = new Event("dragover", { bubbles: true, cancelable: true });
     const dropEvent = new Event("drop", { bubbles: true, cancelable: true });
 
-    fireEvent(section as HTMLElement, dragStartEvent);
+    fireEvent(dragHandle, dragStartEvent);
     fireEvent(section as HTMLElement, dragOverEvent);
     fireEvent(section as HTMLElement, dropEvent);
 

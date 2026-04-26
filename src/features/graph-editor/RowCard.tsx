@@ -37,8 +37,6 @@ export function RowCard({
     <section
       data-testid={testId}
       className="row-card"
-      draggable={draggable}
-      onDragStart={draggable ? onDragStart : undefined}
       onDragOver={onDragOver ? handleDragOver : undefined}
       onDrop={onDrop ? handleDrop : undefined}
     >
@@ -49,6 +47,7 @@ export function RowCard({
           aria-label={dragLabel}
           tabIndex={-1}
           draggable={draggable}
+          onDragStart={draggable ? onDragStart : undefined}
         >
           ⋮⋮
         </button>
