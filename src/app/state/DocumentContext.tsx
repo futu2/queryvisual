@@ -7,7 +7,7 @@ import {
   type Dispatch,
   type ReactNode,
 } from "react";
-import type { GraphDocument } from "../../domain/document/types";
+import type { GraphDocument, GraphWorkspace } from "../../domain/document/types";
 import {
   createInitialEditorState,
   documentReducer,
@@ -24,28 +24,35 @@ const DocumentContext = createContext<DocumentContextValue | null>(null);
 
 export function DocumentProvider({
   children,
+  initialWorkspace,
   initialDocument,
 }: {
   children: ReactNode;
+  initialWorkspace?: GraphWorkspace;
   initialDocument?: GraphDocument;
 }) {
-  const previousInitialDocument = useRef(initialDocument);
+  const initialState = initialWorkspace ?? initialDocument;
+  const previousInitialState = useRef(initialState);
   const [state, dispatch] = useReducer(
     documentReducer,
-    initialDocument,
+    initialState,
     createInitialEditorState,
   );
 
   useEffect(() => {
-    if (
-      initialDocument &&
-      initialDocument !== previousInitialDocument.current
-    ) {
-      dispatch({ type: "replace-document", document: initialDocument });
+    if (!initialState || initialState === previousInitialState.current) {
+      previousInitialState.current = initialState;
+      return;
     }
 
-    previousInitialDocument.current = initialDocument;
-  }, [initialDocument]);
+    if ("graphs" in initialState && initialState.version === 2) {
+      dispatch({ type: "replace-workspace", workspace: initialState });
+    } else {
+      dispatch({ type: "replace-document", document: initialState });
+    }
+
+    previousInitialState.current = initialState;
+  }, [initialState]);
 
   return (
     <DocumentContext.Provider value={{ state, dispatch }}>

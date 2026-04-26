@@ -1,4 +1,10 @@
-import type { GraphDocument } from "../../domain/document/types";
+import type {
+  GraphDefinition,
+  GraphDocument,
+  GraphDocumentBase,
+  GraphWorkspace,
+  LegacyGraphDocument,
+} from "../../domain/document/types";
 import {
   isOutputListenerConfig,
   normalizeOutputListenerConfig,
@@ -130,28 +136,6 @@ function isNodeData(kind: typeof nodeKinds[number], value: unknown) {
   }
 }
 
-function normalizeDocumentOutputs(document: GraphDocument): GraphDocument {
-  return {
-    ...document,
-    nodes: document.nodes.map((node) => {
-      if (node.kind !== "output") {
-        return node;
-      }
-
-      return {
-        ...node,
-        data: {
-          outputName: node.data.outputName,
-          listeners: normalizeOutputListenerConfig(
-            node.data.outputName,
-            (node.data as Record<string, unknown>).listeners,
-          ),
-        },
-      };
-    }),
-  };
-}
-
 function isGraphNode(value: unknown) {
   return (
     isRecord(value) &&
@@ -185,6 +169,94 @@ function sanitizeFilename(name: string) {
   return sanitized === "" ? "queryvisual" : sanitized;
 }
 
+function hasGraphDocumentShape(value: unknown) {
+  return (
+    isRecord(value) &&
+    isRecord(value.metadata) &&
+    typeof value.metadata.name === "string" &&
+    isViewport(value.viewport) &&
+    Array.isArray(value.nodes) &&
+    value.nodes.every(isGraphNode) &&
+    Array.isArray(value.edges) &&
+    value.edges.every(isGraphEdge)
+  );
+}
+
+function isLegacyGraphDocument(value: unknown): value is LegacyGraphDocument {
+  return hasGraphDocumentShape(value) && value.version === 1;
+}
+
+function isGraphDefinition(value: unknown): value is GraphDefinition {
+  return hasGraphDocumentShape(value) && typeof value.id === "string";
+}
+
+function isGraphWorkspace(value: unknown): value is GraphWorkspace {
+  return (
+    isRecord(value) &&
+    value.version === 2 &&
+    isRecord(value.metadata) &&
+    typeof value.metadata.name === "string" &&
+    typeof value.entryGraphId === "string" &&
+    Array.isArray(value.graphs) &&
+    value.graphs.every(isGraphDefinition) &&
+    value.graphs.some((graph) => graph.id === value.entryGraphId)
+  );
+}
+
+function normalizeDocumentOutputs<TDocument extends GraphDocumentBase>(
+  document: TDocument,
+): TDocument {
+  return {
+    ...document,
+    nodes: document.nodes.map((node) => {
+      if (node.kind !== "output") {
+        return node;
+      }
+
+      return {
+        ...node,
+        data: {
+          outputName: node.data.outputName,
+          listeners: normalizeOutputListenerConfig(
+            node.data.outputName,
+            (node.data as Record<string, unknown>).listeners,
+          ),
+        },
+      };
+    }),
+  };
+}
+
+function normalizeWorkspace(workspace: GraphWorkspace): GraphWorkspace {
+  return {
+    ...workspace,
+    graphs: workspace.graphs.map((graph) => normalizeDocumentOutputs(graph)),
+  };
+}
+
+function migrateLegacyDocumentToWorkspace(
+  document: LegacyGraphDocument,
+): GraphWorkspace {
+  const graphId = "graph-main";
+
+  return normalizeWorkspace({
+    version: 2,
+    metadata: {
+      name: document.metadata.name,
+    },
+    entryGraphId: graphId,
+    graphs: [
+      {
+        id: graphId,
+        metadata: document.metadata,
+        viewport: document.viewport,
+        nodes: document.nodes,
+        edges: document.edges,
+      },
+    ],
+  });
+}
+
 export function serializeDocumentJson(document: GraphDocument) {
   return JSON.stringify(document, null, 2);
 }
@@ -198,21 +270,35 @@ export function parseDocumentJson(raw: string): GraphDocument {
     throw new Error("Invalid QueryVisual document");
   }
 
-  if (
-    !isRecord(parsed) ||
-    parsed.version !== 1 ||
-    !isRecord(parsed.metadata) ||
-    typeof parsed.metadata.name !== "string" ||
-    !isViewport(parsed.viewport) ||
-    !Array.isArray(parsed.nodes) ||
-    !parsed.nodes.every(isGraphNode) ||
-    !Array.isArray(parsed.edges) ||
-    !parsed.edges.every(isGraphEdge)
-  ) {
+  if (!isLegacyGraphDocument(parsed)) {
     throw new Error("Invalid QueryVisual document");
   }
 
-  return normalizeDocumentOutputs(parsed as GraphDocument);
+  return normalizeDocumentOutputs(parsed);
+}
+
+export function serializeWorkspaceJson(workspace: GraphWorkspace) {
+  return JSON.stringify(workspace, null, 2);
+}
+
+export function parseWorkspaceJson(raw: string): GraphWorkspace {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("Invalid QueryVisual workspace");
+  }
+
+  if (isLegacyGraphDocument(parsed)) {
+    return migrateLegacyDocumentToWorkspace(parsed);
+  }
+
+  if (!isGraphWorkspace(parsed)) {
+    throw new Error("Invalid QueryVisual workspace");
+  }
+
+  return normalizeWorkspace(parsed);
 }
 
 export function downloadDocument(graphDocument: GraphDocument) {
@@ -223,6 +309,18 @@ export function downloadDocument(graphDocument: GraphDocument) {
   const anchor = window.document.createElement("a");
   anchor.href = url;
   anchor.download = `${sanitizeFilename(graphDocument.metadata.name)}.json`;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+export function downloadWorkspace(workspace: GraphWorkspace) {
+  const blob = new Blob([serializeWorkspaceJson(workspace)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = window.document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${sanitizeFilename(workspace.metadata.name)}.json`;
   anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }

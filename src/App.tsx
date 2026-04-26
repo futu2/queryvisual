@@ -2,15 +2,17 @@ import {
   DocumentProvider,
   useDocumentContext,
 } from "./app/state/DocumentContext";
+import { getActiveGraph } from "./app/state/documentReducer";
 import { useOutputRuntime } from "./features/output-runtime/outputRuntime";
-import type { GraphDocument } from "./domain/document/types";
+import type { GraphDocument, GraphWorkspace } from "./domain/document/types";
 import { DocumentToolbar } from "./features/document-storage/DocumentToolbar";
 import { GraphCanvas } from "./features/graph-editor/GraphCanvas";
 import { NodePalette } from "./features/graph-editor/NodePalette";
 
 export function AppLayout() {
   const { state } = useDocumentContext();
-  const outputRuntime = useOutputRuntime(state.document);
+  const activeGraph = getActiveGraph(state) ?? state.document;
+  const outputRuntime = useOutputRuntime(activeGraph);
 
   return (
     <div className="app-shell">
@@ -32,9 +34,18 @@ export function AppLayout() {
   );
 }
 
-export function App({ initialDocument }: { initialDocument?: GraphDocument }) {
+export function App({
+  initialWorkspace,
+  initialDocument,
+}: {
+  initialWorkspace?: GraphWorkspace;
+  initialDocument?: GraphDocument;
+}) {
   return (
-    <DocumentProvider initialDocument={initialDocument}>
+    <DocumentProvider
+      initialWorkspace={initialWorkspace}
+      initialDocument={initialDocument}
+    >
       <AppLayout />
     </DocumentProvider>
   );

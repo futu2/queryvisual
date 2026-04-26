@@ -62,8 +62,7 @@ export interface GraphEdge {
   targetHandle: "in" | "left" | "right";
 }
 
-export interface GraphDocument {
-  version: 1;
+export interface GraphDocumentBase {
   metadata: {
     name: string;
   };
@@ -75,3 +74,22 @@ export interface GraphDocument {
   nodes: GraphNode[];
   edges: GraphEdge[];
 }
+
+export interface GraphDefinition extends GraphDocumentBase {
+  id: string;
+}
+
+export interface LegacyGraphDocument extends GraphDocumentBase {
+  version: 1;
+}
+
+export interface GraphWorkspace {
+  version: 2;
+  metadata: {
+    name: string;
+  };
+  entryGraphId: string;
+  graphs: GraphDefinition[];
+}
+
+export type GraphDocument = GraphDefinition | LegacyGraphDocument;

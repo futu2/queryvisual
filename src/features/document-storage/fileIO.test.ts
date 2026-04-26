@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { createSampleDocument } from "../../domain/document/sample";
-import { parseDocumentJson, serializeDocumentJson } from "./fileIO";
+import {
+  parseDocumentJson,
+  parseWorkspaceJson,
+  serializeDocumentJson,
+  serializeWorkspaceJson,
+} from "./fileIO";
 
 describe("fileIO", () => {
   test("round-trips graph documents as JSON", () => {
@@ -9,6 +14,55 @@ describe("fileIO", () => {
 
     expect(parsed.metadata.name).toBe(source.metadata.name);
     expect(parsed.nodes).toHaveLength(source.nodes.length);
+  });
+
+  test("wraps legacy single-graph JSON into a one-graph workspace", () => {
+    const workspace = parseWorkspaceJson(
+      JSON.stringify({
+        version: 1,
+        metadata: { name: "legacy" },
+        viewport: { x: 0, y: 0, zoom: 1 },
+        nodes: [],
+        edges: [],
+      }),
+    );
+
+    expect(workspace).toMatchObject({
+      version: 2,
+      metadata: { name: "legacy" },
+      entryGraphId: expect.any(String),
+      graphs: [
+        {
+          metadata: { name: "legacy" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [],
+          edges: [],
+        },
+      ],
+    });
+  });
+
+  test("round-trips an explicit workspace JSON payload", () => {
+    const workspace = parseWorkspaceJson(
+      JSON.stringify({
+        version: 2,
+        metadata: { name: "workspace" },
+        entryGraphId: "graph-main",
+        graphs: [
+          {
+            id: "graph-main",
+            metadata: { name: "Main" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [],
+            edges: [],
+          },
+        ],
+      }),
+    );
+
+    expect(serializeWorkspaceJson(workspace)).toContain(
+      '"entryGraphId": "graph-main"',
+    );
   });
 
   test("rejects invalid top-level document shapes", () => {

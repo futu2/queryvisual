@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useDocumentContext } from "../../app/state/DocumentContext";
-import { downloadDocument, parseDocumentJson } from "./fileIO";
+import { downloadWorkspace, parseWorkspaceJson } from "./fileIO";
 
 export function DocumentToolbar() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -13,7 +13,7 @@ export function DocumentToolbar() {
       <button
         type="button"
         className="ghost-button"
-        onClick={() => downloadDocument(state.document)}
+        onClick={() => downloadWorkspace(state.workspace)}
       >
         Save JSON
       </button>
@@ -36,8 +36,8 @@ export function DocumentToolbar() {
           try {
             const raw = await file.text();
             dispatch({
-              type: "replace-document",
-              document: parseDocumentJson(raw),
+              type: "replace-workspace",
+              workspace: parseWorkspaceJson(raw),
             });
             setLoadError(null);
           } catch {

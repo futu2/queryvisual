@@ -1,18 +1,24 @@
-import { createSampleDocument } from "../../domain/document/sample";
+import { createSampleWorkspace } from "../../domain/workspace/sample";
 import type {
+  GraphDefinition,
   GraphDocument,
   GraphEdge,
   GraphNode,
+  GraphWorkspace,
 } from "../../domain/document/types";
 
 export interface EditorState {
+  workspace: GraphWorkspace;
+  activeGraphId: string;
   document: GraphDocument;
   selectedNodeId: string | null;
   editorNodeId: string | null;
 }
 
 export type EditorAction =
+  | { type: "replace-workspace"; workspace: GraphWorkspace }
   | { type: "replace-document"; document: GraphDocument }
+  | { type: "set-active-graph"; graphId: string }
   | { type: "add-node"; node: GraphNode }
   | { type: "replace-node"; node: GraphNode }
   | { type: "upsert-edge"; edge: GraphEdge }
@@ -37,14 +43,97 @@ function sameTargetHandle(edge: GraphEdge, candidate: GraphEdge) {
   );
 }
 
-export function createInitialEditorState(
-  document: GraphDocument = createSampleDocument(),
-): EditorState {
+function toGraphDefinition(document: GraphDocument): GraphDefinition {
+  if ("id" in document && typeof document.id === "string") {
+    return document;
+  }
+
   return {
-    document,
+    id: "graph-main",
+    metadata: document.metadata,
+    viewport: document.viewport,
+    nodes: document.nodes,
+    edges: document.edges,
+  };
+}
+
+function toWorkspace(document: GraphDocument): GraphWorkspace {
+  const graph = toGraphDefinition(document);
+
+  return {
+    version: 2,
+    metadata: {
+      name: graph.metadata.name,
+    },
+    entryGraphId: graph.id,
+    graphs: [graph],
+  };
+}
+
+function isWorkspaceInput(
+  value: GraphWorkspace | GraphDocument,
+): value is GraphWorkspace {
+  return "graphs" in value && value.version === 2;
+}
+
+function getActiveGraphById(
+  workspace: GraphWorkspace,
+  activeGraphId: string,
+): GraphDefinition | null {
+  return workspace.graphs.find((graph) => graph.id === activeGraphId) ?? null;
+}
+
+function createStateFromWorkspace(workspace: GraphWorkspace): EditorState {
+  const activeGraph =
+    getActiveGraphById(workspace, workspace.entryGraphId) ?? workspace.graphs[0] ?? null;
+
+  if (!activeGraph) {
+    throw new Error("Workspace must include at least one graph");
+  }
+
+  return {
+    workspace,
+    activeGraphId: activeGraph.id,
+    document: activeGraph,
     selectedNodeId: null,
     editorNodeId: null,
   };
+}
+
+function updateActiveGraph(
+  state: EditorState,
+  update: (graph: GraphDefinition) => GraphDefinition,
+): EditorState {
+  const activeGraph = getActiveGraph(state);
+  if (!activeGraph) {
+    return state;
+  }
+
+  const nextActiveGraph = update(activeGraph);
+  return {
+    ...state,
+    workspace: {
+      ...state.workspace,
+      graphs: state.workspace.graphs.map((graph) =>
+        graph.id === nextActiveGraph.id ? nextActiveGraph : graph,
+      ),
+    },
+    document: nextActiveGraph,
+  };
+}
+
+export function createInitialEditorState(
+  documentOrWorkspace: GraphWorkspace | GraphDocument = createSampleWorkspace(),
+): EditorState {
+  if (isWorkspaceInput(documentOrWorkspace)) {
+    return createStateFromWorkspace(documentOrWorkspace);
+  }
+
+  return createStateFromWorkspace(toWorkspace(documentOrWorkspace));
+}
+
+export function getActiveGraph(state: EditorState): GraphDefinition | null {
+  return getActiveGraphById(state.workspace, state.activeGraphId);
 }
 
 export function documentReducer(
@@ -52,61 +141,59 @@ export function documentReducer(
   action: EditorAction,
 ): EditorState {
   switch (action.type) {
+    case "replace-workspace":
+      return createInitialEditorState(action.workspace);
     case "replace-document":
       return createInitialEditorState(action.document);
+    case "set-active-graph": {
+      const nextActiveGraph = getActiveGraphById(state.workspace, action.graphId);
+      if (!nextActiveGraph) {
+        return state;
+      }
+
+      return {
+        ...state,
+        activeGraphId: nextActiveGraph.id,
+        document: nextActiveGraph,
+        selectedNodeId: null,
+        editorNodeId: null,
+      };
+    }
     case "add-node":
-      return {
-        ...state,
-        document: {
-          ...state.document,
-          nodes: [...state.document.nodes, action.node],
-        },
-      };
+      return updateActiveGraph(state, (graph) => ({
+        ...graph,
+        nodes: [...graph.nodes, action.node],
+      }));
     case "replace-node":
-      return {
-        ...state,
-        document: {
-          ...state.document,
-          nodes: state.document.nodes.map((node) =>
-            node.id === action.node.id ? action.node : node,
-          ),
-        },
-      };
+      return updateActiveGraph(state, (graph) => ({
+        ...graph,
+        nodes: graph.nodes.map((node) =>
+          node.id === action.node.id ? action.node : node,
+        ),
+      }));
     case "upsert-edge":
-      return {
-        ...state,
-        document: {
-          ...state.document,
-          edges: [
-            ...state.document.edges.filter(
-              (edge) =>
-                edge.id !== action.edge.id &&
-                !sameTargetHandle(edge, action.edge),
-            ),
-            action.edge,
-          ],
-        },
-      };
-    case "delete-edge":
-      return {
-        ...state,
-        document: {
-          ...state.document,
-          edges: state.document.edges.filter((edge) => edge.id !== action.edgeId),
-        },
-      };
-    case "set-node-position":
-      return {
-        ...state,
-        document: {
-          ...state.document,
-          nodes: state.document.nodes.map((node) =>
-            node.id === action.nodeId
-              ? { ...node, position: action.position }
-              : node,
+      return updateActiveGraph(state, (graph) => ({
+        ...graph,
+        edges: [
+          ...graph.edges.filter(
+            (edge) =>
+              edge.id !== action.edge.id && !sameTargetHandle(edge, action.edge),
           ),
-        },
-      };
+          action.edge,
+        ],
+      }));
+    case "delete-edge":
+      return updateActiveGraph(state, (graph) => ({
+        ...graph,
+        edges: graph.edges.filter((edge) => edge.id !== action.edgeId),
+      }));
+    case "set-node-position":
+      return updateActiveGraph(state, (graph) => ({
+        ...graph,
+        nodes: graph.nodes.map((node) =>
+          node.id === action.nodeId ? { ...node, position: action.position } : node,
+        ),
+      }));
     case "set-viewport":
       if (
         state.document.viewport.x === action.viewport.x &&
@@ -116,13 +203,10 @@ export function documentReducer(
         return state;
       }
 
-      return {
-        ...state,
-        document: {
-          ...state.document,
-          viewport: action.viewport,
-        },
-      };
+      return updateActiveGraph(state, (graph) => ({
+        ...graph,
+        viewport: action.viewport,
+      }));
     case "open-node-editor":
       return {
         ...state,

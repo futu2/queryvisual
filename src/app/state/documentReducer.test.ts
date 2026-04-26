@@ -2,9 +2,21 @@ import { describe, expect, test } from "bun:test";
 import { createSampleDocument } from "../../domain/document/sample";
 import { createDefaultOutputListenerConfig } from "../../domain/document/outputListeners";
 import type { GraphDocument } from "../../domain/document/types";
-import { createInitialEditorState, documentReducer } from "./documentReducer";
+import { createSampleWorkspace } from "../../domain/workspace/sample";
+import {
+  createInitialEditorState,
+  documentReducer,
+  getActiveGraph,
+} from "./documentReducer";
 
 describe("documentReducer", () => {
+  test("creates initial editor state from a sample workspace", () => {
+    const state = createInitialEditorState(createSampleWorkspace());
+
+    expect(state.activeGraphId).toBe(state.workspace.entryGraphId);
+    expect(getActiveGraph(state)?.id).toBe(state.workspace.entryGraphId);
+  });
+
   test("tracks open editor state", () => {
     const initial = createInitialEditorState(createSampleDocument());
     const next = documentReducer(initial, {
@@ -45,10 +57,47 @@ describe("documentReducer", () => {
       document: replacement,
     });
 
-    expect(next.document).toEqual(replacement);
+    expect(next.workspace.entryGraphId).toBe("graph-main");
+    expect(next.document).toEqual({
+      id: "graph-main",
+      metadata: replacement.metadata,
+      viewport: replacement.viewport,
+      nodes: replacement.nodes,
+      edges: replacement.edges,
+    });
     expect(next.selectedNodeId).toBeNull();
     expect(next.editorNodeId).toBeNull();
     expect("activeOutputId" in next).toBe(false);
+  });
+
+  test("replace-workspace resets selection and switches the active graph", () => {
+    const state = {
+      ...createInitialEditorState(createSampleWorkspace()),
+      selectedNodeId: "from-orders",
+      editorNodeId: "from-orders",
+    };
+
+    const next = documentReducer(state, {
+      type: "replace-workspace",
+      workspace: {
+        version: 2,
+        metadata: { name: "Replacement" },
+        entryGraphId: "graph-b",
+        graphs: [
+          {
+            id: "graph-b",
+            metadata: { name: "B" },
+            viewport: { x: 10, y: 20, zoom: 0.8 },
+            nodes: [],
+            edges: [],
+          },
+        ],
+      },
+    });
+
+    expect(next.activeGraphId).toBe("graph-b");
+    expect(next.selectedNodeId).toBeNull();
+    expect(next.editorNodeId).toBeNull();
   });
 
   test("upserts edges by id", () => {
