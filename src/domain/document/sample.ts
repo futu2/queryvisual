@@ -1,4 +1,5 @@
 import type { GraphDocument } from "./types";
+import { createDefaultOutputListenerConfig } from "./outputListeners";
 
 export function createSampleDocument(): GraphDocument {
   return {
@@ -46,6 +47,7 @@ export function createSampleDocument(): GraphDocument {
         position: { x: 720, y: 140 },
         data: {
           outputName: "orders_report",
+          listeners: createDefaultOutputListenerConfig("orders_report"),
         },
       },
     ],

@@ -1,35 +1,20 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { cleanup, render, screen } from "@testing-library/react";
-import { createElement } from "react";
+import { describe, expect, test } from "bun:test";
 import { createSampleDocument } from "../../domain/document/sample";
-import type { GraphDocument } from "../../domain/document/types";
-import { DocumentProvider, useDocumentContext } from "./DocumentContext";
+import { createDefaultOutputListenerConfig } from "../../domain/document/outputListeners";
 import { createInitialEditorState, documentReducer } from "./documentReducer";
 
-afterEach(cleanup);
-
-function ActiveOutputProbe() {
-  const { state } = useDocumentContext();
-  return createElement(
-    "span",
-    { "data-testid": "active-output" },
-    state.activeOutputId ?? "none",
-  );
-}
-
 describe("documentReducer", () => {
-  test("tracks the active output and open editor", () => {
+  test("tracks open editor state", () => {
     const initial = createInitialEditorState(createSampleDocument());
     const next = documentReducer(initial, {
       type: "open-node-editor",
       nodeId: "select-orders",
     });
 
-    expect(initial.activeOutputId).toBe("output-orders");
     expect(next.editorNodeId).toBe("select-orders");
   });
 
-  test("replaces the document and resets ui state", () => {
+  test("replaces the document and resets only selection plus open editor state", () => {
     const initial = {
       ...createInitialEditorState(createSampleDocument()),
       selectedNodeId: "select-orders",
@@ -45,7 +30,10 @@ describe("documentReducer", () => {
           kind: "output",
           label: "Output B",
           position: { x: 0, y: 0 },
-          data: { outputName: "b" },
+          data: {
+            outputName: "b",
+            listeners: createDefaultOutputListenerConfig("b"),
+          },
         },
       ],
       edges: [],
@@ -59,7 +47,7 @@ describe("documentReducer", () => {
     expect(next.document).toEqual(replacement);
     expect(next.selectedNodeId).toBeNull();
     expect(next.editorNodeId).toBeNull();
-    expect(next.activeOutputId).toBe("output-b");
+    expect("activeOutputId" in next).toBe(false);
   });
 
   test("upserts edges by id", () => {
@@ -104,15 +92,17 @@ describe("documentReducer", () => {
     expect(outputInputEdges[0]?.source).toBe("from-orders");
   });
 
-  test("keeps the current active output when given a non-output node id", () => {
+  test("deletes exactly one edge by id", () => {
     const initial = createInitialEditorState(createSampleDocument());
 
     const next = documentReducer(initial, {
-      type: "set-active-output",
-      nodeId: "select-orders",
+      type: "delete-edge",
+      edgeId: "edge-select-output",
     });
 
-    expect(next.activeOutputId).toBe("output-orders");
+    expect(next.document.edges).toHaveLength(initial.document.edges.length - 1);
+    expect(next.document.edges.some((edge) => edge.id === "edge-select-output")).toBe(false);
+    expect(next.document.edges.some((edge) => edge.id === "edge-from-select")).toBe(true);
   });
 
   test("throws on unknown runtime actions", () => {
@@ -134,41 +124,8 @@ describe("documentReducer", () => {
     expect(next.document.viewport).toEqual({ x: 120, y: 64, zoom: 0.75 });
   });
 
-  test("replaces provider state when initialDocument changes", () => {
-    const replacement: GraphDocument = {
-      version: 1,
-      metadata: { name: "replacement" },
-      viewport: { x: 0, y: 0, zoom: 1 },
-      nodes: [
-        {
-          id: "output-next",
-          kind: "output",
-          label: "Output",
-          position: { x: 0, y: 0 },
-          data: { outputName: "replacement_out" },
-        },
-      ],
-      edges: [],
-    };
-
-    const { rerender } = render(
-      createElement(
-        DocumentProvider,
-        { initialDocument: createSampleDocument() },
-        createElement(ActiveOutputProbe),
-      ),
-    );
-
-    expect(screen.getByTestId("active-output").textContent).toBe("output-orders");
-
-    rerender(
-      createElement(
-        DocumentProvider,
-        { initialDocument: replacement },
-        createElement(ActiveOutputProbe),
-      ),
-    );
-
-    expect(screen.getByTestId("active-output").textContent).toBe("output-next");
+  test("initial state no longer includes active output state", () => {
+    const initial = createInitialEditorState(createSampleDocument());
+    expect("activeOutputId" in initial).toBe(false);
   });
 });
