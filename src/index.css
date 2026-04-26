@@ -50,6 +50,18 @@ body {
   color: #645b51;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .stack {
   display: grid;
   gap: 10px;
@@ -81,17 +93,28 @@ body {
 }
 
 .modal-card {
-  width: min(760px, calc(100vw - 48px));
-  max-height: calc(100vh - 64px);
-  overflow: auto;
-  padding: 24px;
+  width: min(780px, calc(100vw - 48px));
+  max-height: calc(100vh - 56px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
+  padding: 24px 24px 0;
   border-radius: 20px;
   background: #fffdf8;
+  border: 1px solid rgba(95, 70, 43, 0.16);
   box-shadow: 0 24px 60px rgba(28, 21, 14, 0.28);
 }
 
 .modal-header {
-  margin-bottom: 20px;
+  margin: 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(95, 70, 43, 0.12);
+}
+
+.modal-header h2 {
+  margin: 6px 0 0;
+  line-height: 1.15;
 }
 
 .modal-kind {
@@ -104,6 +127,21 @@ body {
 .modal-body label {
   display: grid;
   gap: 8px;
+}
+
+.modal-body {
+  display: grid;
+  gap: 14px;
+  overflow: auto;
+  padding: 4px 1px 18px;
+}
+
+.modal-body h3 {
+  margin: 8px 0 2px;
+  font-size: 14px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #7f6851;
 }
 
 .modal-body input,
@@ -123,16 +161,127 @@ body {
 }
 
 .modal-footer {
+  position: sticky;
+  bottom: 0;
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 12px;
-  margin-top: 20px;
+  margin: 0 -24px;
+  padding: 14px 24px 18px;
+  border-top: 1px solid rgba(95, 70, 43, 0.1);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 253, 248, 0.55) 0%,
+    rgba(255, 253, 248, 0.97) 30%,
+    #fffdf8 100%
+  );
 }
 
 .editor-stack,
 .mapping-row {
   display: grid;
   gap: 12px;
+}
+
+.editor-section {
+  display: grid;
+  gap: 10px;
+}
+
+.editor-section > h3,
+.editor-stack > h3 {
+  margin: 8px 0 2px;
+}
+
+.row-card {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(95, 70, 43, 0.2);
+  background: linear-gradient(180deg, #fffcf4 0%, #fff9ef 100%);
+  box-shadow: 0 8px 16px rgba(43, 28, 12, 0.08);
+}
+
+.row-card-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.row-card-title {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  color: #6f5c49;
+}
+
+.row-card-body {
+  display: grid;
+  gap: 10px;
+}
+
+.row-drag-handle {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(95, 70, 43, 0.2);
+  border-radius: 10px;
+  background: rgba(255, 250, 240, 0.95);
+  color: #8f755a;
+  font: inherit;
+  line-height: 1;
+  cursor: grab;
+  user-select: none;
+}
+
+.row-drag-handle:active {
+  cursor: grabbing;
+}
+
+.row-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.row-icon-button {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(31, 29, 26, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #4f4335;
+  font: inherit;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.row-icon-button:hover {
+  background: #fff;
+}
+
+.row-icon-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.row-icon-button-danger {
+  color: #8b2f2a;
+  border-color: rgba(139, 47, 42, 0.24);
+}
+
+.row-drag-handle:focus-visible,
+.row-icon-button:focus-visible,
+.row-add-button:focus-visible {
+  outline: 2px solid rgba(143, 103, 56, 0.7);
+  outline-offset: 2px;
 }
 
 .row-editor-actions {
@@ -159,6 +308,9 @@ body {
 
 .row-add-button {
   justify-self: start;
+  padding: 7px 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, #f8efe1 100%);
+  box-shadow: 0 4px 10px rgba(55, 39, 22, 0.08);
 }
 
 .expression-input {
@@ -210,5 +362,28 @@ body {
   .debug-pane {
     border-left: 0;
     border-bottom: 0;
+  }
+
+  .modal-card {
+    width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+    border-radius: 16px;
+    padding: 18px 18px 0;
+  }
+
+  .modal-footer {
+    margin: 0 -18px;
+    padding: 12px 18px 16px;
+  }
+
+  .row-card-header {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .row-action-bar {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    padding-left: 36px;
   }
 }

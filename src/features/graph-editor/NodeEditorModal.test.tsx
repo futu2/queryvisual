@@ -157,6 +157,36 @@ describe("NodeEditorModal", () => {
     expect(screen.getByLabelText("Mapping name 2")).toBeTruthy();
   });
 
+  test("renders row action controls with accessible icon buttons", () => {
+    const node: GraphNode = {
+      id: "select-orders-actions",
+      kind: "select",
+      label: "Project",
+      position: { x: 0, y: 0 },
+      data: {
+        mappings: [
+          { name: "gross_total", expression: "total" },
+          { name: "status_text", expression: "status" },
+        ],
+      },
+    };
+
+    renderModal({ node });
+
+    const moveUp = screen.getByRole("button", { name: "Move mapping 1 up" });
+    const moveDown = screen.getByRole("button", { name: "Move mapping 1 down" });
+    const duplicate = screen.getByRole("button", { name: "Duplicate mapping 1" });
+    const remove = screen.getByRole("button", { name: "Remove mapping 1" });
+    const dragHandle = screen.getByRole("button", { name: "Drag mapping 1" });
+
+    expect(moveUp.classList.contains("row-icon-button")).toBeTrue();
+    expect(moveDown.classList.contains("row-icon-button")).toBeTrue();
+    expect(duplicate.classList.contains("row-icon-button")).toBeTrue();
+    expect(remove.classList.contains("row-icon-button")).toBeTrue();
+    expect(remove.classList.contains("row-icon-button-danger")).toBeTrue();
+    expect(dragHandle.classList.contains("row-drag-handle")).toBeTrue();
+  });
+
   test("strips blank select placeholders but preserves partially filled mappings", async () => {
     const user = userEvent.setup();
     const onSave = mock();
