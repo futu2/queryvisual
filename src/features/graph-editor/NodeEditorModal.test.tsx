@@ -1021,10 +1021,11 @@ describe("NodeEditorModal", () => {
     expect(screen.getByRole("tab", { name: "IR" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Optimized IR" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "SQL" })).toBeTruthy();
-    expect(screen.getByText("saveToLocalStorage: write failed")).toBeTruthy();
-
-    await user.click(screen.getByRole("tab", { name: "SQL" }));
+    expect(screen.getByRole("tab", { name: "SQL" }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
     expect(screen.getByText("SELECT order_id FROM sales.orders")).toBeTruthy();
+    expect(screen.getByText("saveToLocalStorage: write failed")).toBeTruthy();
 
     await user.clear(screen.getByLabelText("Output name"));
     await user.type(screen.getByLabelText("Output name"), "orders_runtime");
@@ -1050,6 +1051,103 @@ describe("NodeEditorModal", () => {
         },
       },
     });
+  });
+
+  test("output runtime tab selection resets to SQL when runtime data changes", async () => {
+    const user = userEvent.setup();
+    const node: GraphNode = {
+      id: "output-orders-reset",
+      kind: "output",
+      label: "Orders Report",
+      position: { x: 0, y: 0 },
+      data: {
+        outputName: "orders_report",
+        listeners: {
+          copyToClipboard: false,
+          logToConsole: false,
+          saveToLocalStorage: {
+            enabled: false,
+            key: "queryvisual.output.orders_report",
+          },
+        },
+      },
+    };
+    const baseRuntime = {
+      compileResult: {
+        semantic: {
+          document: {
+            version: 1,
+            metadata: { name: "Test document" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [node],
+            edges: [],
+          },
+          outputId: node.id,
+          outputName: "orders_report",
+          orderedNodes: [node],
+          nodesById: { [node.id]: node },
+          schemas: {},
+          diagnostics: [],
+        },
+        ir: null,
+        optimizedIr: null,
+        sql: "SELECT order_id FROM sales.orders",
+      } satisfies CompileOutputResult,
+      listenerStatus: {
+        lastSuccessfulSql: "SELECT order_id FROM sales.orders",
+        lastRunAt: 1704067200000,
+        lastErrorMessage: null,
+        lastSuccessfulSqlByListener: {
+          copyToClipboard: null,
+          logToConsole: null,
+          saveToLocalStorage: null,
+        },
+        lastEnabledByListener: {
+          copyToClipboard: false,
+          logToConsole: false,
+          saveToLocalStorage: false,
+        },
+      } satisfies OutputListenerStatus,
+    };
+
+    const renderResult = renderModal({ node, outputRuntime: baseRuntime });
+
+    await user.click(screen.getByRole("tab", { name: "Diagnostics" }));
+    expect(screen.getByRole("tab", { name: "Diagnostics" }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
+
+    const nextRuntime = {
+      ...baseRuntime,
+      compileResult: {
+        ...baseRuntime.compileResult,
+        sql: "SELECT customer_id FROM sales.orders",
+      },
+    };
+
+    renderResult.rerender(
+      <DocumentProvider
+        initialDocument={{
+          version: 1,
+          metadata: { name: "Test document" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [node],
+          edges: [],
+        }}
+      >
+        <NodeEditorModal
+          node={node}
+          onClose={() => {}}
+          onSave={() => {}}
+          outputRuntime={nextRuntime}
+        />
+      </DocumentProvider>,
+    );
+
+    expect(screen.getByRole("tab", { name: "SQL" }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
+    expect(screen.getByText("SELECT customer_id FROM sales.orders")).toBeTruthy();
   });
 
   test("non-output nodes keep current modal behavior without output runtime tabs", () => {

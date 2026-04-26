@@ -54,10 +54,10 @@ function OutputRuntimeInspector({
   compileResult: CompileOutputResult | null;
   listenerStatus: OutputListenerStatus | null;
 }) {
-  const [activeTab, setActiveTab] = useState<OutputInspectorTab>("diagnostics");
+  const [activeTab, setActiveTab] = useState<OutputInspectorTab>("sql");
 
   useEffect(() => {
-    setActiveTab("diagnostics");
+    setActiveTab("sql");
   }, [compileResult, listenerStatus]);
 
   const tabDefinitions: Array<{ id: OutputInspectorTab; label: string }> = [
