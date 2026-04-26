@@ -163,59 +163,79 @@ describe("fileIO", () => {
     ).toThrow("Invalid QueryVisual document");
   });
 
-  test("rejects graphInput nodes without inputName in legacy documents", () => {
-    expect(() =>
-      parseDocumentJson(
-        JSON.stringify({
-          version: 1,
-          metadata: { name: "bad-graph-input" },
-          viewport: { x: 0, y: 0, zoom: 1 },
-          nodes: [
-            {
-              id: "graph-input-1",
-              kind: "graphInput",
-              label: "Input",
-              position: { x: 0, y: 0 },
-              data: {
-                columns: { order_id: "int" },
-              },
+  test("migrates legacy graphInput nodes without inputName in documents", () => {
+    const parsed = parseDocumentJson(
+      JSON.stringify({
+        version: 1,
+        metadata: { name: "legacy-graph-input" },
+        viewport: { x: 0, y: 0, zoom: 1 },
+        nodes: [
+          {
+            id: "graph-input-1",
+            kind: "graphInput",
+            label: "Input Orders",
+            position: { x: 0, y: 0 },
+            data: {
+              columns: { order_id: "int" },
             },
-          ],
-          edges: [],
-        }),
-      ),
-    ).toThrow("Invalid QueryVisual document");
+          },
+        ],
+        edges: [],
+      }),
+    );
+
+    const inputNode = parsed.nodes.find((node) => node.id === "graph-input-1");
+    expect(inputNode?.kind).toBe("graphInput");
+    if (inputNode?.kind !== "graphInput") {
+      throw new Error("Expected graph input node");
+    }
+
+    expect(inputNode.data).toEqual({
+      inputName: "Input Orders",
+      columns: { order_id: "int" },
+    });
   });
 
-  test("rejects graphInput nodes without inputName in workspaces", () => {
-    expect(() =>
-      parseWorkspaceJson(
-        JSON.stringify({
-          version: 2,
-          metadata: { name: "workspace" },
-          entryGraphId: "graph-main",
-          graphs: [
-            {
-              id: "graph-main",
-              metadata: { name: "Main" },
-              viewport: { x: 0, y: 0, zoom: 1 },
-              nodes: [
-                {
-                  id: "graph-input-1",
-                  kind: "graphInput",
-                  label: "Input",
-                  position: { x: 0, y: 0 },
-                  data: {
-                    columns: { order_id: "int" },
-                  },
+  test("migrates legacy graphInput nodes without inputName in workspaces", () => {
+    const parsed = parseWorkspaceJson(
+      JSON.stringify({
+        version: 2,
+        metadata: { name: "workspace" },
+        entryGraphId: "graph-main",
+        graphs: [
+          {
+            id: "graph-main",
+            metadata: { name: "Main" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [
+              {
+                id: "graph-input-1",
+                kind: "graphInput",
+                label: "Input Orders",
+                position: { x: 0, y: 0 },
+                data: {
+                  columns: { order_id: "int" },
                 },
-              ],
-              edges: [],
-            },
-          ],
-        }),
-      ),
-    ).toThrow("Invalid QueryVisual workspace");
+              },
+            ],
+            edges: [],
+          },
+        ],
+      }),
+    );
+
+    const inputNode = parsed.graphs[0]?.nodes.find(
+      (node) => node.id === "graph-input-1",
+    );
+    expect(inputNode?.kind).toBe("graphInput");
+    if (inputNode?.kind !== "graphInput") {
+      throw new Error("Expected graph input node");
+    }
+
+    expect(inputNode.data).toEqual({
+      inputName: "Input Orders",
+      columns: { order_id: "int" },
+    });
   });
 
   test("rejects unknown node kinds", () => {

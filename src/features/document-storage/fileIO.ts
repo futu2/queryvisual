@@ -98,7 +98,10 @@ function isNodeData(kind: typeof nodeKinds[number], value: unknown) {
 
   switch (kind) {
     case "graphInput":
-      return typeof value.inputName === "string" && isColumnMap(value.columns);
+      return (
+        (value.inputName === undefined || typeof value.inputName === "string") &&
+        isColumnMap(value.columns)
+      );
     case "fromTable":
       return isTableRef(value.tableRef) && isColumnMap(value.columns);
     case "join":
@@ -216,6 +219,19 @@ function normalizeDocumentOutputs<TDocument extends GraphDocumentBase>(
   return {
     ...document,
     nodes: document.nodes.map((node) => {
+      if (node.kind === "graphInput") {
+        const rawData = node.data as Record<string, unknown>;
+
+        return {
+          ...node,
+          data: {
+            inputName:
+              typeof rawData.inputName === "string" ? rawData.inputName : node.label,
+            columns: node.data.columns,
+          },
+        };
+      }
+
       if (node.kind !== "output") {
         return node;
       }

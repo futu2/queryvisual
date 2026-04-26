@@ -164,7 +164,6 @@ export function documentReducer(
         ...state,
         workspace: {
           ...state.workspace,
-          entryGraphId: nextGraph.id,
           graphs: [...state.workspace.graphs, nextGraph],
         },
         activeGraphId: nextGraph.id,
@@ -252,10 +251,6 @@ export function documentReducer(
 
       return {
         ...state,
-        workspace: {
-          ...state.workspace,
-          entryGraphId: nextActiveGraph.id,
-        },
         activeGraphId: nextActiveGraph.id,
         document: nextActiveGraph,
         selectedNodeId: null,

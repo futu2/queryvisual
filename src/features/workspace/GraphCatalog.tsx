@@ -30,7 +30,7 @@ export function GraphCatalog() {
               <label className="graph-catalog__name-field">
                 <span className="sr-only">Graph name</span>
                 <input
-                  aria-label="Graph name"
+                  aria-label={`Graph name ${graph.metadata.name}`}
                   value={graph.metadata.name}
                   onChange={(event) =>
                     dispatch({
@@ -48,6 +48,7 @@ export function GraphCatalog() {
                   <button
                     className="ghost-button"
                     type="button"
+                    aria-label={`Open ${graph.metadata.name}`}
                     onClick={() =>
                       dispatch({ type: "set-active-graph", graphId: graph.id })
                     }
@@ -58,6 +59,7 @@ export function GraphCatalog() {
                 <button
                   className="ghost-button graph-catalog__delete-button"
                   type="button"
+                  aria-label={`Delete ${graph.metadata.name}`}
                   onClick={() =>
                     dispatch({ type: "delete-graph", graphId: graph.id })
                   }

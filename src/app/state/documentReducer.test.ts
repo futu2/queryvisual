@@ -110,7 +110,40 @@ describe("documentReducer", () => {
     expect(next.workspace.graphs).toHaveLength(initial.workspace.graphs.length + 1);
     expect(next.activeGraphId).toBe(createdGraph?.id);
     expect(next.document.id).toBe(createdGraph?.id);
-    expect(next.workspace.entryGraphId).toBe(createdGraph?.id);
+    expect(next.workspace.entryGraphId).toBe(initial.workspace.entryGraphId);
+  });
+
+  test("set-active-graph switches editor graph without mutating workspace entry graph", () => {
+    const initial = createInitialEditorState({
+      version: 2,
+      metadata: { name: "Workspace" },
+      entryGraphId: "graph-a",
+      graphs: [
+        {
+          id: "graph-a",
+          metadata: { name: "Alpha" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [],
+          edges: [],
+        },
+        {
+          id: "graph-b",
+          metadata: { name: "Beta" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [],
+          edges: [],
+        },
+      ],
+    });
+
+    const next = documentReducer(initial, {
+      type: "set-active-graph",
+      graphId: "graph-b",
+    });
+
+    expect(next.activeGraphId).toBe("graph-b");
+    expect(next.document.id).toBe("graph-b");
+    expect(next.workspace.entryGraphId).toBe("graph-a");
   });
 
   test("renames a graph and updates active document metadata", () => {

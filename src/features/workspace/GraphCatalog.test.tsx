@@ -27,28 +27,31 @@ describe("GraphCatalog", () => {
       </DocumentProvider>,
     );
 
-    expect(screen.getAllByLabelText(/Graph name/i)).toHaveLength(1);
+    expect(screen.getByLabelText("Graph name Orders Sample")).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "New graph" }));
 
-    expect(screen.getAllByLabelText(/Graph name/i)).toHaveLength(2);
-
-    const graphNameInputs = screen.getAllByLabelText(
-      /Graph name/i,
-    ) as HTMLInputElement[];
-    const newGraphNameInput = graphNameInputs[1];
+    const newGraphNameInput = screen.getByLabelText(
+      "Graph name Graph 2",
+    ) as HTMLInputElement;
     await user.clear(newGraphNameInput);
     await user.type(newGraphNameInput, "Segmented Revenue");
 
+    expect(screen.getByRole("button", { name: "Delete Orders Sample" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Delete Segmented Revenue" })).toBeTruthy();
     const newGraphRow = getGraphRowByName("Segmented Revenue");
     expect(within(newGraphRow).getByText("Active")).toBeTruthy();
 
     const originalGraphRow = getGraphRowByName("Orders Sample");
-    await user.click(within(originalGraphRow).getByRole("button", { name: "Open" }));
+    await user.click(
+      within(originalGraphRow).getByRole("button", { name: "Open Orders Sample" }),
+    );
     expect(within(originalGraphRow).getByText("Active")).toBeTruthy();
 
     const renamedRow = getGraphRowByName("Segmented Revenue");
-    await user.click(within(renamedRow).getByRole("button", { name: "Open" }));
+    await user.click(
+      within(renamedRow).getByRole("button", { name: "Open Segmented Revenue" }),
+    );
     expect(within(renamedRow).getByText("Active")).toBeTruthy();
   });
 });
