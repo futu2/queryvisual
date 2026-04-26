@@ -35,7 +35,13 @@ test("shows a delete button when hovered and calls onDelete with the edge id", a
   expect(screen.queryByRole("button", { name: "Delete edge" })).toBeNull();
 
   fireEvent.mouseEnter(screen.getByTestId("deletable-edge-hitbox"));
-  fireEvent.click(screen.getByRole("button", { name: "Delete edge" }));
+  const deleteButton = screen.getByRole("button", { name: "Delete edge" });
+
+  expect(deleteButton.className).toContain("nopan");
+  expect(deleteButton.className).toContain("nodrag");
+  expect(deleteButton.style.pointerEvents).toBe("all");
+
+  fireEvent.click(deleteButton);
 
   expect(onDelete).toHaveBeenCalledWith("edge-select-output");
 });
@@ -55,5 +61,9 @@ test("keeps the delete button visible while the edge is selected", () => {
     />,
   );
 
-  expect(screen.getByRole("button", { name: "Delete edge" })).toBeTruthy();
+  const deleteButton = screen.getByRole("button", { name: "Delete edge" });
+
+  expect(deleteButton.className).toContain("nopan");
+  expect(deleteButton.className).toContain("nodrag");
+  expect(deleteButton.style.pointerEvents).toBe("all");
 });

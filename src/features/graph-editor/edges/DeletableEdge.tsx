@@ -57,8 +57,9 @@ export function DeletableEdge({
           <button
             ref={buttonRef}
             type="button"
-            className="deletable-edge__button"
+            className="deletable-edge__button nopan nodrag"
             style={{
+              pointerEvents: "all",
               transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
             }}
             aria-label="Delete edge"
