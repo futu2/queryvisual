@@ -212,11 +212,17 @@ body {
 }
 
 .row-card-title {
+  min-width: 0;
   min-height: 24px;
   display: flex;
   align-items: center;
   font-size: 13px;
   color: #6f5c49;
+}
+
+.row-card-inline-label {
+  width: 100%;
+  display: block;
 }
 
 .row-card-body {

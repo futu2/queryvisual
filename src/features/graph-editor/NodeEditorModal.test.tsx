@@ -157,6 +157,28 @@ describe("NodeEditorModal", () => {
     expect(screen.getByLabelText("Mapping name 2")).toBeTruthy();
   });
 
+  test("renders the select mapping name input inside the row-card header", () => {
+    const node: GraphNode = {
+      id: "select-orders-header",
+      kind: "select",
+      label: "Project",
+      position: { x: 0, y: 0 },
+      data: {
+        mappings: [{ name: "gross_total", expression: "total" }],
+      },
+    };
+
+    renderModal({ node });
+
+    const card = screen.getByTestId("mapping-row-card-1");
+    const header = card.querySelector(".row-card-header");
+
+    expect(header).toBeTruthy();
+    expect(
+      within(header as HTMLElement).getByLabelText("Mapping name 1"),
+    ).toBeTruthy();
+  });
+
   test("renders row action controls with accessible icon buttons", () => {
     const node: GraphNode = {
       id: "select-orders-actions",
@@ -294,6 +316,27 @@ describe("NodeEditorModal", () => {
     expect((screen.getByLabelText("Field type 1") as HTMLSelectElement).value).toBe(
       "string",
     );
+  });
+
+  test("renders the fromTable field name input inside the row-card header", () => {
+    const node: GraphNode = {
+      id: "from-orders-header",
+      kind: "fromTable",
+      label: "Orders",
+      position: { x: 0, y: 0 },
+      data: {
+        tableRef: { tableName: "orders" },
+        columns: { order_id: "int" },
+      },
+    };
+
+    renderModal({ node });
+
+    const card = screen.getByTestId("field-row-card-1");
+    const header = card.querySelector(".row-card-header");
+
+    expect(header).toBeTruthy();
+    expect(within(header as HTMLElement).getByLabelText("Field name 1")).toBeTruthy();
   });
 
   test("duplicates and reorders fromTable field rows before save", async () => {

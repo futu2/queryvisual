@@ -87,6 +87,23 @@ function blankSortItem(): SortItem {
   return { expression: "", direction: "asc" };
 }
 
+function InlineRowNameInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="row-card-inline-label">
+      <span className="sr-only">{label}</span>
+      <input value={value} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
+}
+
 function sanitizeNamedExpressions(rows: NamedExpression[]) {
   return rows
     .map((row) => ({
@@ -129,7 +146,17 @@ function FromTableFieldRows({
               if (fromIndex === -1) return;
               onChange(moveDraftRow(rows, fromIndex, index));
             }}
-            header={null}
+            header={
+              <InlineRowNameInput
+                label={`Field name ${index + 1}`}
+                value={row.name}
+                onChange={(name) => {
+                  const next = [...rows];
+                  next[index] = { ...row, name };
+                  onChange(next);
+                }}
+              />
+            }
             actions={
               <RowActionBar
                 itemName="field"
@@ -144,17 +171,6 @@ function FromTableFieldRows({
               />
             }
           >
-            <label>
-              {`Field name ${index + 1}`}
-              <input
-                value={row.name}
-                onChange={(event) => {
-                  const next = [...rows];
-                  next[index] = { ...row, name: event.target.value };
-                  onChange(next);
-                }}
-              />
-            </label>
             <label>
               {`Field type ${index + 1}`}
               <select
@@ -335,7 +351,17 @@ function NamedExpressionRows({
               if (fromIndex === -1) return;
               onChange(moveDraftRow(rows, fromIndex, index));
             }}
-            header={null}
+            header={
+              <InlineRowNameInput
+                label={nameLabel(index + 1)}
+                value={row.name}
+                onChange={(name) => {
+                  const next = [...rows];
+                  next[index] = { ...row, name };
+                  onChange(next);
+                }}
+              />
+            }
             actions={
               <RowActionBar
                 itemName={itemName}
@@ -352,17 +378,6 @@ function NamedExpressionRows({
               />
             }
           >
-            <label>
-              {nameLabel(index + 1)}
-              <input
-                value={row.name}
-                onChange={(event) => {
-                  const next = [...rows];
-                  next[index] = { ...row, name: event.target.value };
-                  onChange(next);
-                }}
-              />
-            </label>
             <ExpressionInput
               label={expressionLabel(index + 1)}
               value={row.expression}
@@ -638,39 +653,43 @@ export function renderNodeEditor(
     case "aggregation":
       return (
         <>
-          <h3>Group By</h3>
-          <NamedExpressionRows
-            rows={draft.data.groupBy}
-            itemName="group key"
-            addButtonLabel="Add group key"
-            nameLabel={(rowNumber) => `Group key name ${rowNumber}`}
-            expressionLabel={(rowNumber) => `Group key expression ${rowNumber}`}
-            rowCardTestIdPrefix="group-key-row-card"
-            document={document}
-            nodeId={draft.id}
-            schemaOverrides={schemaOverrides}
-            onChange={(rows) =>
-              setDraft({ ...draft, data: { ...draft.data, groupBy: rows } })
-            }
-          />
-          <h3>Aggregates</h3>
-          <NamedExpressionRows
-            rows={draft.data.aggregates}
-            itemName="aggregate"
-            addButtonLabel="Add aggregate"
-            nameLabel={(rowNumber) => `Aggregate name ${rowNumber}`}
-            expressionLabel={(rowNumber) => `Aggregate expression ${rowNumber}`}
-            rowCardTestIdPrefix="aggregate-row-card"
-            document={document}
-            nodeId={draft.id}
-            schemaOverrides={schemaOverrides}
-            onChange={(rows) =>
-              setDraft({
-                ...draft,
-                data: { ...draft.data, aggregates: rows },
-              })
-            }
-          />
+          <div className="editor-section">
+            <h3>Group By</h3>
+            <NamedExpressionRows
+              rows={draft.data.groupBy}
+              itemName="group key"
+              addButtonLabel="Add group key"
+              nameLabel={(rowNumber) => `Group key name ${rowNumber}`}
+              expressionLabel={(rowNumber) => `Group key expression ${rowNumber}`}
+              rowCardTestIdPrefix="group-key-row-card"
+              document={document}
+              nodeId={draft.id}
+              schemaOverrides={schemaOverrides}
+              onChange={(rows) =>
+                setDraft({ ...draft, data: { ...draft.data, groupBy: rows } })
+              }
+            />
+          </div>
+          <div className="editor-section">
+            <h3>Aggregates</h3>
+            <NamedExpressionRows
+              rows={draft.data.aggregates}
+              itemName="aggregate"
+              addButtonLabel="Add aggregate"
+              nameLabel={(rowNumber) => `Aggregate name ${rowNumber}`}
+              expressionLabel={(rowNumber) => `Aggregate expression ${rowNumber}`}
+              rowCardTestIdPrefix="aggregate-row-card"
+              document={document}
+              nodeId={draft.id}
+              schemaOverrides={schemaOverrides}
+              onChange={(rows) =>
+                setDraft({
+                  ...draft,
+                  data: { ...draft.data, aggregates: rows },
+                })
+              }
+            />
+          </div>
         </>
       );
     case "sort":
