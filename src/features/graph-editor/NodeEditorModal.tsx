@@ -1,4 +1,10 @@
-import { useMemo } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useState,
+} from "react";
 import type { GraphNode } from "../../domain/document/types";
 import { useDocumentContext } from "../../app/state/DocumentContext";
 import { inferNodeSchemas } from "../../domain/graph/inferSchemas";
@@ -8,61 +14,150 @@ import {
   useEditableNode,
 } from "./nodeEditors";
 
-export function NodeEditorModal({
-  node,
-  onClose,
-  onSave,
-}: {
+export type NodeEditorModalHandle = {
+  requestClose: (closeAction?: () => void) => void;
+};
+
+type NodeEditorModalProps = {
   node: GraphNode;
   onClose: () => void;
   onSave: (node: GraphNode) => void;
-}) {
+};
+
+export const NodeEditorModal = forwardRef<NodeEditorModalHandle, NodeEditorModalProps>(
+function NodeEditorModal({
+  node,
+  onClose,
+  onSave,
+}, ref) {
   const {
-    state: { document },
+    state: { document: graphDocument },
   } = useDocumentContext();
   const { draft, setDraft } = useEditableNode(node);
+  const [showDiscardDialog, setShowDiscardDialog] = useState(false);
 
   const schemaOverrides = useMemo(
-    () => inferNodeSchemas(document, node.id),
-    [document, node.id],
+    () => inferNodeSchemas(graphDocument, node.id),
+    [graphDocument, node.id],
+  );
+  const serializedDraft = useMemo(() => serializeNodeEditorDraft(draft), [draft]);
+  const isDirty = useMemo(
+    () => JSON.stringify(serializedDraft) !== JSON.stringify(node),
+    [node, serializedDraft],
   );
 
+  function requestClose(closeAction: () => void = onClose) {
+    if (!isDirty) {
+      closeAction();
+      return;
+    }
+
+    setShowDiscardDialog(true);
+  }
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      requestClose,
+    }),
+    [isDirty, onClose],
+  );
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+
+      event.preventDefault();
+      requestClose();
+    }
+
+    globalThis.document.addEventListener("keydown", handleKeyDown);
+    return () =>
+      globalThis.document.removeEventListener("keydown", handleKeyDown);
+  }, [isDirty, onClose]);
+
   return (
-    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+    <div
+      className="modal-backdrop"
+      data-testid="node-editor-backdrop"
+      role="presentation"
+      onClick={() => requestClose()}
+    >
       <div
         className="modal-card"
         role="dialog"
         aria-modal="true"
+        aria-label={`Edit ${node.kind} node`}
         onClick={(event) => event.stopPropagation()}
       >
         <header className="modal-header">
           <div>
             <div className="modal-kind">{node.kind}</div>
-            <h2>{node.label}</h2>
+            <label className="modal-title-field">
+              <span className="sr-only">Node name</span>
+              <input
+                aria-label="Node name"
+                className="modal-title-input"
+                value={draft.label}
+                onChange={(event) =>
+                  setDraft({ ...draft, label: event.target.value })
+                }
+              />
+            </label>
           </div>
         </header>
 
         <section className="modal-body">
-          {renderNodeEditor(draft, setDraft, document, schemaOverrides)}
+          {renderNodeEditor(draft, setDraft, graphDocument, schemaOverrides)}
         </section>
 
         <footer className="modal-footer">
           <button
             type="button"
             className="ghost-button"
-            onClick={onClose}
+            onClick={() => requestClose()}
           >
             Cancel
           </button>
           <button
             type="button"
             className="solid-button"
-            onClick={() => onSave(serializeNodeEditorDraft(draft))}
+            onClick={() => onSave(serializedDraft)}
           >
             Save
           </button>
         </footer>
+
+        {showDiscardDialog ? (
+          <div className="modal-confirmation-scrim">
+            <div
+              className="modal-confirmation-card"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Discard changes?"
+            >
+              <h3>Discard changes?</h3>
+              <p>Your unsaved edits will be lost.</p>
+              <div className="modal-confirmation-actions">
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setShowDiscardDialog(false)}
+                >
+                  Keep editing
+                </button>
+                <button
+                  type="button"
+                  className="solid-button"
+                  onClick={onClose}
+                >
+                  Discard changes
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
-}
+});

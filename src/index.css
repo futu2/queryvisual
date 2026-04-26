@@ -93,6 +93,7 @@ body {
 }
 
 .modal-card {
+  position: relative;
   width: min(780px, calc(100vw - 48px));
   max-height: calc(100vh - 56px);
   display: flex;
@@ -115,6 +116,32 @@ body {
 .modal-header h2 {
   margin: 6px 0 0;
   line-height: 1.15;
+}
+
+.modal-title-field {
+  display: block;
+  margin-top: 6px;
+}
+
+.modal-title-input {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #1f1d1a;
+  font: inherit;
+  font-size: clamp(1.5rem, 1.1rem + 1vw, 2rem);
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.modal-title-input:focus {
+  outline: none;
+}
+
+.modal-title-input:focus-visible {
+  border-radius: 10px;
+  box-shadow: 0 0 0 3px rgba(143, 103, 56, 0.24);
 }
 
 .modal-kind {
@@ -176,6 +203,38 @@ body {
     rgba(255, 253, 248, 0.97) 30%,
     #fffdf8 100%
   );
+}
+
+.modal-confirmation-scrim {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(255, 253, 248, 0.7);
+}
+
+.modal-confirmation-card {
+  width: min(360px, 100%);
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid rgba(95, 70, 43, 0.16);
+  border-radius: 18px;
+  background: #fffdf8;
+  box-shadow: 0 20px 40px rgba(28, 21, 14, 0.18);
+}
+
+.modal-confirmation-card h3,
+.modal-confirmation-card p {
+  margin: 0;
+}
+
+.modal-confirmation-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .editor-stack,

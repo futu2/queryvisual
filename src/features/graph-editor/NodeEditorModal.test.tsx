@@ -722,6 +722,112 @@ describe("NodeEditorModal", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  test("saving an edited node name from the modal header updates the saved node label", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+    const node: GraphNode = {
+      id: "where-header-name",
+      kind: "where",
+      label: "Filter orders",
+      position: { x: 0, y: 0 },
+      data: {
+        predicate: "status = 'paid'",
+      },
+    };
+
+    renderModal({ node, onSave });
+
+    await user.clear(screen.getByLabelText("Node name"));
+    await user.type(screen.getByLabelText("Node name"), "Paid orders");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalled();
+    expect(onSave.mock.calls[0][0].label).toBe("Paid orders");
+  });
+
+  test("cancel on a dirty modal asks for confirmation and keep editing preserves the draft", async () => {
+    const user = userEvent.setup();
+    const onClose = mock();
+    const node: GraphNode = {
+      id: "where-dirty-cancel",
+      kind: "where",
+      label: "Filter orders",
+      position: { x: 0, y: 0 },
+      data: {
+        predicate: "status = 'paid'",
+      },
+    };
+
+    renderModal({ node, onClose });
+
+    await user.clear(screen.getByLabelText("Node name"));
+    await user.type(screen.getByLabelText("Node name"), "Paid orders");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.getByRole("dialog", { name: "Discard changes?" })).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Keep editing" }));
+
+    expect(screen.queryByRole("dialog", { name: "Discard changes?" })).toBeNull();
+    expect((screen.getByLabelText("Node name") as HTMLInputElement).value).toBe(
+      "Paid orders",
+    );
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  test("confirming discard after cancel closes the modal", async () => {
+    const user = userEvent.setup();
+    const onClose = mock();
+    const node: GraphNode = {
+      id: "where-discard-cancel",
+      kind: "where",
+      label: "Filter orders",
+      position: { x: 0, y: 0 },
+      data: {
+        predicate: "status = 'paid'",
+      },
+    };
+
+    renderModal({ node, onClose });
+
+    await user.clear(screen.getByLabelText("Node name"));
+    await user.type(screen.getByLabelText("Node name"), "Paid orders");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await user.click(screen.getByRole("button", { name: "Discard changes" }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test("backdrop click and Escape on a dirty modal show discard confirmation instead of closing", async () => {
+    const user = userEvent.setup();
+    const onClose = mock();
+    const node: GraphNode = {
+      id: "where-dirty-dismiss",
+      kind: "where",
+      label: "Filter orders",
+      position: { x: 0, y: 0 },
+      data: {
+        predicate: "status = 'paid'",
+      },
+    };
+
+    renderModal({ node, onClose });
+
+    await user.clear(screen.getByLabelText("Node name"));
+    await user.type(screen.getByLabelText("Node name"), "Paid orders");
+
+    await user.click(screen.getByTestId("node-editor-backdrop"));
+    expect(screen.getByRole("dialog", { name: "Discard changes?" })).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Keep editing" }));
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(screen.getByRole("dialog", { name: "Discard changes?" })).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   test("saves a cleared limit offset as null", async () => {
     const user = userEvent.setup();
     const onSave = mock();
