@@ -3,8 +3,10 @@ import {
   useEffect,
   useImperativeHandle,
   useMemo,
+  useRef,
   useState,
 } from "react";
+import { flushSync } from "react-dom";
 import type { GraphNode } from "../../domain/document/types";
 import { useDocumentContext } from "../../app/state/DocumentContext";
 import { inferNodeSchemas } from "../../domain/graph/inferSchemas";
@@ -38,6 +40,9 @@ function NodeEditorModal({
   const [pendingCloseAction, setPendingCloseAction] = useState<(() => void) | null>(
     null,
   );
+  const keepEditingButtonRef = useRef<HTMLButtonElement | null>(null);
+  const previousEditorFocusRef = useRef<HTMLElement | null>(null);
+  const shouldRestoreFocusRef = useRef(false);
 
   const schemaOverrides = useMemo(
     () => inferNodeSchemas(graphDocument, node.id),
@@ -55,6 +60,7 @@ function NodeEditorModal({
       return;
     }
 
+    shouldRestoreFocusRef.current = false;
     setPendingCloseAction(() => closeAction);
     setShowDiscardDialog(true);
   }
@@ -68,15 +74,34 @@ function NodeEditorModal({
   );
 
   function handleKeepEditing() {
+    shouldRestoreFocusRef.current = true;
     setPendingCloseAction(null);
     setShowDiscardDialog(false);
   }
 
   function handleDiscardChanges() {
     const closeAction = pendingCloseAction ?? onClose;
-    setPendingCloseAction(null);
+    shouldRestoreFocusRef.current = false;
+    flushSync(() => {
+      setPendingCloseAction(null);
+      setShowDiscardDialog(false);
+    });
     closeAction();
   }
+
+  useEffect(() => {
+    if (showDiscardDialog) {
+      keepEditingButtonRef.current?.focus();
+      return;
+    }
+
+    if (!shouldRestoreFocusRef.current) {
+      return;
+    }
+
+    shouldRestoreFocusRef.current = false;
+    previousEditorFocusRef.current?.focus();
+  }, [showDiscardDialog]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -100,48 +125,57 @@ function NodeEditorModal({
     >
       <div
         className="modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Edit ${node.kind} node`}
+        role={showDiscardDialog ? undefined : "dialog"}
+        aria-modal={showDiscardDialog ? undefined : true}
+        aria-label={showDiscardDialog ? undefined : `Edit ${node.kind} node`}
+        onFocusCapture={(event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLElement)) return;
+          if (target.closest(".modal-footer")) return;
+          if (target.closest(".modal-confirmation-card")) return;
+          previousEditorFocusRef.current = target;
+        }}
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="modal-header">
-          <div>
-            <div className="modal-kind">{node.kind}</div>
-            <label className="modal-title-field">
-              <span className="sr-only">Node name</span>
-              <input
-                aria-label="Node name"
-                className="modal-title-input"
-                value={draft.label}
-                onChange={(event) =>
-                  setDraft({ ...draft, label: event.target.value })
-                }
-              />
-            </label>
-          </div>
-        </header>
+        <div aria-hidden={showDiscardDialog}>
+          <header className="modal-header">
+            <div>
+              <div className="modal-kind">{node.kind}</div>
+              <label className="modal-title-field">
+                <span className="sr-only">Node name</span>
+                <input
+                  aria-label="Node name"
+                  className="modal-title-input"
+                  value={draft.label}
+                  onChange={(event) =>
+                    setDraft({ ...draft, label: event.target.value })
+                  }
+                />
+              </label>
+            </div>
+          </header>
 
-        <section className="modal-body">
-          {renderNodeEditor(draft, setDraft, graphDocument, schemaOverrides)}
-        </section>
+          <section className="modal-body">
+            {renderNodeEditor(draft, setDraft, graphDocument, schemaOverrides)}
+          </section>
 
-        <footer className="modal-footer">
-          <button
-            type="button"
-            className="ghost-button"
-            onClick={() => requestClose()}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="solid-button"
-            onClick={() => onSave(serializedDraft)}
-          >
-            Save
-          </button>
-        </footer>
+          <footer className="modal-footer">
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => requestClose()}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="solid-button"
+              onClick={() => onSave(serializedDraft)}
+            >
+              Save
+            </button>
+          </footer>
+        </div>
 
         {showDiscardDialog ? (
           <div className="modal-confirmation-scrim">
@@ -157,6 +191,7 @@ function NodeEditorModal({
                 <button
                   type="button"
                   className="ghost-button"
+                  ref={keepEditingButtonRef}
                   onClick={handleKeepEditing}
                 >
                   Keep editing

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { createRef } from "react";
 import userEvent from "@testing-library/user-event";
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { GraphDocument } from "../../domain/document/types";
 import type { GraphNode } from "../../domain/document/types";
 import { DocumentProvider } from "../../app/state/DocumentContext";
@@ -824,20 +824,106 @@ describe("NodeEditorModal", () => {
     };
 
     render(
-      <DocumentProvider initialDocument={document}>
-        <NodeEditorModal ref={ref} node={node} onClose={onClose} onSave={() => {}} />
-      </DocumentProvider>,
+      <>
+        <button type="button" onClick={() => ref.current?.requestClose(customClose)}>
+          Trigger custom close
+        </button>
+        <DocumentProvider initialDocument={document}>
+          <NodeEditorModal ref={ref} node={node} onClose={onClose} onSave={() => {}} />
+        </DocumentProvider>
+      </>,
     );
 
     await user.clear(screen.getByLabelText("Node name"));
     await user.type(screen.getByLabelText("Node name"), "Paid orders");
 
-    act(() => {
-      ref.current?.requestClose(customClose);
-    });
+    await user.click(screen.getByRole("button", { name: "Trigger custom close" }));
     await user.click(screen.getByRole("button", { name: "Discard changes" }));
 
     expect(customClose).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  test("discard confirmation clears before a custom close callback that does not unmount the modal returns", async () => {
+    const user = userEvent.setup();
+    const onClose = mock();
+    let dialogPresentDuringCustomClose = false;
+    const customClose = mock(() => {
+      dialogPresentDuringCustomClose =
+        screen.queryByRole("dialog", { name: "Discard changes?" }) !== null;
+    });
+    const ref = createRef<NodeEditorModalHandle>();
+    const node: GraphNode = {
+      id: "where-custom-sticky-confirm",
+      kind: "where",
+      label: "Filter orders",
+      position: { x: 0, y: 0 },
+      data: {
+        predicate: "status = 'paid'",
+      },
+    };
+
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "Test document" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [node],
+      edges: [],
+    };
+
+    render(
+      <>
+        <button type="button" onClick={() => ref.current?.requestClose(customClose)}>
+          Trigger custom close
+        </button>
+        <DocumentProvider initialDocument={document}>
+          <NodeEditorModal ref={ref} node={node} onClose={onClose} onSave={() => {}} />
+        </DocumentProvider>
+      </>,
+    );
+
+    await user.clear(screen.getByLabelText("Node name"));
+    await user.type(screen.getByLabelText("Node name"), "Paid orders");
+
+    await user.click(screen.getByRole("button", { name: "Trigger custom close" }));
+    await user.click(screen.getByRole("button", { name: "Discard changes" }));
+
+    expect(customClose).toHaveBeenCalledTimes(1);
+    expect(dialogPresentDuringCustomClose).toBe(false);
+    expect(screen.queryByRole("dialog", { name: "Discard changes?" })).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  test("focus moves into the discard confirmation and returns to the previously focused control on keep editing", async () => {
+    const user = userEvent.setup();
+    const onClose = mock();
+    const node: GraphNode = {
+      id: "where-confirm-focus",
+      kind: "where",
+      label: "Filter orders",
+      position: { x: 0, y: 0 },
+      data: {
+        predicate: "status = 'paid'",
+      },
+    };
+
+    renderModal({ node, onClose });
+
+    const nodeNameInput = screen.getByLabelText("Node name");
+    await user.clear(nodeNameInput);
+    await user.type(nodeNameInput, "Paid orders");
+    await user.click(nodeNameInput);
+    expect(globalThis.document.activeElement).toBe(nodeNameInput);
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    const keepEditingButton = screen.getByRole("button", { name: "Keep editing" });
+    expect(globalThis.document.activeElement).toBe(keepEditingButton);
+
+    await user.click(keepEditingButton);
+
+    expect(screen.queryByRole("dialog", { name: "Discard changes?" })).toBeNull();
+    expect(globalThis.document.activeElement).toBe(nodeNameInput);
     expect(onClose).not.toHaveBeenCalled();
   });
 
