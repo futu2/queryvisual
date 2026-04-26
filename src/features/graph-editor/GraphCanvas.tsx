@@ -9,7 +9,7 @@ import {
 } from "@xyflow/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDocumentContext } from "../../app/state/DocumentContext";
-import type { Diagnostic } from "../../domain/diagnostics/types";
+import type { OutputRuntimeSnapshot } from "../output-runtime/outputRuntime";
 import {
   toFlowEdges,
   toFlowNodes,
@@ -25,7 +25,7 @@ const nodeTypes = {
   queryNode: QueryNode,
 };
 
-export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
+export function GraphCanvas({ outputRuntime }: { outputRuntime: OutputRuntimeSnapshot }) {
   const { state, dispatch } = useDocumentContext();
   const [nodeRuntimeById, setNodeRuntimeById] = useState<
     Record<string, FlowNodeRuntime>
@@ -54,13 +54,23 @@ export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
     () =>
       toFlowNodes(
         state.document,
-        diagnostics,
+        outputRuntime.diagnostics,
         state.selectedNodeId,
         nodeRuntimeById,
       ),
-    [diagnostics, nodeRuntimeById, state.document, state.selectedNodeId],
+    [nodeRuntimeById, outputRuntime.diagnostics, state.document, state.selectedNodeId],
   );
   const edges = useMemo(() => toFlowEdges(state.document), [state.document]);
+  const editedOutputRuntime = useMemo(() => {
+    if (!editedNode || editedNode.kind !== "output") {
+      return null;
+    }
+
+    return {
+      compileResult: outputRuntime.resultsByOutputId[editedNode.id] ?? null,
+      listenerStatus: outputRuntime.listenerStatusByOutputId[editedNode.id] ?? null,
+    };
+  }, [editedNode, outputRuntime.listenerStatusByOutputId, outputRuntime.resultsByOutputId]);
 
   function runEditorTransition(action: () => void) {
     if (editedNode && nodeEditorModalRef.current) {
@@ -162,6 +172,7 @@ export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
         <NodeEditorModal
           ref={nodeEditorModalRef}
           node={editedNode}
+          outputRuntime={editedOutputRuntime}
           onClose={() => dispatch({ type: "open-node-editor", nodeId: null })}
           onSave={(node) => {
             dispatch({ type: "replace-node", node });

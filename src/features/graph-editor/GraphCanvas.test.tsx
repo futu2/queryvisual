@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { DocumentProvider, useDocumentContext } from "../../app/state/DocumentContext";
 import { createSampleDocument } from "../../domain/document/sample";
+import type { OutputRuntimeSnapshot } from "../output-runtime/outputRuntime";
 
 let reactFlowProps: Record<string, unknown> | null = null;
 
@@ -60,6 +61,14 @@ mock.module("@xyflow/react", () => ({
 }));
 
 const { GraphCanvas } = await import("./GraphCanvas");
+
+function createEmptyOutputRuntime(): OutputRuntimeSnapshot {
+  return {
+    resultsByOutputId: {},
+    diagnostics: [],
+    listenerStatusByOutputId: {},
+  };
+}
 
 function getFlowNodes() {
   return Array.isArray(reactFlowProps?.nodes) ? reactFlowProps.nodes : [];
@@ -141,7 +150,7 @@ describe("GraphCanvas", () => {
 
     render(
       <DocumentProvider initialDocument={createSampleDocument()}>
-        <GraphCanvas diagnostics={[]} />
+        <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
         <EditorStateProbe />
       </DocumentProvider>,
     );
@@ -180,7 +189,7 @@ describe("GraphCanvas", () => {
 
     render(
       <DocumentProvider initialDocument={createSampleDocument()}>
-        <GraphCanvas diagnostics={[]} />
+        <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
       </DocumentProvider>,
     );
 
@@ -208,7 +217,7 @@ describe("GraphCanvas", () => {
 
     render(
       <DocumentProvider initialDocument={createSampleDocument()}>
-        <GraphCanvas diagnostics={[]} />
+        <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
         <EditorStateProbe />
       </DocumentProvider>,
     );
@@ -235,7 +244,7 @@ describe("GraphCanvas", () => {
 
     render(
       <DocumentProvider initialDocument={createSampleDocument()}>
-        <GraphCanvas diagnostics={[]} />
+        <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
         <EditorStateProbe />
       </DocumentProvider>,
     );
@@ -257,7 +266,7 @@ describe("GraphCanvas", () => {
 
     render(
       <DocumentProvider initialDocument={createSampleDocument()}>
-        <GraphCanvas diagnostics={[]} />
+        <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
         <EditorStateProbe />
       </DocumentProvider>,
     );
@@ -280,7 +289,7 @@ describe("GraphCanvas", () => {
 
     render(
       <DocumentProvider initialDocument={createSampleDocument()}>
-        <GraphCanvas diagnostics={[]} />
+        <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
         <EditorStateProbe />
       </DocumentProvider>,
     );
@@ -310,7 +319,7 @@ describe("GraphCanvas", () => {
   test("updates node position from React Flow node changes during drag", () => {
     render(
       <DocumentProvider initialDocument={createSampleDocument()}>
-        <GraphCanvas diagnostics={[]} />
+        <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
         <PositionProbe />
       </DocumentProvider>,
     );
@@ -339,7 +348,7 @@ describe("GraphCanvas", () => {
   test("preserves measured node dimensions across drag updates", () => {
     render(
       <DocumentProvider initialDocument={createSampleDocument()}>
-        <GraphCanvas diagnostics={[]} />
+        <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
       </DocumentProvider>,
     );
 
@@ -374,5 +383,56 @@ describe("GraphCanvas", () => {
     expect(fromOrders).toMatchObject({
       measured: { width: 180, height: 86 },
     });
+  });
+
+  test("opening an output node shows saved SQL in the modal from output runtime", async () => {
+    const outputRuntime: OutputRuntimeSnapshot = {
+      resultsByOutputId: {
+        "output-orders": {
+          semantic: {
+            document: createSampleDocument(),
+            outputId: "output-orders",
+            outputName: "orders_report",
+            orderedNodes: [],
+            nodesById: {},
+            schemas: {},
+            diagnostics: [],
+          },
+          ir: null,
+          optimizedIr: null,
+          sql: "SELECT order_id FROM sales.orders",
+        },
+      },
+      diagnostics: [],
+      listenerStatusByOutputId: {
+        "output-orders": {
+          lastSuccessfulSql: "SELECT order_id FROM sales.orders",
+          lastRunAt: 1704067200000,
+          lastErrorMessage: null,
+          lastSuccessfulSqlByListener: {
+            copyToClipboard: null,
+            logToConsole: null,
+            saveToLocalStorage: null,
+          },
+          lastEnabledByListener: {
+            copyToClipboard: false,
+            logToConsole: false,
+            saveToLocalStorage: false,
+          },
+        },
+      },
+    };
+
+    render(
+      <DocumentProvider initialDocument={createSampleDocument()}>
+        <GraphCanvas outputRuntime={outputRuntime} />
+      </DocumentProvider>,
+    );
+
+    await invokeNodeClick("output-orders");
+
+    expect(screen.getByRole("dialog", { name: "Edit output node" })).toBeTruthy();
+    await userEvent.setup().click(screen.getByRole("tab", { name: "SQL" }));
+    expect(screen.getByText("SELECT order_id FROM sales.orders")).toBeTruthy();
   });
 });

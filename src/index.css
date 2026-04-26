@@ -242,6 +242,16 @@ body {
   gap: 12px;
 }
 
+.editor-checkbox-row {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-checkbox-row input[type="checkbox"] {
+  width: auto;
+}
+
 .editor-section {
   display: grid;
   gap: 10px;
@@ -411,6 +421,64 @@ body {
 
 .expression-diagnostic {
   line-height: 1.25;
+}
+
+.output-runtime-section {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(95, 70, 43, 0.18);
+  background: rgba(255, 250, 241, 0.75);
+}
+
+.output-runtime-section h3 {
+  margin: 0;
+}
+
+.output-runtime-status {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  color: #4f4335;
+}
+
+.output-runtime-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.output-runtime-tab {
+  border-radius: 999px;
+  padding: 6px 10px;
+  border: 1px solid rgba(31, 29, 26, 0.18);
+  background: rgba(255, 255, 255, 0.9);
+  color: #1f1d1a;
+  font: inherit;
+  cursor: pointer;
+}
+
+.output-runtime-tab.is-active {
+  background: #1f1d1a;
+  color: #fff;
+}
+
+.output-runtime-panel {
+  border: 1px solid rgba(95, 70, 43, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  overflow: auto;
+}
+
+.output-runtime-panel pre {
+  margin: 0;
+  padding: 10px 12px;
+  font-family: "IBM Plex Mono", "SFMono-Regular", ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 @media (max-width: 1024px) {

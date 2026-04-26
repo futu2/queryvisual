@@ -26,7 +26,7 @@ export function AppLayout() {
         style={{ display: "flex", flexDirection: "column", gap: 12 }}
       >
         <h2>Canvas</h2>
-        <GraphCanvas diagnostics={outputRuntime.diagnostics} />
+        <GraphCanvas outputRuntime={outputRuntime} />
       </main>
     </div>
   );
