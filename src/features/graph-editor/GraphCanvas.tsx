@@ -7,7 +7,7 @@ import {
   type NodeChange,
   type NodeMouseHandler,
 } from "@xyflow/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDocumentContext } from "../../app/state/DocumentContext";
 import type { OutputRuntimeSnapshot } from "../output-runtime/outputRuntime";
 import {
@@ -30,7 +30,15 @@ const edgeTypes = {
   deletableEdge: DeletableEdge,
 };
 
-export function GraphCanvas({ outputRuntime }: { outputRuntime: OutputRuntimeSnapshot }) {
+type GraphCanvasProps = {
+  outputRuntime: OutputRuntimeSnapshot;
+  registerEditorTransition?: (runner: (action: () => void) => void) => void;
+};
+
+export function GraphCanvas({
+  outputRuntime,
+  registerEditorTransition,
+}: GraphCanvasProps) {
   const { state, dispatch } = useDocumentContext();
   const [nodeRuntimeById, setNodeRuntimeById] = useState<
     Record<string, FlowNodeRuntime>
@@ -83,14 +91,25 @@ export function GraphCanvas({ outputRuntime }: { outputRuntime: OutputRuntimeSna
     };
   }, [editedNode, outputRuntime.listenerStatusByOutputId, outputRuntime.resultsByOutputId]);
 
-  function runEditorTransition(action: () => void) {
-    if (editedNode && nodeEditorModalRef.current) {
-      nodeEditorModalRef.current.requestClose(action);
+  const runEditorTransition = useCallback(
+    (action: () => void) => {
+      if (editedNode && nodeEditorModalRef.current) {
+        nodeEditorModalRef.current.requestClose(action);
+        return;
+      }
+
+      action();
+    },
+    [editedNode],
+  );
+
+  useEffect(() => {
+    if (!registerEditorTransition) {
       return;
     }
 
-    action();
-  }
+    registerEditorTransition(runEditorTransition);
+  }, [registerEditorTransition, runEditorTransition]);
 
   const onConnect = (connection: Connection) => {
     if (

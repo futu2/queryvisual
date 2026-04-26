@@ -1,8 +1,13 @@
 import { useDocumentContext } from "../../app/state/DocumentContext";
 
-export function GraphCatalog() {
+export function GraphCatalog({
+  runGraphMutation,
+}: {
+  runGraphMutation?: (action: () => void) => void;
+}) {
   const { state, dispatch } = useDocumentContext();
   const { graphs } = state.workspace;
+  const transition = runGraphMutation ?? ((action: () => void) => action());
 
   return (
     <section className="graph-catalog" aria-label="Graph catalog">
@@ -11,7 +16,7 @@ export function GraphCatalog() {
         <button
           className="ghost-button"
           type="button"
-          onClick={() => dispatch({ type: "create-graph" })}
+          onClick={() => transition(() => dispatch({ type: "create-graph" }))}
         >
           New graph
         </button>
@@ -49,9 +54,11 @@ export function GraphCatalog() {
                     className="ghost-button"
                     type="button"
                     aria-label={`Open ${graph.metadata.name}`}
-                    onClick={() =>
-                      dispatch({ type: "set-active-graph", graphId: graph.id })
-                    }
+                    onClick={() => {
+                      transition(() =>
+                        dispatch({ type: "set-active-graph", graphId: graph.id }),
+                      );
+                    }}
                   >
                     Open
                   </button>
@@ -60,9 +67,11 @@ export function GraphCatalog() {
                   className="ghost-button graph-catalog__delete-button"
                   type="button"
                   aria-label={`Delete ${graph.metadata.name}`}
-                  onClick={() =>
-                    dispatch({ type: "delete-graph", graphId: graph.id })
-                  }
+                  onClick={() => {
+                    transition(() =>
+                      dispatch({ type: "delete-graph", graphId: graph.id }),
+                    );
+                  }}
                   disabled={!canDelete}
                 >
                   Delete

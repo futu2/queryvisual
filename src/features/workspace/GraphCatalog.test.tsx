@@ -1,8 +1,14 @@
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, test } from "bun:test";
 import userEvent from "@testing-library/user-event";
-import { cleanup, render, screen, within } from "@testing-library/react";
-import { DocumentProvider } from "../../app/state/DocumentContext";
+import { useEffect, useRef } from "react";
+import { DocumentProvider, useDocumentContext } from "../../app/state/DocumentContext";
+import type { GraphNode } from "../../domain/document/types";
 import { createSampleWorkspace } from "../../domain/workspace/sample";
+import {
+  NodeEditorModal,
+  type NodeEditorModalHandle,
+} from "../graph-editor/NodeEditorModal";
 import { GraphCatalog } from "./GraphCatalog";
 
 afterEach(cleanup);
@@ -15,6 +21,49 @@ function getGraphRowByName(name: string) {
   }
 
   return row as HTMLElement;
+}
+
+function CatalogWithEditorGuardHarness() {
+  const { state, dispatch } = useDocumentContext();
+  const editorRef = useRef<NodeEditorModalHandle | null>(null);
+  const initialNodeId = state.document.nodes[0]?.id ?? null;
+  const editedNode =
+    state.document.nodes.find((node) => node.id === state.editorNodeId) ?? null;
+
+  useEffect(() => {
+    if (!initialNodeId) {
+      return;
+    }
+
+    dispatch({ type: "select-node", nodeId: initialNodeId });
+    dispatch({ type: "open-node-editor", nodeId: initialNodeId });
+  }, [dispatch, initialNodeId]);
+
+  const runGraphMutation = (action: () => void) => {
+    if (editedNode && editorRef.current) {
+      editorRef.current.requestClose(action);
+      return;
+    }
+
+    action();
+  };
+
+  return (
+    <>
+      <GraphCatalog runGraphMutation={runGraphMutation} />
+      {editedNode ? (
+        <NodeEditorModal
+          ref={editorRef}
+          node={editedNode as GraphNode}
+          onClose={() => dispatch({ type: "open-node-editor", nodeId: null })}
+          onSave={(node) => {
+            dispatch({ type: "replace-node", node });
+            dispatch({ type: "open-node-editor", nodeId: null });
+          }}
+        />
+      ) : null}
+    </>
+  );
 }
 
 describe("GraphCatalog", () => {
@@ -53,5 +102,24 @@ describe("GraphCatalog", () => {
       within(renamedRow).getByRole("button", { name: "Open Segmented Revenue" }),
     );
     expect(within(renamedRow).getByText("Active")).toBeTruthy();
+  });
+
+  test("new graph action prompts discard confirmation when node editor is dirty", async () => {
+    const user = userEvent.setup();
+
+    await act(async () => {
+      render(
+        <DocumentProvider initialWorkspace={createSampleWorkspace()}>
+          <CatalogWithEditorGuardHarness />
+        </DocumentProvider>,
+      );
+    });
+
+    await user.clear(await screen.findByLabelText("Node name"));
+    await user.type(screen.getByLabelText("Node name"), "Dirty orders");
+    await user.click(screen.getByRole("button", { name: "New graph" }));
+
+    expect(screen.getByRole("dialog", { name: "Discard changes?" })).toBeTruthy();
+    expect(screen.queryByLabelText("Graph name Graph 2")).toBeNull();
   });
 });

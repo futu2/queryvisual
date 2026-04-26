@@ -2,6 +2,7 @@ import {
   DocumentProvider,
   useDocumentContext,
 } from "./app/state/DocumentContext";
+import { useRef } from "react";
 import { getActiveGraph } from "./app/state/documentReducer";
 import { useOutputRuntime } from "./features/output-runtime/outputRuntime";
 import type { GraphDocument, GraphWorkspace } from "./domain/document/types";
@@ -14,6 +15,9 @@ export function AppLayout() {
   const { state } = useDocumentContext();
   const activeGraph = getActiveGraph(state) ?? state.document;
   const outputRuntime = useOutputRuntime(activeGraph);
+  const editorTransitionRef = useRef<(action: () => void) => void>((action) =>
+    action(),
+  );
 
   return (
     <div className="app-shell">
@@ -21,7 +25,9 @@ export function AppLayout() {
         <h1>QueryVisual</h1>
         <p className="muted">Structured graph editor for DQL compilation.</p>
         <DocumentToolbar />
-        <GraphCatalog />
+        <GraphCatalog
+          runGraphMutation={(action) => editorTransitionRef.current(action)}
+        />
         <NodePalette />
       </aside>
 
@@ -30,7 +36,12 @@ export function AppLayout() {
         style={{ display: "flex", flexDirection: "column", gap: 12 }}
       >
         <h2>Canvas</h2>
-        <GraphCanvas outputRuntime={outputRuntime} />
+        <GraphCanvas
+          outputRuntime={outputRuntime}
+          registerEditorTransition={(runner) => {
+            editorTransitionRef.current = runner;
+          }}
+        />
       </main>
     </div>
   );
