@@ -121,19 +121,11 @@ function PositionProbe() {
 }
 
 function EditorStateProbe() {
-  const { state, dispatch } = useDocumentContext();
+  const { state } = useDocumentContext();
 
   return (
     <>
       <span data-testid="selected-node-id">{state.selectedNodeId ?? "null"}</span>
-      <span data-testid="active-output-id">{state.activeOutputId ?? "null"}</span>
-      <button
-        type="button"
-        data-testid="clear-active-output"
-        onClick={() => dispatch({ type: "set-active-output", nodeId: null })}
-      >
-        clear
-      </button>
     </>
   );
 }
@@ -211,7 +203,7 @@ describe("GraphCanvas", () => {
     );
   });
 
-  test("onPaneClick while dirty shows discard confirmation and keep editing preserves selection and active output", async () => {
+  test("onPaneClick while dirty shows discard confirmation and keep editing preserves selection", async () => {
     const user = userEvent.setup();
 
     render(
@@ -221,7 +213,6 @@ describe("GraphCanvas", () => {
       </DocumentProvider>,
     );
 
-    await user.click(screen.getByTestId("clear-active-output"));
     await invokeNodeClick("from-orders");
     await user.clear(screen.getByLabelText("Node name"));
     await user.type(screen.getByLabelText("Node name"), "Paid orders");
@@ -234,7 +225,6 @@ describe("GraphCanvas", () => {
 
     expect(screen.queryByRole("dialog", { name: "Discard changes?" })).toBeNull();
     expect(screen.getByTestId("selected-node-id").textContent).toBe("from-orders");
-    expect(screen.getByTestId("active-output-id").textContent).toBe("null");
     expect((screen.getByLabelText("Node name") as HTMLInputElement).value).toBe(
       "Paid orders",
     );
@@ -285,7 +275,7 @@ describe("GraphCanvas", () => {
     expect(screen.getByTestId("selected-node-id").textContent).toBe("from-orders");
   });
 
-  test("keep editing preserves active output until an output node switch is discarded", async () => {
+  test("keep editing preserves selection until an output node switch is discarded", async () => {
     const user = userEvent.setup();
 
     render(
@@ -295,7 +285,6 @@ describe("GraphCanvas", () => {
       </DocumentProvider>,
     );
 
-    await user.click(screen.getByTestId("clear-active-output"));
     await invokeNodeClick("from-orders");
     await user.clear(screen.getByLabelText("Node name"));
     await user.type(screen.getByLabelText("Node name"), "Paid orders");
@@ -304,18 +293,15 @@ describe("GraphCanvas", () => {
 
     expect(screen.getByRole("dialog", { name: "Discard changes?" })).toBeTruthy();
     expect(screen.getByTestId("selected-node-id").textContent).toBe("from-orders");
-    expect(screen.getByTestId("active-output-id").textContent).toBe("null");
 
     await user.click(screen.getByRole("button", { name: "Keep editing" }));
 
     expect(screen.getByTestId("selected-node-id").textContent).toBe("from-orders");
-    expect(screen.getByTestId("active-output-id").textContent).toBe("null");
 
     await invokeNodeClick("output-orders");
     await user.click(screen.getByRole("button", { name: "Discard changes" }));
 
     expect(screen.getByTestId("selected-node-id").textContent).toBe("output-orders");
-    expect(screen.getByTestId("active-output-id").textContent).toBe("output-orders");
     expect((screen.getByLabelText("Node name") as HTMLInputElement).value).toBe(
       "Orders Report",
     );

@@ -832,7 +832,13 @@ export function renderNodeEditor(
           <input
             value={draft.data.outputName}
             onChange={(event) =>
-              setDraft({ ...draft, data: { outputName: event.target.value } })
+              setDraft({
+                ...draft,
+                data: {
+                  ...draft.data,
+                  outputName: event.target.value,
+                },
+              })
             }
           />
         </label>

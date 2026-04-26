@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createSampleDocument } from "../../domain/document/sample";
 import { createDefaultOutputListenerConfig } from "../../domain/document/outputListeners";
+import type { GraphDocument } from "../../domain/document/types";
 import { createInitialEditorState, documentReducer } from "./documentReducer";
 
 describe("documentReducer", () => {

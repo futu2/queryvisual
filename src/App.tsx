@@ -2,7 +2,7 @@ import {
   DocumentProvider,
   useDocumentContext,
 } from "./app/state/DocumentContext";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { compileOutput } from "./domain/compile/compileOutput";
 import { DebugPanel } from "./features/debug/DebugPanel";
 import { DocumentToolbar } from "./features/document-storage/DocumentToolbar";
@@ -10,7 +10,7 @@ import { GraphCanvas } from "./features/graph-editor/GraphCanvas";
 import { NodePalette } from "./features/graph-editor/NodePalette";
 
 function AppLayout() {
-  const { state, dispatch } = useDocumentContext();
+  const { state } = useDocumentContext();
   const outputs = useMemo(
     () =>
       state.document.nodes
@@ -18,13 +18,30 @@ function AppLayout() {
         .map((node) => ({ id: node.id, name: node.data.outputName })),
     [state.document.nodes],
   );
+  const [activeOutputId, setActiveOutputId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (outputs.length === 0) {
+      setActiveOutputId(null);
+      return;
+    }
+
+    setActiveOutputId((current) => {
+      if (current && outputs.some((output) => output.id === current)) {
+        return current;
+      }
+
+      return outputs[0]?.id ?? null;
+    });
+  }, [outputs]);
+
   const compileResult = useMemo(() => {
-    if (!state.activeOutputId) {
+    if (!activeOutputId) {
       return null;
     }
 
-    return compileOutput(state.document, state.activeOutputId);
-  }, [state.activeOutputId, state.document.edges, state.document.nodes]);
+    return compileOutput(state.document, activeOutputId);
+  }, [activeOutputId, state.document.edges, state.document.nodes]);
   const diagnostics = compileResult?.semantic.diagnostics ?? [];
 
   return (
@@ -49,10 +66,8 @@ function AppLayout() {
         <DebugPanel
           result={compileResult}
           outputs={outputs}
-          activeOutputId={state.activeOutputId}
-          onSelectOutput={(outputId) =>
-            dispatch({ type: "set-active-output", nodeId: outputId })
-          }
+          activeOutputId={activeOutputId}
+          onSelectOutput={setActiveOutputId}
         />
       </section>
     </div>

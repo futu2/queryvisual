@@ -101,9 +101,6 @@ export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
     runEditorTransition(() => {
       dispatch({ type: "select-node", nodeId: node.id });
       dispatch({ type: "open-node-editor", nodeId: node.id });
-      if (node.data.node.kind === "output") {
-        dispatch({ type: "set-active-output", nodeId: node.id });
-      }
     });
   };
 
