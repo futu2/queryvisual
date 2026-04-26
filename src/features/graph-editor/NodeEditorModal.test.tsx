@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import userEvent from "@testing-library/user-event";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { GraphDocument } from "../../domain/document/types";
 import type { GraphNode } from "../../domain/document/types";
 import { DocumentProvider } from "../../app/state/DocumentContext";
@@ -88,6 +88,65 @@ describe("NodeEditorModal", () => {
       { name: "status_text", expression: "status" },
       { name: "gross_total", expression: "total" },
     ]);
+  });
+
+  test("drag-reorders select mappings by dragging row cards", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+
+    const node: GraphNode = {
+      id: "select-orders-drag",
+      kind: "select",
+      label: "Project",
+      position: { x: 0, y: 0 },
+      data: {
+        mappings: [
+          { name: "gross_total", expression: "total" },
+          { name: "status_text", expression: "status" },
+          { name: "customer_id", expression: "customer_id" },
+        ],
+      },
+    };
+
+    renderModal({ node, onSave });
+
+    const firstCard = screen.getByTestId("mapping-row-card-1");
+    const thirdCard = screen.getByTestId("mapping-row-card-3");
+
+    fireEvent.dragStart(firstCard);
+    fireEvent.dragOver(thirdCard);
+    fireEvent.drop(thirdCard);
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalled();
+    expect(onSave.mock.calls[0][0].data.mappings).toEqual([
+      { name: "status_text", expression: "status" },
+      { name: "customer_id", expression: "customer_id" },
+      { name: "gross_total", expression: "total" },
+    ]);
+  });
+
+  test("removes visible mapping numbering while keeping accessible field labels", () => {
+    const node: GraphNode = {
+      id: "select-orders-labels",
+      kind: "select",
+      label: "Project",
+      position: { x: 0, y: 0 },
+      data: {
+        mappings: [
+          { name: "gross_total", expression: "total" },
+          { name: "status_text", expression: "status" },
+        ],
+      },
+    };
+
+    renderModal({ node });
+
+    expect(screen.queryByText(/^Mapping 1$/)).toBeNull();
+    expect(screen.queryByText(/^Mapping 2$/)).toBeNull();
+    expect(screen.getByLabelText("Mapping name 1")).toBeTruthy();
+    expect(screen.getByLabelText("Mapping name 2")).toBeTruthy();
   });
 
   test("strips blank select placeholders but preserves partially filled mappings", async () => {

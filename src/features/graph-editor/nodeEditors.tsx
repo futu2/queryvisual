@@ -7,6 +7,17 @@ import type {
 } from "../../domain/document/types";
 import type { ColumnMap, ColumnType, TableRef } from "../../domain/schema/types";
 import { ExpressionInput } from "./ExpressionInput";
+import { RowActionBar } from "./RowActionBar";
+import { RowCard } from "./RowCard";
+import {
+  addDraftRow,
+  DraftRow,
+  duplicateDraftRow,
+  ensureDraftRows,
+  moveDraftRow,
+  removeDraftRow,
+  stripDraftRows,
+} from "./rowDrafts";
 
 type FieldRow = {
   name: string;
@@ -14,16 +25,34 @@ type FieldRow = {
 };
 
 type FromTableNode = Extract<GraphNode, { kind: "fromTable" }>;
+type SelectNode = Extract<GraphNode, { kind: "select" }>;
+type AggregationNode = Extract<GraphNode, { kind: "aggregation" }>;
+type NamedExpressionDraftRow = DraftRow<NamedExpression>;
+
+type SelectEditorDraft = Omit<SelectNode, "data"> & {
+  data: {
+    mappings: NamedExpressionDraftRow[];
+  };
+};
+
+type AggregationEditorDraft = Omit<AggregationNode, "data"> & {
+  data: {
+    groupBy: NamedExpressionDraftRow[];
+    aggregates: NamedExpressionDraftRow[];
+  };
+};
 
 type FromTableEditorDraft = Omit<FromTableNode, "data"> & {
   data: {
     tableRef: TableRef;
-    fieldRows: FieldRow[];
+    fieldRows: DraftRow<FieldRow>[];
   };
 };
 
 type EditableNodeDraft =
-  | Exclude<GraphNode, FromTableNode>
+  | Exclude<GraphNode, FromTableNode | SelectNode | AggregationNode>
+  | SelectEditorDraft
+  | AggregationEditorDraft
   | FromTableEditorDraft;
 
 const columnTypes: ColumnType[] = [
@@ -45,42 +74,6 @@ function blankNamedExpression(): NamedExpression {
   return { name: "", expression: "" };
 }
 
-function ensureAtLeastOneRow<T>(rows: T[], createBlank: () => T) {
-  return rows.length > 0 ? rows : [createBlank()];
-}
-
-function addRow<T>(rows: T[], createBlank: () => T) {
-  return [...rows, createBlank()];
-}
-
-function moveRow<T>(rows: T[], index: number, direction: -1 | 1) {
-  const targetIndex = index + direction;
-  if (targetIndex < 0 || targetIndex >= rows.length) {
-    return rows;
-  }
-
-  const next = [...rows];
-  [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
-  return next;
-}
-
-function duplicateRow<T>(rows: T[], index: number, cloneRow: (row: T) => T) {
-  if (!rows[index]) {
-    return rows;
-  }
-
-  return [
-    ...rows.slice(0, index + 1),
-    cloneRow(rows[index]),
-    ...rows.slice(index + 1),
-  ];
-}
-
-function removeRow<T>(rows: T[], index: number, createBlank: () => T) {
-  const next = rows.filter((_, rowIndex) => rowIndex !== index);
-  return ensureAtLeastOneRow(next, createBlank);
-}
-
 function sanitizeNamedExpressions(rows: NamedExpression[]) {
   return rows
     .map((row) => ({
@@ -91,118 +84,84 @@ function sanitizeNamedExpressions(rows: NamedExpression[]) {
     .filter((row) => row.name !== "" || row.expression.trim() !== "");
 }
 
-function RowActionButtons({
-  itemName,
-  index,
-  rowCount,
-  onMoveUp,
-  onMoveDown,
-  onDuplicate,
-  onRemove,
-}: {
-  itemName: string;
-  index: number;
-  rowCount: number;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-  onDuplicate: () => void;
-  onRemove: () => void;
-}) {
-  return (
-    <div className="row-editor-actions">
-      <button
-        type="button"
-        className="row-action-button"
-        aria-label={`Move ${itemName} ${index + 1} up`}
-        disabled={index === 0}
-        onClick={onMoveUp}
-      >
-        Up
-      </button>
-      <button
-        type="button"
-        className="row-action-button"
-        aria-label={`Move ${itemName} ${index + 1} down`}
-        disabled={index === rowCount - 1}
-        onClick={onMoveDown}
-      >
-        Down
-      </button>
-      <button
-        type="button"
-        className="row-action-button"
-        aria-label={`Duplicate ${itemName} ${index + 1}`}
-        onClick={onDuplicate}
-      >
-        Duplicate
-      </button>
-      <button
-        type="button"
-        className="row-action-button"
-        aria-label={`Remove ${itemName} ${index + 1}`}
-        onClick={onRemove}
-      >
-        Remove
-      </button>
-    </div>
-  );
-}
-
 function FromTableFieldRows({
   rows,
   onChange,
 }: {
-  rows: FieldRow[];
-  onChange: (rows: FieldRow[]) => void;
+  rows: DraftRow<FieldRow>[];
+  onChange: (rows: DraftRow<FieldRow>[]) => void;
 }) {
+  const [draggedRowId, setDraggedRowId] = useState<string | null>(null);
+
   return (
     <div className="editor-stack">
       {rows.map((row, index) => (
-        <div key={index} className="mapping-row">
-          <label>
-            {`Field name ${index + 1}`}
-            <input
-              value={row.name}
-              onChange={(event) => {
-                const next = [...rows];
-                next[index] = { ...row, name: event.target.value };
-                onChange(next);
-              }}
-            />
-          </label>
-          <label>
-            {`Field type ${index + 1}`}
-            <select
-              value={row.type}
-              onChange={(event) => {
-                const next = [...rows];
-                next[index] = { ...row, type: event.target.value as ColumnType };
-                onChange(next);
-              }}
-            >
-              {columnTypes.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </label>
-          <RowActionButtons
-            itemName="field"
-            index={index}
-            rowCount={rows.length}
-            onMoveUp={() => onChange(moveRow(rows, index, -1))}
-            onMoveDown={() => onChange(moveRow(rows, index, 1))}
-            onDuplicate={() => onChange(duplicateRow(rows, index, (item) => ({ ...item })))}
-            onRemove={() => onChange(removeRow(rows, index, blankFieldRow))}
-          />
+        <div key={row.rowId} className="mapping-row">
+          <RowCard
+            dragLabel={`Drag field ${index + 1}`}
+            draggable={rows.length > 1}
+            onDragStart={() => setDraggedRowId(row.rowId)}
+            onDragOver={() => {}}
+            onDrop={() => {
+              if (draggedRowId === null) return;
+              const fromIndex = rows.findIndex(
+                (candidate) => candidate.rowId === draggedRowId,
+              );
+              setDraggedRowId(null);
+              if (fromIndex === -1) return;
+              onChange(moveDraftRow(rows, fromIndex, index));
+            }}
+            header={<span data-testid={`field-row-card-${index + 1}`} aria-hidden="true" />}
+            actions={
+              <RowActionBar
+                itemName="field"
+                rowNumber={index + 1}
+                rowCount={rows.length}
+                onMoveUp={() => onChange(moveDraftRow(rows, index, index - 1))}
+                onMoveDown={() => onChange(moveDraftRow(rows, index, index + 1))}
+                onDuplicate={() =>
+                  onChange(duplicateDraftRow(rows, index, (item) => ({ ...item })))
+                }
+                onRemove={() => onChange(removeDraftRow(rows, index, blankFieldRow))}
+              />
+            }
+          >
+            <label>
+              {`Field name ${index + 1}`}
+              <input
+                value={row.name}
+                onChange={(event) => {
+                  const next = [...rows];
+                  next[index] = { ...row, name: event.target.value };
+                  onChange(next);
+                }}
+              />
+            </label>
+            <label>
+              {`Field type ${index + 1}`}
+              <select
+                value={row.type}
+                onChange={(event) => {
+                  const next = [...rows];
+                  next[index] = { ...row, type: event.target.value as ColumnType };
+                  onChange(next);
+                }}
+              >
+                {columnTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </RowCard>
         </div>
       ))}
 
       <button
         type="button"
         className="row-add-button"
-        onClick={() => onChange(addRow(rows, blankFieldRow))}
+        onClick={() => onChange(addDraftRow(rows, blankFieldRow))}
       >
         Add field
       </button>
@@ -215,7 +174,7 @@ function toEditableNodeDraft(node: GraphNode): EditableNodeDraft {
     return {
       ...node,
       data: {
-        mappings: ensureAtLeastOneRow(node.data.mappings, blankNamedExpression),
+        mappings: ensureDraftRows(node.data.mappings, blankNamedExpression),
       },
     };
   }
@@ -224,11 +183,8 @@ function toEditableNodeDraft(node: GraphNode): EditableNodeDraft {
     return {
       ...node,
       data: {
-        groupBy: ensureAtLeastOneRow(node.data.groupBy, blankNamedExpression),
-        aggregates: ensureAtLeastOneRow(
-          node.data.aggregates,
-          blankNamedExpression,
-        ),
+        groupBy: ensureDraftRows(node.data.groupBy, blankNamedExpression),
+        aggregates: ensureDraftRows(node.data.aggregates, blankNamedExpression),
       },
     };
   }
@@ -237,7 +193,7 @@ function toEditableNodeDraft(node: GraphNode): EditableNodeDraft {
     return node;
   }
 
-  const fieldRows = ensureAtLeastOneRow(
+  const fieldRows = ensureDraftRows(
     Object.entries(node.data.columns).map(([name, type]) => ({ name, type })),
     blankFieldRow,
   );
@@ -253,20 +209,25 @@ function toEditableNodeDraft(node: GraphNode): EditableNodeDraft {
 
 export function serializeNodeEditorDraft(draft: EditableNodeDraft): GraphNode {
   if (draft.kind === "select") {
+    const mappings = stripDraftRows(draft.data.mappings);
+
     return {
       ...draft,
       data: {
-        mappings: sanitizeNamedExpressions(draft.data.mappings),
+        mappings: sanitizeNamedExpressions(mappings),
       },
     };
   }
 
   if (draft.kind === "aggregation") {
+    const groupBy = stripDraftRows(draft.data.groupBy);
+    const aggregates = stripDraftRows(draft.data.aggregates);
+
     return {
       ...draft,
       data: {
-        groupBy: sanitizeNamedExpressions(draft.data.groupBy),
-        aggregates: sanitizeNamedExpressions(draft.data.aggregates),
+        groupBy: sanitizeNamedExpressions(groupBy),
+        aggregates: sanitizeNamedExpressions(aggregates),
       },
     };
   }
@@ -276,7 +237,7 @@ export function serializeNodeEditorDraft(draft: EditableNodeDraft): GraphNode {
   }
 
   const columns = Object.fromEntries(
-    draft.data.fieldRows
+    stripDraftRows(draft.data.fieldRows)
       .filter((row) => row.name.trim() !== "")
       .map((row) => [row.name, row.type]),
   ) as ColumnMap;
@@ -296,66 +257,98 @@ function NamedExpressionRows({
   addButtonLabel,
   nameLabel,
   expressionLabel,
+  rowCardTestIdPrefix,
   document,
   nodeId,
   schemaOverrides,
   onChange,
 }: {
-  rows: NamedExpression[];
+  rows: NamedExpressionDraftRow[];
   itemName: string;
   addButtonLabel: string;
   nameLabel: (rowNumber: number) => string;
   expressionLabel: (rowNumber: number) => string;
+  rowCardTestIdPrefix?: string;
   document: GraphDocument;
   nodeId: string;
   schemaOverrides?: Record<string, ColumnMap>;
-  onChange: (rows: NamedExpression[]) => void;
+  onChange: (rows: NamedExpressionDraftRow[]) => void;
 }) {
+  const [draggedRowId, setDraggedRowId] = useState<string | null>(null);
+
   return (
     <div className="editor-stack">
       {rows.map((row, index) => (
-        <div key={index} className="mapping-row">
-          <label>
-            {nameLabel(index + 1)}
-            <input
-              value={row.name}
-              onChange={(event) => {
+        <div key={row.rowId} className="mapping-row">
+          <RowCard
+            dragLabel={`Drag ${itemName} ${index + 1}`}
+            draggable={rows.length > 1}
+            onDragStart={() => setDraggedRowId(row.rowId)}
+            onDragOver={() => {}}
+            onDrop={() => {
+              if (draggedRowId === null) return;
+              const fromIndex = rows.findIndex(
+                (candidate) => candidate.rowId === draggedRowId,
+              );
+              setDraggedRowId(null);
+              if (fromIndex === -1) return;
+              onChange(moveDraftRow(rows, fromIndex, index));
+            }}
+            header={
+              rowCardTestIdPrefix ? (
+                <span
+                  data-testid={`${rowCardTestIdPrefix}-${index + 1}`}
+                  aria-hidden="true"
+                />
+              ) : null
+            }
+            actions={
+              <RowActionBar
+                itemName={itemName}
+                rowNumber={index + 1}
+                rowCount={rows.length}
+                onMoveUp={() => onChange(moveDraftRow(rows, index, index - 1))}
+                onMoveDown={() => onChange(moveDraftRow(rows, index, index + 1))}
+                onDuplicate={() =>
+                  onChange(duplicateDraftRow(rows, index, (item) => ({ ...item })))
+                }
+                onRemove={() =>
+                  onChange(removeDraftRow(rows, index, blankNamedExpression))
+                }
+              />
+            }
+          >
+            <label>
+              {nameLabel(index + 1)}
+              <input
+                value={row.name}
+                onChange={(event) => {
+                  const next = [...rows];
+                  next[index] = { ...row, name: event.target.value };
+                  onChange(next);
+                }}
+              />
+            </label>
+            <ExpressionInput
+              label={expressionLabel(index + 1)}
+              value={row.expression}
+              document={document}
+              nodeId={nodeId}
+              schemaOverrides={schemaOverrides}
+              multiline
+              onChange={(expression) => {
                 const next = [...rows];
-                next[index] = { ...row, name: event.target.value };
+                next[index] = { ...row, expression };
                 onChange(next);
               }}
             />
-          </label>
-          <ExpressionInput
-            label={expressionLabel(index + 1)}
-            value={row.expression}
-            document={document}
-            nodeId={nodeId}
-            schemaOverrides={schemaOverrides}
-            multiline
-            onChange={(expression) => {
-              const next = [...rows];
-              next[index] = { ...row, expression };
-              onChange(next);
-            }}
-          />
-          <RowActionButtons
-            itemName={itemName}
-            index={index}
-            rowCount={rows.length}
-            onMoveUp={() => onChange(moveRow(rows, index, -1))}
-            onMoveDown={() => onChange(moveRow(rows, index, 1))}
-            onDuplicate={() =>
-              onChange(duplicateRow(rows, index, (item) => ({ ...item })))
-            }
-            onRemove={() => onChange(removeRow(rows, index, blankNamedExpression))}
-          />
+          </RowCard>
         </div>
       ))}
       <button
         type="button"
         className="row-add-button"
-        onClick={() => onChange(addRow(rows, blankNamedExpression))}
+        onClick={() => onChange(addDraftRow(rows, blankNamedExpression))}
       >
         {addButtonLabel}
       </button>
@@ -383,6 +376,7 @@ function SelectMappingRows({
       addButtonLabel="Add mapping"
       nameLabel={(rowNumber) => `Mapping name ${rowNumber}`}
       expressionLabel={() => "Expression"}
+      rowCardTestIdPrefix="mapping-row-card"
       document={document}
       nodeId={nodeId}
       schemaOverrides={schemaOverrides}
@@ -525,6 +519,7 @@ export function renderNodeEditor(
             addButtonLabel="Add group key"
             nameLabel={(rowNumber) => `Group key name ${rowNumber}`}
             expressionLabel={(rowNumber) => `Group key expression ${rowNumber}`}
+            rowCardTestIdPrefix="group-key-row-card"
             document={document}
             nodeId={draft.id}
             schemaOverrides={schemaOverrides}
@@ -539,6 +534,7 @@ export function renderNodeEditor(
             addButtonLabel="Add aggregate"
             nameLabel={(rowNumber) => `Aggregate name ${rowNumber}`}
             expressionLabel={(rowNumber) => `Aggregate expression ${rowNumber}`}
+            rowCardTestIdPrefix="aggregate-row-card"
             document={document}
             nodeId={draft.id}
             schemaOverrides={schemaOverrides}
