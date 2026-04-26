@@ -547,4 +547,130 @@ describe("inferDocumentSchemas", () => {
     expect(schemas["subgraph-orders"]).toEqual({ total: "float" });
     expect(schemas["select-parent"]).toEqual({ gross_total: "float" });
   });
+
+  test("fails closed for invalid subgraph wiring (no inferred child schema leak)", () => {
+    const childGraph = {
+      id: "graph-child",
+      metadata: { name: "Child" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "child-input",
+          kind: "graphInput" as const,
+          label: "Child In",
+          position: { x: 0, y: 0 },
+          data: {
+            inputName: "orders_in",
+            columns: { total: "float" },
+          },
+        },
+        {
+          id: "output-child",
+          kind: "output" as const,
+          label: "Output",
+          position: { x: 260, y: 0 },
+          data: {
+            outputName: "child_out",
+            listeners: createDefaultOutputListenerConfig("child_out"),
+          },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-child",
+          source: "child-input",
+          sourceHandle: "out",
+          target: "output-child",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const parentGraph = {
+      id: "graph-parent",
+      metadata: { name: "Parent" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "from-parent",
+          kind: "fromTable" as const,
+          label: "T",
+          position: { x: -260, y: 0 },
+          data: {
+            tableRef: { tableName: "t" },
+            // Missing required child column `total`.
+            columns: { order_id: "int" },
+          },
+        },
+        {
+          id: "subgraph-orders",
+          kind: "subgraph" as const,
+          label: "Child graph",
+          position: { x: 0, y: 0 },
+          data: { graphId: "graph-child" },
+        },
+        {
+          id: "select-parent",
+          kind: "select" as const,
+          label: "Select",
+          position: { x: 260, y: 0 },
+          data: { mappings: [{ name: "gross_total", expression: "total" }] },
+        },
+        {
+          id: "output-parent",
+          kind: "output" as const,
+          label: "Output",
+          position: { x: 520, y: 0 },
+          data: {
+            outputName: "parent_out",
+            listeners: createDefaultOutputListenerConfig("parent_out"),
+          },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-parent-subgraph-input",
+          source: "from-parent",
+          sourceHandle: "out",
+          target: "subgraph-orders",
+          targetHandle: "in:child-input",
+        },
+        {
+          id: "edge-subgraph-select",
+          source: "subgraph-orders",
+          sourceHandle: "out:output-child",
+          target: "select-parent",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-select-out",
+          source: "select-parent",
+          sourceHandle: "out",
+          target: "output-parent",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const workspace: GraphWorkspace = {
+      version: 2,
+      metadata: { name: "Workspace" },
+      entryGraphId: "graph-parent",
+      graphs: [parentGraph, childGraph],
+    };
+
+    const semantic = validateOutput(workspace, "graph-parent", "output-parent");
+    expect(
+      semantic.diagnostics.some(
+        (diagnostic) => diagnostic.level === "error" && diagnostic.code === "subgraph.incompatible-input",
+      ),
+    ).toBe(true);
+
+    const schemas = inferWorkspaceGraphSchemas(workspace, "graph-parent");
+
+    // The subgraph output schema must not be inferred from the child's declared graphInput
+    // when the parent does not satisfy required inputs.
+    expect(schemas["subgraph-orders"]).toEqual({});
+    expect(schemas["select-parent"]).toEqual({});
+  });
 });
