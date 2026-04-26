@@ -67,4 +67,120 @@ describe("QueryNode", () => {
     expect(screen.getByText("Where")).toBeTruthy();
     expect(screen.getByText("id > 0")).toBeTruthy();
   });
+
+  test("source transform and terminal nodes expose family and kind hooks", () => {
+    const { container } = render(
+      <ReactFlowProvider>
+        <div>
+          <QueryNode
+            id="input-1"
+            data={{
+              node: {
+                id: "input-1",
+                kind: "graphInput",
+                label: "Input",
+                position: { x: 0, y: 0 },
+                data: {
+                  columns: { id: "int" },
+                },
+              },
+              diagnostics: [],
+            }}
+            selected={false}
+            dragging={false}
+          />
+          <QueryNode
+            id="select-1"
+            data={{
+              node: {
+                id: "select-1",
+                kind: "select",
+                label: "Select",
+                position: { x: 0, y: 0 },
+                data: {
+                  mappings: [{ from: "id", to: "id" }],
+                },
+              },
+              diagnostics: [],
+            }}
+            selected={false}
+            dragging={false}
+          />
+          <QueryNode
+            id="output-1"
+            data={{
+              node: {
+                id: "output-1",
+                kind: "output",
+                label: "Output",
+                position: { x: 0, y: 0 },
+                data: {
+                  outputName: "result",
+                },
+              },
+              diagnostics: [],
+            }}
+            selected={false}
+            dragging={false}
+          />
+        </div>
+      </ReactFlowProvider>,
+    );
+
+    const sourceNode = container.querySelector('[data-node-kind="graphInput"]');
+    const transformNode = container.querySelector('[data-node-kind="select"]');
+    const terminalNode = container.querySelector('[data-node-kind="output"]');
+
+    expect(sourceNode?.getAttribute("data-node-family")).toBe("source");
+    expect(sourceNode?.classList.contains("query-node--source")).toBe(true);
+    expect(sourceNode?.classList.contains("query-node--graphInput")).toBe(true);
+
+    expect(transformNode?.getAttribute("data-node-family")).toBe("transform");
+    expect(transformNode?.classList.contains("query-node--transform")).toBe(true);
+    expect(transformNode?.classList.contains("query-node--select")).toBe(true);
+
+    expect(terminalNode?.getAttribute("data-node-family")).toBe("terminal");
+    expect(terminalNode?.classList.contains("query-node--terminal")).toBe(true);
+    expect(terminalNode?.classList.contains("query-node--output")).toBe(true);
+  });
+
+  test("selected and error classes layer alongside type presentation hooks", () => {
+    const { container } = render(
+      <ReactFlowProvider>
+        <QueryNode
+          id="join-1"
+          data={{
+            node: {
+              id: "join-1",
+              kind: "join",
+              label: "Join",
+              position: { x: 0, y: 0 },
+              data: {
+                joinType: "inner",
+                predicate: "a.id = b.id",
+              },
+            },
+            diagnostics: [
+              {
+                level: "error",
+                code: "join.invalid-condition",
+                message: "Join condition is invalid.",
+                ref: { nodeId: "join-1", field: "predicate" },
+              },
+            ],
+          }}
+          selected={true}
+          dragging={false}
+        />
+      </ReactFlowProvider>,
+    );
+
+    const node = container.querySelector('[data-node-kind="join"]');
+
+    expect(node?.getAttribute("data-node-family")).toBe("transform");
+    expect(node?.classList.contains("query-node--transform")).toBe(true);
+    expect(node?.classList.contains("query-node--join")).toBe(true);
+    expect(node?.classList.contains("is-selected")).toBe(true);
+    expect(node?.classList.contains("has-errors")).toBe(true);
+  });
 });

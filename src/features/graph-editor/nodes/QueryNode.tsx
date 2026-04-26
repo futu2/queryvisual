@@ -4,6 +4,21 @@ import { formatTableRef } from "../../../domain/schema/types";
 import type { FlowNodeData } from "../flowAdapter";
 import "./queryNode.css";
 
+const PRESENTATION_BY_KIND: Record<
+  GraphNode["kind"],
+  { family: "source" | "transform" | "terminal"; glyph: string }
+> = {
+  graphInput: { family: "source", glyph: "IN" },
+  fromTable: { family: "source", glyph: "TB" },
+  join: { family: "transform", glyph: "+" },
+  where: { family: "transform", glyph: "?" },
+  select: { family: "transform", glyph: "[]" },
+  aggregation: { family: "transform", glyph: "#" },
+  sort: { family: "transform", glyph: "::" },
+  limit: { family: "transform", glyph: "1" },
+  output: { family: "terminal", glyph: "OUT" },
+};
+
 function summaryText(node: GraphNode) {
   switch (node.kind) {
     case "fromTable":
@@ -48,13 +63,21 @@ export function QueryNode({ data, selected }: NodeProps<FlowNodeData>) {
   const hasErrors = data.diagnostics.some(
     (diagnostic) => diagnostic.level === "error",
   );
+  const presentation = PRESENTATION_BY_KIND[data.node.kind];
 
   return (
     <div
-      className={`query-node ${selected ? "is-selected" : ""} ${hasErrors ? "has-errors" : ""}`}
+      className={`query-node query-node--${presentation.family} query-node--${data.node.kind} ${selected ? "is-selected" : ""} ${hasErrors ? "has-errors" : ""}`}
+      data-node-kind={data.node.kind}
+      data-node-family={presentation.family}
     >
       <TargetHandles node={data.node} />
-      <div className="query-node__kind">{data.node.kind}</div>
+      <div className="query-node__header">
+        <span className="query-node__glyph" aria-hidden="true">
+          {presentation.glyph}
+        </span>
+        <div className="query-node__kind">{data.node.kind}</div>
+      </div>
       <div className="query-node__title">{data.node.label}</div>
       <div className="query-node__summary">{summaryText(data.node)}</div>
       {hasErrors ? <span className="query-node__badge">error</span> : null}

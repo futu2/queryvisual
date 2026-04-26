@@ -8,13 +8,69 @@
   box-shadow: 0 8px 20px rgba(68, 55, 40, 0.08);
 }
 
-.query-node.is-selected {
-  border-color: #9a5f19;
-  box-shadow: 0 10px 26px rgba(154, 95, 25, 0.18);
+.query-node--source {
+  background:
+    linear-gradient(180deg, rgba(222, 239, 236, 0.96), rgba(255, 253, 248, 0.96));
+  border-color: rgba(50, 110, 100, 0.24);
 }
 
-.query-node.has-errors {
-  border-color: #ae3f2f;
+.query-node--transform {
+  background:
+    linear-gradient(180deg, rgba(246, 236, 221, 0.96), rgba(255, 253, 248, 0.96));
+  border-color: rgba(154, 95, 25, 0.22);
+}
+
+.query-node--terminal {
+  background:
+    linear-gradient(180deg, rgba(234, 231, 245, 0.96), rgba(255, 253, 248, 0.96));
+  border-color: rgba(92, 73, 143, 0.24);
+}
+
+.query-node--graphInput,
+.query-node--fromTable,
+.query-node--output {
+  border-radius: 20px;
+}
+
+.query-node--join {
+  box-shadow:
+    inset 4px 0 0 rgba(143, 87, 23, 0.18),
+    0 8px 20px rgba(68, 55, 40, 0.08);
+}
+
+.query-node__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.query-node__glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  background: rgba(255, 255, 255, 0.72);
+  color: #4f4337;
+}
+
+.query-node--source .query-node__glyph {
+  color: #285f56;
+  background: rgba(240, 250, 247, 0.9);
+}
+
+.query-node--transform .query-node__glyph {
+  color: #8f5717;
+  background: rgba(255, 247, 238, 0.92);
+}
+
+.query-node--terminal .query-node__glyph {
+  color: #5a4a8e;
+  background: rgba(244, 241, 253, 0.92);
 }
 
 .query-node__kind {
@@ -40,4 +96,14 @@
   right: 12px;
   font-size: 11px;
   color: #ae3f2f;
+}
+
+.query-node.is-selected {
+  border-color: #9a5f19;
+  box-shadow: 0 10px 26px rgba(154, 95, 25, 0.18);
+}
+
+.query-node.has-errors {
+  border-color: #ae3f2f;
+  box-shadow: 0 0 0 1px rgba(174, 63, 47, 0.18), 0 10px 24px rgba(174, 63, 47, 0.12);
 }
