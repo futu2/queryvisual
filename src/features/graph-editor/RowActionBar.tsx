@@ -18,7 +18,11 @@ export function RowActionBar({
   onRemove,
 }: RowActionBarProps) {
   return (
-    <div className="row-action-bar" aria-label={`${itemName} ${rowNumber} actions`}>
+    <div
+      className="row-action-bar"
+      role="group"
+      aria-label={`${itemName} ${rowNumber} actions`}
+    >
       <button
         className="row-icon-button"
         type="button"

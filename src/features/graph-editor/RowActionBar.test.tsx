@@ -32,6 +32,7 @@ describe("RowActionBar", () => {
     const wrapper = container.querySelector("div");
 
     expect(wrapper?.classList.contains("row-action-bar")).toBeTrue();
+    expect(wrapper?.getAttribute("role")).toBe("group");
     expect(moveUp.classList.contains("row-icon-button")).toBeTrue();
     expect(moveDown.classList.contains("row-icon-button")).toBeTrue();
     expect(duplicate.classList.contains("row-icon-button")).toBeTrue();
@@ -156,5 +157,54 @@ describe("RowCard", () => {
     expect(onDrop).toHaveBeenCalledTimes(1);
     expect(dragOverEvent.defaultPrevented).toBeTrue();
     expect(dropEvent.defaultPrevented).toBeTrue();
+  });
+
+  test("when non-draggable, still delegates drag over/drop callbacks and prevents default", () => {
+    const onDragOver = mock();
+    const onDrop = mock();
+
+    const { container } = render(
+      <RowCard
+        dragLabel="Drag field 3"
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+        header={<span>Field 3</span>}
+        actions={<span>Actions</span>}
+      />,
+    );
+
+    const section = container.querySelector("section");
+    expect(section).toBeTruthy();
+    const dragOverEvent = new Event("dragover", { bubbles: true, cancelable: true });
+    const dropEvent = new Event("drop", { bubbles: true, cancelable: true });
+
+    fireEvent(section as HTMLElement, dragOverEvent);
+    fireEvent(section as HTMLElement, dropEvent);
+
+    expect(onDragOver).toHaveBeenCalledTimes(1);
+    expect(onDrop).toHaveBeenCalledTimes(1);
+    expect(dragOverEvent.defaultPrevented).toBeTrue();
+    expect(dropEvent.defaultPrevented).toBeTrue();
+  });
+
+  test("when draggable, dragging the handle triggers drag-start callback once", () => {
+    const onDragStart = mock();
+
+    render(
+      <RowCard
+        dragLabel="Drag field 4"
+        draggable
+        onDragStart={onDragStart}
+        header={<span>Field 4</span>}
+        actions={<span>Actions</span>}
+      />,
+    );
+
+    const dragHandle = screen.getByRole("button", { name: "Drag field 4" });
+    expect(dragHandle.getAttribute("draggable")).toBe("true");
+    const dragStartEvent = new Event("dragstart", { bubbles: true, cancelable: true });
+    fireEvent(dragHandle, dragStartEvent);
+
+    expect(onDragStart).toHaveBeenCalledTimes(1);
   });
 });

@@ -36,8 +36,8 @@ export function RowCard({
       className="row-card"
       draggable={draggable}
       onDragStart={draggable ? onDragStart : undefined}
-      onDragOver={draggable ? handleDragOver : undefined}
-      onDrop={draggable ? handleDrop : undefined}
+      onDragOver={onDragOver ? handleDragOver : undefined}
+      onDrop={onDrop ? handleDrop : undefined}
     >
       <div className="row-card-header">
         <button
@@ -45,6 +45,7 @@ export function RowCard({
           type="button"
           aria-label={dragLabel}
           tabIndex={-1}
+          draggable={draggable}
         >
           ⋮⋮
         </button>
