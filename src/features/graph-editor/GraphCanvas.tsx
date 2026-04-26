@@ -94,6 +94,10 @@ export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
   };
 
   const onNodeClick: NodeMouseHandler = (_, node) => {
+    if (editedNode?.id === node.id) {
+      return;
+    }
+
     runEditorTransition(() => {
       dispatch({ type: "select-node", nodeId: node.id });
       dispatch({ type: "open-node-editor", nodeId: node.id });

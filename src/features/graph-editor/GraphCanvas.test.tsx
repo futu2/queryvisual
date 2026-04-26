@@ -94,7 +94,7 @@ async function invokeNodeClick(nodeId: string) {
   }
 
   await act(async () => {
-    onNodeClick({ type: "click" }, node);
+    await Promise.resolve(onNodeClick({ type: "click" }, node));
   });
 }
 
@@ -105,7 +105,7 @@ async function invokePaneClick() {
   }
 
   await act(async () => {
-    onPaneClick({ type: "click" });
+    await Promise.resolve(onPaneClick({ type: "click" }));
   });
 }
 
@@ -260,6 +260,29 @@ describe("GraphCanvas", () => {
     expect(screen.queryByRole("dialog", { name: "Discard changes?" })).toBeNull();
     expect(screen.queryByLabelText("Node name")).toBeNull();
     expect(screen.getByTestId("selected-node-id").textContent).toBe("null");
+  });
+
+  test("clicking the currently edited node while dirty is a no-op and does not show discard confirmation", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <DocumentProvider initialDocument={createSampleDocument()}>
+        <GraphCanvas diagnostics={[]} />
+        <EditorStateProbe />
+      </DocumentProvider>,
+    );
+
+    await invokeNodeClick("from-orders");
+    await user.clear(screen.getByLabelText("Node name"));
+    await user.type(screen.getByLabelText("Node name"), "Paid orders");
+
+    await invokeNodeClick("from-orders");
+
+    expect(screen.queryByRole("dialog", { name: "Discard changes?" })).toBeNull();
+    expect((screen.getByLabelText("Node name") as HTMLInputElement).value).toBe(
+      "Paid orders",
+    );
+    expect(screen.getByTestId("selected-node-id").textContent).toBe("from-orders");
   });
 
   test("keep editing preserves active output until an output node switch is discarded", async () => {

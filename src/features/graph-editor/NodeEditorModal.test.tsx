@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { createRef } from "react";
 import userEvent from "@testing-library/user-event";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { GraphDocument } from "../../domain/document/types";
 import type { GraphNode } from "../../domain/document/types";
 import { DocumentProvider } from "../../app/state/DocumentContext";
@@ -487,6 +487,63 @@ describe("NodeEditorModal", () => {
       ["order_id", "float"],
       ["status", "string"],
     ]);
+  });
+
+  test("traps tab focus inside the discard confirmation while it is open", async () => {
+    const user = userEvent.setup();
+    const closeRef = createRef<NodeEditorModalHandle>();
+
+    const node: GraphNode = {
+      id: "from-orders-focus-trap",
+      kind: "fromTable",
+      label: "Orders",
+      position: { x: 0, y: 0 },
+      data: {
+        tableRef: { tableName: "orders" },
+        columns: { order_id: "int" },
+      },
+    };
+
+    const fallbackDocument: GraphDocument = {
+      version: 1,
+      metadata: { name: "Test document" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [node],
+      edges: [],
+    };
+
+    render(
+      <DocumentProvider initialDocument={fallbackDocument}>
+        <NodeEditorModal
+          ref={closeRef}
+          node={node}
+          onClose={() => {}}
+          onSave={() => {}}
+        />
+      </DocumentProvider>,
+    );
+
+    const nameInput = screen.getByLabelText("Node name");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Paid orders");
+
+    await act(async () => {
+      closeRef.current?.requestClose();
+    });
+
+    const keepEditingButton = screen.getByRole("button", { name: "Keep editing" });
+    const discardButton = screen.getByRole("button", { name: "Discard changes" });
+
+    expect(globalThis.document.activeElement).toBe(keepEditingButton);
+
+    await user.tab();
+    expect(globalThis.document.activeElement).toBe(discardButton);
+
+    await user.tab();
+    expect(globalThis.document.activeElement).toBe(keepEditingButton);
+
+    await user.tab({ shift: true });
+    expect(globalThis.document.activeElement).toBe(discardButton);
   });
 
   test("edits aggregation group keys and aggregates independently", async () => {

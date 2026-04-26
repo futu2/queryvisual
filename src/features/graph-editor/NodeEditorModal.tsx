@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  type KeyboardEvent as ReactKeyboardEvent,
   useEffect,
   useImperativeHandle,
   useMemo,
@@ -41,6 +42,7 @@ function NodeEditorModal({
     null,
   );
   const keepEditingButtonRef = useRef<HTMLButtonElement | null>(null);
+  const discardDialogRef = useRef<HTMLDivElement | null>(null);
   const previousEditorFocusRef = useRef<HTMLElement | null>(null);
   const shouldRestoreFocusRef = useRef(false);
 
@@ -87,6 +89,38 @@ function NodeEditorModal({
       setShowDiscardDialog(false);
     });
     closeAction();
+  }
+
+  function handleDiscardDialogKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "Tab") {
+      return;
+    }
+
+    const focusableElements = discardDialogRef.current?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+
+    if (!focusableElements || focusableElements.length === 0) {
+      event.preventDefault();
+      return;
+    }
+
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+    const activeElement = globalThis.document.activeElement;
+
+    if (event.shiftKey) {
+      if (activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      }
+      return;
+    }
+
+    if (activeElement === lastElement) {
+      event.preventDefault();
+      firstElement.focus();
+    }
   }
 
   useEffect(() => {
@@ -184,6 +218,8 @@ function NodeEditorModal({
               role="dialog"
               aria-modal="true"
               aria-label="Discard changes?"
+              ref={discardDialogRef}
+              onKeyDown={handleDiscardDialogKeyDown}
             >
               <h3>Discard changes?</h3>
               <p>Your unsaved edits will be lost.</p>
