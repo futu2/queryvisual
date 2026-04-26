@@ -7,7 +7,14 @@ import {
   type NodeChange,
   type NodeMouseHandler,
 } from "@xyflow/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useDocumentContext } from "../../app/state/DocumentContext";
 import type { OutputRuntimeSnapshot } from "../output-runtime/outputRuntime";
 import {
@@ -103,7 +110,7 @@ export function GraphCanvas({
     [editedNode],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!registerEditorTransition) {
       return;
     }
