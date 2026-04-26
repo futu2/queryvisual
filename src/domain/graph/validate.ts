@@ -275,9 +275,20 @@ function validateGraphOutput(params: {
         const childInputSchemas: Record<string, ColumnMap> = {};
         let compatible = true;
 
-        const childInputs = childGraph.nodes.filter(
-          (n): n is Extract<GraphNode, { kind: "graphInput" }> => n.kind === "graphInput",
+        const childReachableNodes = orderedReachableNodes(childGraph, childOutputId);
+        const requiredChildInputIds = new Set(
+          childReachableNodes
+            .filter(
+              (n): n is Extract<GraphNode, { kind: "graphInput" }> => n.kind === "graphInput",
+            )
+            .map((n) => n.id),
         );
+
+        const childInputs = childGraph.nodes
+          .filter(
+            (n): n is Extract<GraphNode, { kind: "graphInput" }> => n.kind === "graphInput",
+          )
+          .filter((n) => requiredChildInputIds.has(n.id));
         for (const inputNode of childInputs) {
           const handleId = `in:${inputNode.id}`;
           const matches = inputs.filter((edge) => edge.targetHandle === handleId);

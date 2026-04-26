@@ -174,6 +174,107 @@ function createWorkspaceWithCycle(): GraphWorkspace {
   };
 }
 
+function createWorkspaceWithUnusedChildInput(): GraphWorkspace {
+  const childGraph = {
+    id: "graph-child",
+    metadata: { name: "Child" },
+    viewport: { x: 0, y: 0, zoom: 1 },
+    nodes: [
+      {
+        id: "child-input-used",
+        kind: "graphInput" as const,
+        label: "Used Input",
+        position: { x: 0, y: 0 },
+        data: {
+          inputName: "used_in",
+          columns: { order_id: "int" },
+        },
+      },
+      {
+        id: "child-input-unused",
+        kind: "graphInput" as const,
+        label: "Unused Input",
+        position: { x: 0, y: 200 },
+        data: {
+          inputName: "unused_in",
+          columns: { customer_id: "int" },
+        },
+      },
+      {
+        id: "child-output",
+        kind: "output" as const,
+        label: "Output",
+        position: { x: 260, y: 0 },
+        data: outputData("child_out"),
+      },
+    ],
+    edges: [
+      {
+        id: "edge-used-out",
+        source: "child-input-used",
+        sourceHandle: "out",
+        target: "child-output",
+        targetHandle: "in",
+      },
+    ],
+  };
+
+  const parentGraph = {
+    id: "graph-parent",
+    metadata: { name: "Parent" },
+    viewport: { x: 0, y: 0, zoom: 1 },
+    nodes: [
+      {
+        id: "from-parent",
+        kind: "fromTable" as const,
+        label: "T",
+        position: { x: -260, y: 0 },
+        data: {
+          tableRef: { tableName: "t" },
+          columns: { order_id: "int" },
+        },
+      },
+      {
+        id: "subgraph-child",
+        kind: "subgraph" as const,
+        label: "Child graph",
+        position: { x: 0, y: 0 },
+        data: { graphId: "graph-child" },
+      },
+      {
+        id: "output-parent",
+        kind: "output" as const,
+        label: "Output",
+        position: { x: 260, y: 0 },
+        data: outputData("parent_out"),
+      },
+    ],
+    edges: [
+      {
+        id: "edge-parent-subgraph-used",
+        source: "from-parent",
+        sourceHandle: "out",
+        target: "subgraph-child",
+        targetHandle: "in:child-input-used",
+      },
+      {
+        id: "edge-subgraph-output",
+        source: "subgraph-child",
+        sourceHandle: "out:child-output",
+        target: "output-parent",
+        targetHandle: "in",
+      },
+    ],
+  };
+
+  return {
+    version: 2,
+    metadata: { name: "Unused Child Input Workspace" },
+    entryGraphId: "graph-parent",
+    graphs: [parentGraph, childGraph],
+  };
+}
+
 describe("validateOutput", () => {
   test("validates the sample output without errors", () => {
     const document = createSampleDocument();
@@ -401,6 +502,14 @@ describe("validateOutput", () => {
         (diagnostic) => diagnostic.level === "error" && diagnostic.code === "subgraph.cycle",
       ),
     ).toBe(true);
+  });
+
+  test("does not require wiring unused child graph inputs for the selected child output", () => {
+    const workspace = createWorkspaceWithUnusedChildInput();
+
+    const result = validateOutput(workspace, "graph-parent", "output-parent");
+
+    expect(result.diagnostics).toEqual([]);
   });
 
   test("reports a missing join input", () => {
