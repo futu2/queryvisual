@@ -2,9 +2,8 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 import { createRef } from "react";
 import userEvent from "@testing-library/user-event";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import type { GraphDocument } from "../../domain/document/types";
-import type { GraphNode } from "../../domain/document/types";
-import { DocumentProvider } from "../../app/state/DocumentContext";
+import type { GraphDocument, GraphNode, GraphWorkspace } from "../../domain/document/types";
+import { DocumentProvider, useDocumentContext } from "../../app/state/DocumentContext";
 import type { CompileOutputResult } from "../../domain/compile/compileOutput";
 import type { OutputListenerStatus } from "../output-runtime/outputRuntime";
 import { NodeEditorModal, type NodeEditorModalHandle } from "./NodeEditorModal";
@@ -52,12 +51,14 @@ function dispatchDragEvent(
 function renderModal({
   node,
   document,
+  workspace,
   onClose = () => {},
   onSave = () => {},
   outputRuntime = null,
 }: {
   node: GraphNode;
   document?: GraphDocument;
+  workspace?: GraphWorkspace;
   onClose?: () => void;
   onSave?: (node: GraphNode) => void;
   outputRuntime?: {
@@ -74,7 +75,10 @@ function renderModal({
   };
 
   return render(
-    <DocumentProvider initialDocument={document ?? fallbackDocument}>
+    <DocumentProvider
+      initialWorkspace={workspace}
+      initialDocument={document ?? fallbackDocument}
+    >
       <NodeEditorModal
         node={node}
         onClose={onClose}
@@ -83,6 +87,11 @@ function renderModal({
       />
     </DocumentProvider>,
   );
+}
+
+function ActiveGraphProbe() {
+  const { state } = useDocumentContext();
+  return <span data-testid="active-graph-id">{state.activeGraphId}</span>;
 }
 
 describe("NodeEditorModal", () => {
@@ -1770,5 +1779,61 @@ describe("NodeEditorModal", () => {
     renderModal({ node: whereNode, document });
 
     expect(screen.queryByText("Predicate must be boolean.")).toBeNull();
+  });
+
+  test("subgraph nodes save a referenced graph id and support open-child jump", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+    const onClose = mock();
+
+    const node: GraphNode = {
+      id: "subgraph-1",
+      kind: "subgraph",
+      label: "Orders Package",
+      position: { x: 0, y: 0 },
+      data: { graphId: "" },
+    };
+
+    const workspace: GraphWorkspace = {
+      version: 2,
+      metadata: { name: "Workspace" },
+      entryGraphId: "graph-parent",
+      graphs: [
+        {
+          id: "graph-parent",
+          metadata: { name: "Parent" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [node],
+          edges: [],
+        },
+        {
+          id: "graph-child",
+          metadata: { name: "Orders Child" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [],
+          edges: [],
+        },
+      ],
+    };
+
+    render(
+      <DocumentProvider initialWorkspace={workspace}>
+        <NodeEditorModal node={node} onClose={onClose} onSave={onSave} />
+        <ActiveGraphProbe />
+      </DocumentProvider>,
+    );
+
+    expect(screen.getByTestId("active-graph-id").textContent).toBe("graph-parent");
+
+    await user.selectOptions(screen.getByLabelText("Child graph"), "graph-child");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalled();
+    expect(onSave.mock.calls[0][0].data.graphId).toBe("graph-child");
+
+    await user.click(screen.getByRole("button", { name: "Open child graph" }));
+
+    expect(onClose).toHaveBeenCalled();
+    expect(screen.getByTestId("active-graph-id").textContent).toBe("graph-child");
   });
 });

@@ -188,9 +188,8 @@ function NodeEditorModal({
   onClose,
   onSave,
 }, ref) {
-  const {
-    state: { document: graphDocument },
-  } = useDocumentContext();
+  const { state, dispatch } = useDocumentContext();
+  const graphDocument = state.document;
   const { draft, initialDraft, setDraft } = useEditableNode(node);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
   const [pendingCloseAction, setPendingCloseAction] = useState<(() => void) | null>(
@@ -202,10 +201,16 @@ function NodeEditorModal({
   const previousEditorFocusRef = useRef<HTMLElement | null>(null);
   const shouldRestoreFocusRef = useRef(false);
 
-  const schemaOverrides = useMemo(
-    () => inferNodeSchemas(graphDocument, node.id),
-    [graphDocument, node.id],
-  );
+  const schemaOverrides = useMemo(() => {
+    const needsOverrides =
+      node.kind === "where" ||
+      node.kind === "join" ||
+      node.kind === "select" ||
+      node.kind === "aggregation" ||
+      node.kind === "sort";
+
+    return needsOverrides ? inferNodeSchemas(graphDocument, node.id) : undefined;
+  }, [graphDocument, node.id, node.kind]);
   const serializedDraft = useMemo(() => serializeNodeEditorDraft(draft), [draft]);
   const isDirty = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(initialDraft),
@@ -351,7 +356,14 @@ function NodeEditorModal({
           </header>
 
           <section className="modal-body">
-            {renderNodeEditor(draft, setDraft, graphDocument, schemaOverrides)}
+            {renderNodeEditor(draft, setDraft, graphDocument, schemaOverrides, {
+              workspace: state.workspace,
+              activeGraphId: state.activeGraphId,
+              onOpenGraph: (graphId) => {
+                dispatch({ type: "set-active-graph", graphId });
+                onClose();
+              },
+            })}
             {node.kind === "output" ? (
               <OutputRuntimeInspector
                 outputId={node.id}

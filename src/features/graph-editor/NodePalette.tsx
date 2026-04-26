@@ -5,6 +5,7 @@ import type { GraphNode, NodeKind } from "../../domain/document/types";
 const paletteItems: Array<{ kind: NodeKind; label: string }> = [
   { kind: "graphInput", label: "Graph Input" },
   { kind: "fromTable", label: "From" },
+  { kind: "subgraph", label: "Subgraph" },
   { kind: "join", label: "Join" },
   { kind: "where", label: "Where" },
   { kind: "select", label: "Select" },
@@ -46,6 +47,12 @@ function createNode(kind: NodeKind, index: number): GraphNode {
         ...base,
         kind,
         data: { joinType: "inner", predicate: "left.id = right.id" },
+      };
+    case "subgraph":
+      return {
+        ...base,
+        kind,
+        data: { graphId: "" },
       };
     case "where":
       return { ...base, kind, data: { predicate: "id > 0" } };

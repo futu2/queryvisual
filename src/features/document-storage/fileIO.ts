@@ -23,6 +23,7 @@ const columnTypes = [
 const nodeKinds = [
   "graphInput",
   "fromTable",
+  "subgraph",
   "join",
   "where",
   "select",
@@ -104,6 +105,8 @@ function isNodeData(kind: typeof nodeKinds[number], value: unknown) {
       );
     case "fromTable":
       return isTableRef(value.tableRef) && isColumnMap(value.columns);
+    case "subgraph":
+      return typeof value.graphId === "string";
     case "join":
       return (
         (value.joinType === "inner" ||
@@ -154,11 +157,9 @@ function isGraphEdge(value: unknown) {
     isRecord(value) &&
     typeof value.id === "string" &&
     typeof value.source === "string" &&
-    value.sourceHandle === "out" &&
+    typeof value.sourceHandle === "string" &&
     typeof value.target === "string" &&
-    (value.targetHandle === "in" ||
-      value.targetHandle === "left" ||
-      value.targetHandle === "right")
+    typeof value.targetHandle === "string"
   );
 }
 

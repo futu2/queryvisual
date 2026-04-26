@@ -3,11 +3,13 @@ import userEvent from "@testing-library/user-event";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { DocumentProvider, useDocumentContext } from "../../app/state/DocumentContext";
 import { createSampleDocument } from "../../domain/document/sample";
+import type { GraphWorkspace } from "../../domain/document/types";
 import type { OutputRuntimeSnapshot } from "../output-runtime/outputRuntime";
 
 let reactFlowProps: Record<string, unknown> | null = null;
 
 mock.module("@xyflow/react", () => ({
+  ReactFlowProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   ReactFlow: (props: Record<string, unknown>) => {
     reactFlowProps = props;
     const nodes = Array.isArray(props.nodes) ? props.nodes : [];
@@ -187,6 +189,49 @@ afterEach(() => {
 });
 
 describe("GraphCanvas", () => {
+  test("passes workspace context through to flow node data for subgraph interface inference", () => {
+    const workspace: GraphWorkspace = {
+      version: 2,
+      metadata: { name: "Workspace" },
+      entryGraphId: "graph-parent",
+      graphs: [
+        {
+          id: "graph-parent",
+          metadata: { name: "Parent" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [
+            {
+              id: "subgraph-1",
+              kind: "subgraph",
+              label: "Orders Package",
+              position: { x: 0, y: 0 },
+              data: { graphId: "graph-child" },
+            },
+          ],
+          edges: [],
+        },
+        {
+          id: "graph-child",
+          metadata: { name: "Orders Child" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [],
+          edges: [],
+        },
+      ],
+    };
+
+    render(
+      <DocumentProvider initialWorkspace={workspace}>
+        <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
+      </DocumentProvider>,
+    );
+
+    const flowNode = getFlowNode("subgraph-1") as
+      | { data?: { workspace?: unknown } }
+      | undefined;
+    expect(flowNode?.data?.workspace).toBeTruthy();
+  });
+
   test("defers node switching through React Flow onNodeClick until discard is confirmed", async () => {
     const user = userEvent.setup();
 

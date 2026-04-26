@@ -74,11 +74,18 @@ export function GraphCanvas({
     () =>
       toFlowNodes(
         state.document,
+        state.workspace,
         outputRuntime.diagnostics,
         state.selectedNodeId,
         nodeRuntimeById,
       ),
-    [nodeRuntimeById, outputRuntime.diagnostics, state.document, state.selectedNodeId],
+    [
+      nodeRuntimeById,
+      outputRuntime.diagnostics,
+      state.document,
+      state.selectedNodeId,
+      state.workspace,
+    ],
   );
   const edges = useMemo(
     () =>

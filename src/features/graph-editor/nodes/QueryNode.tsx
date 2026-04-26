@@ -1,6 +1,7 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { GraphNode } from "../../../domain/document/types";
 import { formatTableRef } from "../../../domain/schema/types";
+import { inferChildGraphInterface } from "../../../domain/workspace/interfaces";
 import type { FlowNodeData } from "../flowAdapter";
 import "./queryNode.css";
 
@@ -10,6 +11,7 @@ const PRESENTATION_BY_KIND: Record<
 > = {
   graphInput: { family: "source", glyph: "IN" },
   fromTable: { family: "source", glyph: "TB" },
+  subgraph: { family: "transform", glyph: "SG" },
   join: { family: "transform", glyph: "+" },
   where: { family: "transform", glyph: "?" },
   select: { family: "transform", glyph: "[]" },
@@ -19,12 +21,38 @@ const PRESENTATION_BY_KIND: Record<
   output: { family: "terminal", glyph: "OUT" },
 };
 
-function summaryText(node: GraphNode) {
+function handleTop(index: number, count: number) {
+  if (count <= 1) {
+    return 48;
+  }
+
+  const min = 32;
+  const max = 72;
+  const ratio = index / (count - 1);
+  return min + (max - min) * ratio;
+}
+
+function formatInterfaceSummary(inputCount: number, outputCount: number) {
+  return `${inputCount} inputs / ${outputCount} outputs`;
+}
+
+function summaryText(node: GraphNode, workspace?: FlowNodeData["workspace"]) {
   switch (node.kind) {
     case "fromTable":
       return `${formatTableRef(node.data.tableRef)} · ${Object.keys(node.data.columns).length} cols`;
     case "graphInput":
       return `${Object.keys(node.data.columns).length} cols`;
+    case "subgraph": {
+      const { graph, iface } = inferChildGraphInterface(workspace, node.data.graphId);
+      const base = formatInterfaceSummary(iface.inputs.length, iface.outputs.length);
+      if (!node.data.graphId.trim()) {
+        return base;
+      }
+      if (!graph) {
+        return `Missing graph · ${base}`;
+      }
+      return base;
+    }
     case "join":
       return `${node.data.joinType} join`;
     case "where":
@@ -42,7 +70,13 @@ function summaryText(node: GraphNode) {
   }
 }
 
-function TargetHandles({ node }: { node: GraphNode }) {
+function TargetHandles({
+  node,
+  workspace,
+}: {
+  node: GraphNode;
+  workspace?: FlowNodeData["workspace"];
+}) {
   if (node.kind === "join") {
     return (
       <>
@@ -70,6 +104,32 @@ function TargetHandles({ node }: { node: GraphNode }) {
     return null;
   }
 
+  if (node.kind === "subgraph") {
+    const { iface } = inferChildGraphInterface(workspace, node.data.graphId);
+
+    return (
+      <>
+        {iface.inputs.map((port, index) => (
+          <span
+            key={`subgraph-target-${port.name}`}
+            hidden
+            data-query-node-handle-marker={`target-${port.name}`}
+          />
+        ))}
+        {iface.inputs.map((port, index) => (
+          <Handle
+            key={`subgraph-target-handle-${port.name}`}
+            type="target"
+            id={port.name}
+            position={Position.Left}
+            style={{ top: handleTop(index, iface.inputs.length) }}
+            data-query-node-handle={`target-${port.name}`}
+          />
+        ))}
+      </>
+    );
+  }
+
   return (
     <>
       <span hidden data-query-node-handle-marker="target-in" />
@@ -88,6 +148,10 @@ export function QueryNode({ data, selected }: NodeProps<FlowNodeData>) {
     (diagnostic) => diagnostic.level === "error",
   );
   const presentation = PRESENTATION_BY_KIND[data.node.kind];
+  const subgraphInterface =
+    data.node.kind === "subgraph"
+      ? inferChildGraphInterface(data.workspace, data.node.data.graphId)
+      : null;
 
   return (
     <div
@@ -95,7 +159,7 @@ export function QueryNode({ data, selected }: NodeProps<FlowNodeData>) {
       data-node-kind={data.node.kind}
       data-node-family={presentation.family}
     >
-      <TargetHandles node={data.node} />
+      <TargetHandles node={data.node} workspace={data.workspace} />
       {data.node.kind === "join" ? <span className="query-node__accent" aria-hidden="true" /> : null}
       <div className="query-node__header">
         <span className="query-node__glyph" aria-hidden="true">
@@ -104,9 +168,65 @@ export function QueryNode({ data, selected }: NodeProps<FlowNodeData>) {
         <div className="query-node__kind">{data.node.kind}</div>
       </div>
       <div className="query-node__title">{data.node.label}</div>
-      <div className="query-node__summary">{summaryText(data.node)}</div>
+      <div className="query-node__summary">{summaryText(data.node, data.workspace)}</div>
+      {data.node.kind === "subgraph" ? (
+        <div className="query-node__ports" aria-label="Subgraph interface">
+          {subgraphInterface && subgraphInterface.graph ? (
+            <div className="query-node__ports-heading">
+              {subgraphInterface.graph.metadata.name}
+            </div>
+          ) : null}
+          {subgraphInterface && !subgraphInterface.graph && data.node.data.graphId.trim() ? (
+            <div className="query-node__ports-heading is-missing">
+              Missing graph
+            </div>
+          ) : null}
+          {subgraphInterface ? (
+            <div className="query-node__ports-grid">
+              <div className="query-node__ports-column">
+                <div className="query-node__ports-title">Inputs</div>
+                {subgraphInterface.iface.inputs.map((port) => (
+                  <div key={`in-${port.name}`} className="query-node__port-row">
+                    <span className="query-node__port-pill">{port.name}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="query-node__ports-column">
+                <div className="query-node__ports-title">Outputs</div>
+                {subgraphInterface.iface.outputs.map((port) => (
+                  <div key={`out-${port.name}`} className="query-node__port-row">
+                    <span className="query-node__port-pill">{port.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {hasErrors ? <span className="query-node__badge">error</span> : null}
-      {data.node.kind === "output" ? null : (
+      {data.node.kind === "output" ? null : data.node.kind === "subgraph" ? (
+        <>
+          {(subgraphInterface?.iface.outputs ?? []).map((port) => (
+            <span
+              key={`subgraph-source-marker-${port.name}`}
+              hidden
+              data-query-node-handle-marker={`source-${port.name}`}
+            />
+          ))}
+          {(subgraphInterface?.iface.outputs ?? []).map((port, index) => (
+            <Handle
+              key={`subgraph-source-handle-${port.name}`}
+              type="source"
+              id={port.name}
+              position={Position.Right}
+              style={{
+                top: handleTop(index, subgraphInterface?.iface.outputs.length ?? 0),
+              }}
+              data-query-node-handle={`source-${port.name}`}
+            />
+          ))}
+        </>
+      ) : (
         <>
           <span hidden data-query-node-handle-marker="source-out" />
           <Handle

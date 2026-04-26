@@ -1,11 +1,12 @@
 import type { Edge, Node } from "@xyflow/react";
 import type { Diagnostic } from "../../domain/diagnostics/types";
-import type { GraphDocument, GraphNode } from "../../domain/document/types";
+import type { GraphDocument, GraphNode, GraphWorkspace } from "../../domain/document/types";
 import type { DeletableEdgeData } from "./edges/DeletableEdge";
 
 export interface FlowNodeData {
   node: GraphNode;
   diagnostics: Diagnostic[];
+  workspace?: GraphWorkspace;
 }
 
 export interface FlowNodeRuntime {
@@ -20,6 +21,7 @@ export interface FlowNodeRuntime {
 
 export function toFlowNodes(
   document: GraphDocument,
+  workspace: GraphWorkspace | undefined,
   diagnostics: Diagnostic[],
   selectedNodeId: string | null,
   runtimeByNodeId: Record<string, FlowNodeRuntime> = {},
@@ -35,6 +37,7 @@ export function toFlowNodes(
       diagnostics: diagnostics.filter(
         (diagnostic) => diagnostic.ref?.nodeId === node.id,
       ),
+      workspace,
     },
   }));
 }

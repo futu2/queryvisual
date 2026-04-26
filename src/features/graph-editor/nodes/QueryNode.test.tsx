@@ -2,7 +2,53 @@ import { describe, expect, test } from "bun:test";
 import { ReactFlowProvider } from "@xyflow/react";
 import { render, screen } from "@testing-library/react";
 import { createDefaultOutputListenerConfig } from "../../../domain/document/outputListeners";
+import type { GraphWorkspace } from "../../../domain/document/types";
 import { QueryNode } from "./QueryNode";
+
+function createWorkspaceWithChildInterface(): GraphWorkspace {
+  return {
+    version: 2,
+    metadata: { name: "Workspace" },
+    entryGraphId: "graph-parent",
+    graphs: [
+      {
+        id: "graph-parent",
+        metadata: { name: "Parent" },
+        viewport: { x: 0, y: 0, zoom: 1 },
+        nodes: [],
+        edges: [],
+      },
+      {
+        id: "graph-child",
+        metadata: { name: "Orders Child" },
+        viewport: { x: 0, y: 0, zoom: 1 },
+        nodes: [
+          {
+            id: "child-input-orders",
+            kind: "graphInput",
+            label: "Orders Input",
+            position: { x: 0, y: 0 },
+            data: {
+              inputName: "orders_in",
+              columns: { order_id: "int" },
+            },
+          },
+          {
+            id: "child-output-orders",
+            kind: "output",
+            label: "Orders Report",
+            position: { x: 260, y: 0 },
+            data: {
+              outputName: "orders_report",
+              listeners: createDefaultOutputListenerConfig("orders_report"),
+            },
+          },
+        ],
+        edges: [],
+      },
+    ],
+  };
+}
 
 describe("QueryNode", () => {
   test("shows a compact summary for fromTable nodes", () => {
@@ -344,5 +390,38 @@ describe("QueryNode", () => {
 
     expect(node?.querySelector('[data-query-node-handle-marker="source-out"]')).toBeNull();
     expect(node?.querySelector('[data-query-node-handle-marker="target-in"]')).toBeTruthy();
+  });
+
+  test("subgraph nodes render one handle per child input and output", () => {
+    const { container } = render(
+      <ReactFlowProvider>
+        <QueryNode
+          id="subgraph-1"
+          data={{
+            node: {
+              id: "subgraph-1",
+              kind: "subgraph",
+              label: "Orders Package",
+              position: { x: 0, y: 0 },
+              data: { graphId: "graph-child" },
+            },
+            diagnostics: [],
+            workspace: createWorkspaceWithChildInterface(),
+          }}
+          selected={false}
+          dragging={false}
+        />
+      </ReactFlowProvider>,
+    );
+
+    expect(screen.getByText("orders_in")).toBeTruthy();
+    expect(screen.getByText("orders_report")).toBeTruthy();
+    expect(screen.getByText("1 inputs / 1 outputs")).toBeTruthy();
+    expect(
+      container.querySelector('[data-query-node-handle-marker="target-orders_in"]'),
+    ).toBeTruthy();
+    expect(
+      container.querySelector('[data-query-node-handle-marker="source-orders_report"]'),
+    ).toBeTruthy();
   });
 });

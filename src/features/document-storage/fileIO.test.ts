@@ -29,6 +29,47 @@ describe("fileIO", () => {
     expect(parsed.nodes).toHaveLength(source.nodes.length);
   });
 
+  test("parses and serializes subgraph nodes and dynamic handles in legacy documents", () => {
+    const parsed = parseDocumentJson(
+      JSON.stringify({
+        version: 1,
+        metadata: { name: "subgraph-legacy" },
+        viewport: { x: 0, y: 0, zoom: 1 },
+        nodes: [
+          {
+            id: "subgraph-1",
+            kind: "subgraph",
+            label: "Orders Package",
+            position: { x: 100, y: 80 },
+            data: { graphId: "graph-child" },
+          },
+          {
+            id: "output-1",
+            kind: "output",
+            label: "Output",
+            position: { x: 260, y: 80 },
+            data: { outputName: "orders_report" },
+          },
+        ],
+        edges: [
+          {
+            id: "edge-subgraph-output",
+            source: "subgraph-1",
+            sourceHandle: "orders_report",
+            target: "output-1",
+            targetHandle: "in",
+          },
+        ],
+      }),
+    );
+
+    expect(parsed.nodes.find((node) => node.id === "subgraph-1")?.kind).toBe(
+      "subgraph",
+    );
+    expect(parsed.edges[0]?.sourceHandle).toBe("orders_report");
+    expect(serializeDocumentJson(parsed)).toContain('"sourceHandle": "orders_report"');
+  });
+
   test("wraps legacy single-graph JSON into a one-graph workspace", () => {
     const workspace = parseWorkspaceJson(
       JSON.stringify({
@@ -76,6 +117,53 @@ describe("fileIO", () => {
     expect(serializeWorkspaceJson(workspace)).toContain(
       '"entryGraphId": "graph-main"',
     );
+  });
+
+  test("parses and serializes subgraph nodes and dynamic handles in workspaces", () => {
+    const workspace = parseWorkspaceJson(
+      JSON.stringify({
+        version: 2,
+        metadata: { name: "workspace" },
+        entryGraphId: "graph-parent",
+        graphs: [
+          {
+            id: "graph-parent",
+            metadata: { name: "Parent" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [
+              {
+                id: "subgraph-1",
+                kind: "subgraph",
+                label: "Orders Package",
+                position: { x: 100, y: 80 },
+                data: { graphId: "graph-child" },
+              },
+            ],
+            edges: [
+              {
+                id: "edge-parent-subgraph",
+                source: "subgraph-1",
+                sourceHandle: "orders_report",
+                target: "subgraph-1",
+                targetHandle: "orders_in",
+              },
+            ],
+          },
+          {
+            id: "graph-child",
+            metadata: { name: "Child" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [],
+            edges: [],
+          },
+        ],
+      }),
+    );
+
+    const parentGraph = workspace.graphs.find((graph) => graph.id === "graph-parent");
+    expect(parentGraph?.nodes[0]?.kind).toBe("subgraph");
+    expect(parentGraph?.edges[0]?.targetHandle).toBe("orders_in");
+    expect(serializeWorkspaceJson(workspace)).toContain('"targetHandle": "orders_in"');
   });
 
   test("rejects workspaces with duplicate graph ids", () => {
@@ -296,7 +384,7 @@ describe("fileIO", () => {
             {
               id: "edge-1",
               source: "a",
-              sourceHandle: "left",
+              sourceHandle: 123,
               target: "b",
               targetHandle: "in",
             },

@@ -3,6 +3,7 @@ import type { DragEvent as ReactDragEvent } from "react";
 import type {
   GraphDocument,
   GraphNode,
+  GraphWorkspace,
   NamedExpression,
   SortItem,
 } from "../../domain/document/types";
@@ -693,6 +694,11 @@ export function renderNodeEditor(
   setDraft: (node: EditableNodeDraft) => void,
   document: GraphDocument,
   schemaOverrides?: Record<string, ColumnMap>,
+  options?: {
+    workspace?: GraphWorkspace;
+    activeGraphId?: string;
+    onOpenGraph?: (graphId: string) => void;
+  },
 ) {
   switch (draft.kind) {
     case "fromTable":
@@ -1016,5 +1022,57 @@ export function renderNodeEditor(
           />
         </div>
       );
+    case "subgraph": {
+      const graphs = options?.workspace?.graphs ?? [];
+      const selectedGraph =
+        draft.data.graphId.trim() === ""
+          ? null
+          : graphs.find((graph) => graph.id === draft.data.graphId) ?? null;
+      const canOpen =
+        Boolean(selectedGraph) && selectedGraph!.id !== options?.activeGraphId;
+
+      return (
+        <div className="editor-stack">
+          <label>
+            Child graph
+            <select
+              value={draft.data.graphId}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  data: {
+                    ...draft.data,
+                    graphId: event.target.value,
+                  },
+                })
+              }
+            >
+              <option value="">Select a graph...</option>
+              {graphs.map((graph) => (
+                <option key={graph.id} value={graph.id}>
+                  {graph.metadata.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {draft.data.graphId.trim() !== "" && !selectedGraph ? (
+            <div role="status" aria-live="polite">
+              Missing graph.
+            </div>
+          ) : null}
+          <button
+            type="button"
+            className="ghost-button"
+            disabled={!canOpen}
+            onClick={() => {
+              if (!canOpen) return;
+              options?.onOpenGraph?.(selectedGraph!.id);
+            }}
+          >
+            Open child graph
+          </button>
+        </div>
+      );
+    }
   }
 }

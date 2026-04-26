@@ -3,6 +3,7 @@ import type { ColumnMap, TableRef } from "../schema/types";
 export type NodeKind =
   | "graphInput"
   | "fromTable"
+  | "subgraph"
   | "join"
   | "where"
   | "select"
@@ -46,6 +47,7 @@ export interface GraphNodeBase<TKind extends NodeKind, TData> {
 export type GraphNode =
   | GraphNodeBase<"graphInput", { inputName: string; columns: ColumnMap }>
   | GraphNodeBase<"fromTable", { tableRef: TableRef; columns: ColumnMap }>
+  | GraphNodeBase<"subgraph", { graphId: string }>
   | GraphNodeBase<"join", { joinType: "inner" | "left" | "right" | "full"; predicate: string }>
   | GraphNodeBase<"where", { predicate: string }>
   | GraphNodeBase<"select", { mappings: NamedExpression[] }>
@@ -57,9 +59,9 @@ export type GraphNode =
 export interface GraphEdge {
   id: string;
   source: string;
-  sourceHandle: "out";
+  sourceHandle: string;
   target: string;
-  targetHandle: "in" | "left" | "right";
+  targetHandle: string;
 }
 
 export interface GraphDocumentBase {

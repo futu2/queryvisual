@@ -568,6 +568,56 @@ body {
   word-break: break-word;
 }
 
+.query-node__ports {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(95, 70, 43, 0.18);
+  display: grid;
+  gap: 8px;
+}
+
+.query-node__ports-heading {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1f1d1a;
+}
+
+.query-node__ports-heading.is-missing {
+  color: #9c3f2d;
+}
+
+.query-node__ports-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.query-node__ports-title {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8d7257;
+}
+
+.query-node__port-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.query-node__port-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 8px;
+  border: 1px solid rgba(31, 29, 26, 0.14);
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  font-family: "IBM Plex Mono", "SFMono-Regular", ui-monospace, monospace;
+  line-height: 1.2;
+}
+
 @media (max-width: 1024px) {
   .app-shell {
     grid-template-columns: 1fr;
