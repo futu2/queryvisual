@@ -8,6 +8,44 @@ import { NodeEditorModal } from "./NodeEditorModal";
 
 afterEach(cleanup);
 
+function createMockDataTransfer() {
+  const store = new Map<string, string>();
+
+  return {
+    effectAllowed: "",
+    dropEffect: "",
+    setData: mock((format: string, value: string) => {
+      store.set(format, value);
+    }),
+    getData: mock((format: string) => store.get(format) ?? ""),
+    clearData: mock((format?: string) => {
+      if (typeof format === "string") {
+        store.delete(format);
+        return;
+      }
+
+      store.clear();
+    }),
+  };
+}
+
+function dispatchDragEvent(
+  target: Element,
+  type: "dragstart" | "dragover" | "drop" | "dragend",
+  dataTransfer?: ReturnType<typeof createMockDataTransfer>,
+) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+
+  if (dataTransfer) {
+    Object.defineProperty(event, "dataTransfer", {
+      value: dataTransfer,
+      configurable: true,
+    });
+  }
+
+  fireEvent(target, event);
+}
+
 function renderModal({
   node,
   document,
@@ -90,9 +128,10 @@ describe("NodeEditorModal", () => {
     ]);
   });
 
-  test("drag-reorders select mappings by dragging row cards", async () => {
+  test("drag-reorders select mappings by dragging row cards and seeds dataTransfer", async () => {
     const user = userEvent.setup();
     const onSave = mock();
+    const dataTransfer = createMockDataTransfer();
 
     const node: GraphNode = {
       id: "select-orders-drag",
@@ -121,9 +160,12 @@ describe("NodeEditorModal", () => {
     expect(firstCard.getAttribute("draggable")).not.toBe("true");
     expect(firstHandle.getAttribute("draggable")).toBe("true");
 
-    fireEvent.dragStart(firstHandle);
-    fireEvent.dragOver(thirdCard);
-    fireEvent.drop(thirdCard);
+    dispatchDragEvent(firstHandle, "dragstart", dataTransfer);
+    expect(dataTransfer.effectAllowed).toBe("move");
+    expect(dataTransfer.getData("text/plain")).not.toBe("");
+
+    dispatchDragEvent(thirdCard, "dragover", dataTransfer);
+    dispatchDragEvent(thirdCard, "drop", dataTransfer);
 
     await user.click(screen.getByRole("button", { name: "Save" }));
 
@@ -132,6 +174,48 @@ describe("NodeEditorModal", () => {
       { name: "status_text", expression: "status" },
       { name: "customer_id", expression: "customer_id" },
       { name: "gross_total", expression: "total" },
+    ]);
+  });
+
+  test("drag-reorders fromTable field rows before save", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+    const dataTransfer = createMockDataTransfer();
+
+    const node: GraphNode = {
+      id: "from-orders-drag",
+      kind: "fromTable",
+      label: "Orders",
+      position: { x: 0, y: 0 },
+      data: {
+        tableRef: { tableName: "orders" },
+        columns: {
+          order_id: "int",
+          customer_id: "string",
+          created_at: "timestamp",
+        },
+      },
+    };
+
+    renderModal({ node, onSave });
+
+    const firstCard = screen.getByTestId("field-row-card-1");
+    const thirdCard = screen.getByTestId("field-row-card-3");
+    const firstHandle = within(firstCard).getByRole("button", {
+      name: "Drag field 1",
+    });
+
+    dispatchDragEvent(firstHandle, "dragstart", dataTransfer);
+    dispatchDragEvent(thirdCard, "dragover", dataTransfer);
+    dispatchDragEvent(thirdCard, "drop", dataTransfer);
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalled();
+    expect(Object.entries(onSave.mock.calls[0][0].data.columns)).toEqual([
+      ["customer_id", "string"],
+      ["created_at", "timestamp"],
+      ["order_id", "int"],
     ]);
   });
 
@@ -494,6 +578,57 @@ describe("NodeEditorModal", () => {
     ]);
   });
 
+  test("preserves cleared existing sort items on save", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+
+    const node: GraphNode = {
+      id: "sort-cleared-item",
+      kind: "sort",
+      label: "Sort",
+      position: { x: 0, y: 0 },
+      data: {
+        items: [{ expression: "created_at", direction: "desc" }],
+      },
+    };
+
+    renderModal({ node, onSave });
+
+    await user.clear(screen.getByLabelText("Sort expression 1"));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalled();
+    expect(onSave.mock.calls[0][0].data.items).toEqual([
+      { expression: "", direction: "desc" },
+    ]);
+  });
+
+  test("keeps empty sort nodes empty when saved without edits", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+
+    const node: GraphNode = {
+      id: "sort-empty",
+      kind: "sort",
+      label: "Sort",
+      position: { x: 0, y: 0 },
+      data: {
+        items: [],
+      },
+    };
+
+    renderModal({ node, onSave });
+
+    expect((screen.getByLabelText("Sort expression 1") as HTMLInputElement).value).toBe(
+      "",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalled();
+    expect(onSave.mock.calls[0][0].data.items).toEqual([]);
+  });
+
   test("trims aggregation group keys and aggregates on save", async () => {
     const user = userEvent.setup();
     const onSave = mock();
@@ -521,6 +656,48 @@ describe("NodeEditorModal", () => {
     ]);
     expect(onSave.mock.calls[0][0].data.aggregates).toEqual([
       { name: "gross_total", expression: "  sum(total)  " },
+    ]);
+  });
+
+  test("drag-reorders aggregation group keys before save", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+    const dataTransfer = createMockDataTransfer();
+
+    const node: GraphNode = {
+      id: "agg-groupby-drag",
+      kind: "aggregation",
+      label: "Aggregate",
+      position: { x: 0, y: 0 },
+      data: {
+        groupBy: [
+          { name: "customer_id", expression: "customer_id" },
+          { name: "status", expression: "status" },
+          { name: "region", expression: "region" },
+        ],
+        aggregates: [{ name: "gross_total", expression: "sum(total)" }],
+      },
+    };
+
+    renderModal({ node, onSave });
+
+    const firstCard = screen.getByTestId("group-key-row-card-1");
+    const thirdCard = screen.getByTestId("group-key-row-card-3");
+    const firstHandle = within(firstCard).getByRole("button", {
+      name: "Drag group key 1",
+    });
+
+    dispatchDragEvent(firstHandle, "dragstart", dataTransfer);
+    dispatchDragEvent(thirdCard, "dragover", dataTransfer);
+    dispatchDragEvent(thirdCard, "drop", dataTransfer);
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalled();
+    expect(onSave.mock.calls[0][0].data.groupBy).toEqual([
+      { name: "status", expression: "status" },
+      { name: "region", expression: "region" },
+      { name: "customer_id", expression: "customer_id" },
     ]);
   });
 

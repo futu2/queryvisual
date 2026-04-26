@@ -210,4 +210,24 @@ describe("RowCard", () => {
 
     expect(onDragStart).toHaveBeenCalledTimes(1);
   });
+
+  test("when draggable, ending a handle drag triggers drag-end callback once", () => {
+    const onDragEnd = mock();
+
+    render(
+      <RowCard
+        dragLabel="Drag field 5"
+        draggable
+        onDragEnd={onDragEnd}
+        header={<span>Field 5</span>}
+        actions={<span>Actions</span>}
+      />,
+    );
+
+    const dragHandle = screen.getByRole("button", { name: "Drag field 5" });
+    const dragEndEvent = new Event("dragend", { bubbles: true, cancelable: true });
+    fireEvent(dragHandle, dragEndEvent);
+
+    expect(onDragEnd).toHaveBeenCalledTimes(1);
+  });
 });

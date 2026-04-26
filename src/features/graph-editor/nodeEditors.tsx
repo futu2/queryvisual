@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { DragEvent as ReactDragEvent } from "react";
 import type {
   GraphDocument,
   GraphNode,
@@ -29,7 +30,10 @@ type SelectNode = Extract<GraphNode, { kind: "select" }>;
 type AggregationNode = Extract<GraphNode, { kind: "aggregation" }>;
 type SortNode = Extract<GraphNode, { kind: "sort" }>;
 type NamedExpressionDraftRow = DraftRow<NamedExpression>;
-type SortItemDraftRow = DraftRow<SortItem>;
+type SortItemDraftValue = SortItem & {
+  isPlaceholder?: boolean;
+};
+type SortItemDraftRow = DraftRow<SortItemDraftValue>;
 
 type SelectEditorDraft = Omit<SelectNode, "data"> & {
   data: {
@@ -75,6 +79,8 @@ const columnTypes: ColumnType[] = [
   "unknown",
 ];
 
+const rowDragDataType = "application/x-queryvisual-row-id";
+
 function blankFieldRow(): FieldRow {
   return { name: "", type: "string" };
 }
@@ -85,6 +91,13 @@ function blankNamedExpression(): NamedExpression {
 
 function blankSortItem(): SortItem {
   return { expression: "", direction: "asc" };
+}
+
+function blankSortItemDraft(options?: { isPlaceholder?: boolean }): SortItemDraftValue {
+  return {
+    ...blankSortItem(),
+    ...(options?.isPlaceholder ? { isPlaceholder: true } : {}),
+  };
 }
 
 function InlineRowNameInput({
@@ -114,8 +127,65 @@ function sanitizeNamedExpressions(rows: NamedExpression[]) {
     .filter((row) => row.name !== "" || row.expression.trim() !== "");
 }
 
-function sanitizeSortItems(rows: SortItem[]) {
-  return rows.filter((row) => row.expression.trim() !== "");
+function sanitizeSortItems(rows: SortItemDraftRow[]) {
+  return rows
+    .filter((row) => !row.isPlaceholder)
+    .map(({ expression, direction }) => ({ expression, direction }));
+}
+
+function ensureSortDraftRows(rows: SortItem[]) {
+  if (rows.length > 0) {
+    return ensureDraftRows(rows, blankSortItem) as SortItemDraftRow[];
+  }
+
+  return ensureDraftRows(
+    [blankSortItemDraft({ isPlaceholder: true })],
+    () => blankSortItemDraft({ isPlaceholder: true }),
+  ) as SortItemDraftRow[];
+}
+
+function addSortDraftRow(rows: SortItemDraftRow[]) {
+  if (rows.length === 1 && rows[0]?.isPlaceholder) {
+    return [{ ...rows[0], isPlaceholder: false }];
+  }
+
+  return addDraftRow(rows, () => blankSortItemDraft()) as SortItemDraftRow[];
+}
+
+function duplicateSortDraftRow(rows: SortItemDraftRow[], index: number) {
+  return duplicateDraftRow(rows, index, (item) => ({
+    expression: item.expression,
+    direction: item.direction,
+  })) as SortItemDraftRow[];
+}
+
+function removeSortDraftRow(rows: SortItemDraftRow[], index: number) {
+  const next = rows.filter((_, rowIndex) => rowIndex !== index);
+  return next.length > 0 ? next : ensureSortDraftRows([]);
+}
+
+function handleRowDragStart(
+  event: ReactDragEvent<HTMLElement>,
+  rowId: string,
+  setDraggedRowId: (rowId: string | null) => void,
+) {
+  setDraggedRowId(rowId);
+  if (!event.dataTransfer) return;
+
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData(rowDragDataType, rowId);
+  event.dataTransfer.setData("text/plain", rowId);
+}
+
+function getDraggedRowId(
+  event: ReactDragEvent<HTMLElement>,
+  draggedRowId: string | null,
+) {
+  const nativeRowId =
+    event.dataTransfer?.getData(rowDragDataType) ||
+    event.dataTransfer?.getData("text/plain");
+
+  return nativeRowId || draggedRowId;
 }
 
 function FromTableFieldRows({
@@ -135,12 +205,15 @@ function FromTableFieldRows({
             testId={`field-row-card-${index + 1}`}
             dragLabel={`Drag field ${index + 1}`}
             draggable={rows.length > 1}
-            onDragStart={() => setDraggedRowId(row.rowId)}
+            onDragStart={(event) =>
+              handleRowDragStart(event, row.rowId, setDraggedRowId)
+            }
+            onDragEnd={() => setDraggedRowId(null)}
             onDragOver={() => {}}
-            onDrop={() => {
-              if (draggedRowId === null) return;
+            onDrop={(event) => {
+              const activeRowId = getDraggedRowId(event, draggedRowId);
               const fromIndex = rows.findIndex(
-                (candidate) => candidate.rowId === draggedRowId,
+                (candidate) => candidate.rowId === activeRowId,
               );
               setDraggedRowId(null);
               if (fromIndex === -1) return;
@@ -227,7 +300,7 @@ function toEditableNodeDraft(node: GraphNode): EditableNodeDraft {
     return {
       ...node,
       data: {
-        items: ensureDraftRows(node.data.items, blankSortItem),
+        items: ensureSortDraftRows(node.data.items),
       },
     };
   }
@@ -279,7 +352,7 @@ export function serializeNodeEditorDraft(draft: EditableNodeDraft): GraphNode {
     return {
       ...draft,
       data: {
-        items: sanitizeSortItems(stripDraftRows(draft.data.items)),
+        items: sanitizeSortItems(draft.data.items),
       },
     };
   }
@@ -340,12 +413,15 @@ function NamedExpressionRows({
             }
             dragLabel={`Drag ${itemName} ${index + 1}`}
             draggable={rows.length > 1}
-            onDragStart={() => setDraggedRowId(row.rowId)}
+            onDragStart={(event) =>
+              handleRowDragStart(event, row.rowId, setDraggedRowId)
+            }
+            onDragEnd={() => setDraggedRowId(null)}
             onDragOver={() => {}}
-            onDrop={() => {
-              if (draggedRowId === null) return;
+            onDrop={(event) => {
+              const activeRowId = getDraggedRowId(event, draggedRowId);
               const fromIndex = rows.findIndex(
-                (candidate) => candidate.rowId === draggedRowId,
+                (candidate) => candidate.rowId === activeRowId,
               );
               setDraggedRowId(null);
               if (fromIndex === -1) return;
@@ -428,12 +504,15 @@ function SortItemRows({
             testId={`sort-row-card-${index + 1}`}
             dragLabel={`Drag sort item ${index + 1}`}
             draggable={rows.length > 1}
-            onDragStart={() => setDraggedRowId(row.rowId)}
+            onDragStart={(event) =>
+              handleRowDragStart(event, row.rowId, setDraggedRowId)
+            }
+            onDragEnd={() => setDraggedRowId(null)}
             onDragOver={() => {}}
-            onDrop={() => {
-              if (draggedRowId === null) return;
+            onDrop={(event) => {
+              const activeRowId = getDraggedRowId(event, draggedRowId);
               const fromIndex = rows.findIndex(
-                (candidate) => candidate.rowId === draggedRowId,
+                (candidate) => candidate.rowId === activeRowId,
               );
               setDraggedRowId(null);
               if (fromIndex === -1) return;
@@ -447,10 +526,8 @@ function SortItemRows({
                 rowCount={rows.length}
                 onMoveUp={() => onChange(moveDraftRow(rows, index, index - 1))}
                 onMoveDown={() => onChange(moveDraftRow(rows, index, index + 1))}
-                onDuplicate={() =>
-                  onChange(duplicateDraftRow(rows, index, (item) => ({ ...item })))
-                }
-                onRemove={() => onChange(removeDraftRow(rows, index, blankSortItem))}
+                onDuplicate={() => onChange(duplicateSortDraftRow(rows, index))}
+                onRemove={() => onChange(removeSortDraftRow(rows, index))}
               />
             }
           >
@@ -462,7 +539,7 @@ function SortItemRows({
               schemaOverrides={schemaOverrides}
               onChange={(expression) => {
                 const next = [...rows];
-                next[index] = { ...row, expression };
+                next[index] = { ...row, expression, isPlaceholder: false };
                 onChange(next);
               }}
             />
@@ -475,6 +552,7 @@ function SortItemRows({
                   next[index] = {
                     ...row,
                     direction: event.target.value as "asc" | "desc",
+                    isPlaceholder: false,
                   };
                   onChange(next);
                 }}
@@ -489,7 +567,7 @@ function SortItemRows({
       <button
         type="button"
         className="row-add-button"
-        onClick={() => onChange(addDraftRow(rows, blankSortItem))}
+        onClick={() => onChange(addSortDraftRow(rows))}
       >
         Add sort item
       </button>

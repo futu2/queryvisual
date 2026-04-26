@@ -5,6 +5,7 @@ type RowCardProps = {
   testId?: string;
   draggable?: boolean;
   onDragStart?: DragEventHandler<HTMLElement>;
+  onDragEnd?: DragEventHandler<HTMLElement>;
   onDragOver?: DragEventHandler<HTMLElement>;
   onDrop?: DragEventHandler<HTMLElement>;
   header: ReactNode;
@@ -17,6 +18,7 @@ export function RowCard({
   testId,
   draggable = false,
   onDragStart,
+  onDragEnd,
   onDragOver,
   onDrop,
   header,
@@ -48,6 +50,7 @@ export function RowCard({
           tabIndex={-1}
           draggable={draggable}
           onDragStart={draggable ? onDragStart : undefined}
+          onDragEnd={draggable ? onDragEnd : undefined}
         >
           ⋮⋮
         </button>
