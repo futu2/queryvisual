@@ -304,8 +304,11 @@ export function useOutputRuntime(
     };
   }, [compiledSnapshot.resultsByOutputId, deps, runtimeDocument]);
 
-  return {
-    ...compiledSnapshot,
-    listenerStatusByOutputId,
-  };
+  return useMemo(
+    () => ({
+      ...compiledSnapshot,
+      listenerStatusByOutputId,
+    }),
+    [compiledSnapshot, listenerStatusByOutputId],
+  );
 }

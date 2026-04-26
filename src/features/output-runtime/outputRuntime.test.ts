@@ -94,13 +94,16 @@ function createDocumentWithListenerOutputs() {
 function RuntimeProbe({
   document,
   onSnapshot,
+  onRender,
   deps,
 }: {
   document: ReturnType<typeof createSampleDocument>;
   onSnapshot: (snapshot: OutputRuntimeSnapshot) => void;
+  onRender?: (snapshot: OutputRuntimeSnapshot) => void;
   deps: Parameters<typeof useOutputRuntime>[1];
 }) {
   const snapshot = useOutputRuntime(document, deps);
+  onRender?.(snapshot);
 
   useEffect(() => {
     onSnapshot(snapshot);
@@ -352,6 +355,7 @@ describe("useOutputRuntime and applyOutputListeners", () => {
 
   test("does not rerun runtime listener pass on viewport-only document updates", async () => {
     const clipboardWrite = mock(() => {});
+    const onRender = mock(() => {});
     const onSnapshot = mock(() => {});
     const document = createDocumentWithListenerOutputs();
     const deps = {
@@ -364,6 +368,7 @@ describe("useOutputRuntime and applyOutputListeners", () => {
       createElement(RuntimeProbe, {
         document,
         onSnapshot,
+        onRender,
         deps,
       }),
     );
@@ -371,6 +376,8 @@ describe("useOutputRuntime and applyOutputListeners", () => {
     await waitFor(() => {
       expect(clipboardWrite).toHaveBeenCalledTimes(1);
     });
+    const settledSnapshot = onRender.mock.calls.at(-1)?.[0] as OutputRuntimeSnapshot;
+    onRender.mockClear();
     onSnapshot.mockClear();
 
     rerender(
@@ -384,16 +391,18 @@ describe("useOutputRuntime and applyOutputListeners", () => {
           },
         },
         onSnapshot,
+        onRender,
         deps,
       }),
     );
 
     await waitFor(() => {
-      expect(onSnapshot).toHaveBeenCalledTimes(1);
+      expect(onRender).toHaveBeenCalledTimes(1);
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(onSnapshot).toHaveBeenCalledTimes(1);
+    expect(onRender.mock.calls[0]?.[0]).toBe(settledSnapshot);
+    expect(onSnapshot).toHaveBeenCalledTimes(0);
     expect(clipboardWrite).toHaveBeenCalledTimes(1);
   });
 });
