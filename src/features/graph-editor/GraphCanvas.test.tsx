@@ -10,6 +10,7 @@ let reactFlowProps: Record<string, unknown> | null = null;
 
 mock.module("@xyflow/react", () => ({
   ReactFlowProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useUpdateNodeInternals: () => () => {},
   ReactFlow: (props: Record<string, unknown>) => {
     reactFlowProps = props;
     const nodes = Array.isArray(props.nodes) ? props.nodes : [];

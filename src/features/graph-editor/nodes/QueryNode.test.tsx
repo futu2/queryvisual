@@ -1,10 +1,29 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { ReactFlowProvider } from "@xyflow/react";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 import { cleanup, render, screen } from "@testing-library/react";
 import { createDefaultOutputListenerConfig } from "../../../domain/document/outputListeners";
 import type { GraphWorkspace } from "../../../domain/document/types";
 import { inferChildGraphInterface } from "../../../domain/workspace/interfaces";
-import { QueryNode } from "./QueryNode";
+
+let updateNodeInternalsSpy: ReturnType<typeof mock> | null = null;
+
+mock.module("@xyflow/react", () => {
+  updateNodeInternalsSpy = mock();
+
+  return {
+    ReactFlowProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    Handle: ({ id, ...rest }: Record<string, unknown>) => (
+      <div data-handleid={typeof id === "string" ? id : undefined} {...rest} />
+    ),
+    Position: {
+      Left: "left",
+      Right: "right",
+    },
+    useUpdateNodeInternals: () => updateNodeInternalsSpy,
+  };
+});
+
+const { ReactFlowProvider } = await import("@xyflow/react");
+const { QueryNode } = await import("./QueryNode");
 
 afterEach(cleanup);
 
@@ -634,5 +653,118 @@ describe("QueryNode", () => {
       .filter((row): row is Element => Boolean(row));
     expect(outputRows).toHaveLength(6);
     expect(new Set(outputRows).size).toBe(6);
+  });
+
+  test("subgraph nodes trigger updateNodeInternals when the inferred child interface changes", () => {
+    if (!updateNodeInternalsSpy) {
+      throw new Error("Missing updateNodeInternals spy");
+    }
+
+    const baseWorkspace: GraphWorkspace = {
+      version: 2,
+      metadata: { name: "Workspace" },
+      entryGraphId: "graph-parent",
+      graphs: [
+        {
+          id: "graph-parent",
+          metadata: { name: "Parent" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [],
+          edges: [],
+        },
+        {
+          id: "graph-child",
+          metadata: { name: "Child" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [
+            {
+              id: "child-input-1",
+              kind: "graphInput",
+              label: "Input 1",
+              position: { x: 0, y: 0 },
+              data: { inputName: "in_1", columns: { id: "int" } },
+            },
+            {
+              id: "child-output-1",
+              kind: "output",
+              label: "Output 1",
+              position: { x: 260, y: 0 },
+              data: {
+                outputName: "out_1",
+                listeners: createDefaultOutputListenerConfig("out_1"),
+              },
+            },
+          ],
+          edges: [],
+        },
+      ],
+    };
+
+    const { rerender } = render(
+      <ReactFlowProvider>
+        <QueryNode
+          id="subgraph-1"
+          data={{
+            node: {
+              id: "subgraph-1",
+              kind: "subgraph",
+              label: "Subgraph",
+              position: { x: 0, y: 0 },
+              data: { graphId: "graph-child" },
+            },
+            diagnostics: [],
+            workspace: baseWorkspace,
+          }}
+          selected={false}
+          dragging={false}
+        />
+      </ReactFlowProvider>,
+    );
+
+    const initialCalls = updateNodeInternalsSpy.mock.calls.length;
+    expect(initialCalls).toBeGreaterThan(0);
+
+    const updatedWorkspace: GraphWorkspace = {
+      ...baseWorkspace,
+      graphs: baseWorkspace.graphs.map((graph) => {
+        if (graph.id !== "graph-child") return graph;
+        return {
+          ...graph,
+          nodes: [
+            ...graph.nodes,
+            {
+              id: "child-input-2",
+              kind: "graphInput",
+              label: "Input 2",
+              position: { x: 0, y: 40 },
+              data: { inputName: "in_2", columns: { id: "int" } },
+            },
+          ],
+        };
+      }),
+    };
+
+    rerender(
+      <ReactFlowProvider>
+        <QueryNode
+          id="subgraph-1"
+          data={{
+            node: {
+              id: "subgraph-1",
+              kind: "subgraph",
+              label: "Subgraph",
+              position: { x: 0, y: 0 },
+              data: { graphId: "graph-child" },
+            },
+            diagnostics: [],
+            workspace: updatedWorkspace,
+          }}
+          selected={false}
+          dragging={false}
+        />
+      </ReactFlowProvider>,
+    );
+
+    expect(updateNodeInternalsSpy.mock.calls.length).toBeGreaterThan(initialCalls);
   });
 });

@@ -1,4 +1,5 @@
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { Handle, Position, type NodeProps, useUpdateNodeInternals } from "@xyflow/react";
+import { useLayoutEffect, useMemo } from "react";
 import type { GraphNode } from "../../../domain/document/types";
 import { formatTableRef } from "../../../domain/schema/types";
 import { inferChildGraphInterface } from "../../../domain/workspace/interfaces";
@@ -110,15 +111,38 @@ function TargetHandles({
   );
 }
 
-export function QueryNode({ data, selected }: NodeProps<FlowNodeData>) {
+export function QueryNode({ id, data, selected }: NodeProps<FlowNodeData>) {
   const hasErrors = data.diagnostics.some(
     (diagnostic) => diagnostic.level === "error",
   );
   const presentation = PRESENTATION_BY_KIND[data.node.kind];
+  const updateNodeInternals = useUpdateNodeInternals();
   const subgraphInterface =
     data.node.kind === "subgraph"
       ? inferChildGraphInterface(data.workspace, data.node.data.graphId)
       : null;
+
+  const subgraphInterfaceSignature = useMemo(() => {
+    if (!subgraphInterface) {
+      return "";
+    }
+
+    return [
+      subgraphInterface.graph?.id ?? "missing",
+      subgraphInterface.iface.inputs.map((port) => port.handleId).join("|"),
+      subgraphInterface.iface.outputs.map((port) => port.handleId).join("|"),
+    ].join("::");
+  }, [subgraphInterface]);
+
+  useLayoutEffect(() => {
+    if (data.node.kind !== "subgraph") {
+      return;
+    }
+
+    // Handles are dynamic for subgraph nodes; React Flow needs an explicit refresh
+    // so internal handle geometry stays in sync with the DOM.
+    updateNodeInternals(id);
+  }, [data.node.kind, id, subgraphInterfaceSignature, updateNodeInternals]);
 
   return (
     <div
