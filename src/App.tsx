@@ -4,12 +4,13 @@ import {
 } from "./app/state/DocumentContext";
 import { useEffect, useMemo, useState } from "react";
 import { compileOutput } from "./domain/compile/compileOutput";
+import type { GraphDocument } from "./domain/document/types";
 import { DebugPanel } from "./features/debug/DebugPanel";
 import { DocumentToolbar } from "./features/document-storage/DocumentToolbar";
 import { GraphCanvas } from "./features/graph-editor/GraphCanvas";
 import { NodePalette } from "./features/graph-editor/NodePalette";
 
-function AppLayout() {
+export function AppLayout() {
   const { state } = useDocumentContext();
   const outputs = useMemo(
     () =>
@@ -34,6 +35,20 @@ function AppLayout() {
       return outputs[0]?.id ?? null;
     });
   }, [outputs]);
+
+  useEffect(() => {
+    const candidateOutputId = [state.editorNodeId, state.selectedNodeId].find(
+      (nodeId) =>
+        nodeId !== null &&
+        state.document.nodes.some(
+          (node) => node.id === nodeId && node.kind === "output",
+        ),
+    );
+
+    if (candidateOutputId) {
+      setActiveOutputId(candidateOutputId);
+    }
+  }, [state.document.nodes, state.editorNodeId, state.selectedNodeId]);
 
   const compileResult = useMemo(() => {
     if (!activeOutputId) {
@@ -74,9 +89,9 @@ function AppLayout() {
   );
 }
 
-export function App() {
+export function App({ initialDocument }: { initialDocument?: GraphDocument }) {
   return (
-    <DocumentProvider>
+    <DocumentProvider initialDocument={initialDocument}>
       <AppLayout />
     </DocumentProvider>
   );

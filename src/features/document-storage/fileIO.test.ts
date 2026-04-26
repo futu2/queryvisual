@@ -216,4 +216,36 @@ describe("fileIO", () => {
       },
     });
   });
+
+  test("rejects malformed explicit output listener payloads", () => {
+    expect(() =>
+      parseDocumentJson(
+        JSON.stringify({
+          version: 1,
+          metadata: { name: "bad-listeners" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [
+            {
+              id: "output-bad",
+              kind: "output",
+              label: "Output",
+              position: { x: 0, y: 0 },
+              data: {
+                outputName: "out",
+                listeners: {
+                  copyToClipboard: "yes",
+                  logToConsole: false,
+                  saveToLocalStorage: {
+                    enabled: false,
+                    key: "out",
+                  },
+                },
+              },
+            },
+          ],
+          edges: [],
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual document");
+  });
 });
