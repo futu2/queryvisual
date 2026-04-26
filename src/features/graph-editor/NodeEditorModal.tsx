@@ -36,11 +36,12 @@ function NodeEditorModal({
   const {
     state: { document: graphDocument },
   } = useDocumentContext();
-  const { draft, setDraft } = useEditableNode(node);
+  const { draft, initialDraft, setDraft } = useEditableNode(node);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
   const [pendingCloseAction, setPendingCloseAction] = useState<(() => void) | null>(
     null,
   );
+  const nodeNameInputRef = useRef<HTMLInputElement | null>(null);
   const keepEditingButtonRef = useRef<HTMLButtonElement | null>(null);
   const discardDialogRef = useRef<HTMLDivElement | null>(null);
   const previousEditorFocusRef = useRef<HTMLElement | null>(null);
@@ -52,8 +53,8 @@ function NodeEditorModal({
   );
   const serializedDraft = useMemo(() => serializeNodeEditorDraft(draft), [draft]);
   const isDirty = useMemo(
-    () => JSON.stringify(serializedDraft) !== JSON.stringify(node),
-    [node, serializedDraft],
+    () => JSON.stringify(draft) !== JSON.stringify(initialDraft),
+    [draft, initialDraft],
   );
 
   function requestClose(closeAction: () => void = onClose) {
@@ -138,6 +139,10 @@ function NodeEditorModal({
   }, [showDiscardDialog]);
 
   useEffect(() => {
+    nodeNameInputRef.current?.focus();
+  }, [node.id]);
+
+  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
 
@@ -180,6 +185,7 @@ function NodeEditorModal({
                 <input
                   aria-label="Node name"
                   className="modal-title-input"
+                  ref={nodeNameInputRef}
                   value={draft.label}
                   onChange={(event) =>
                     setDraft({ ...draft, label: event.target.value })

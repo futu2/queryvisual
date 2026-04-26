@@ -319,6 +319,49 @@ describe("NodeEditorModal", () => {
     ]);
   });
 
+  test("treats visible whitespace edits as dirty and warns before discard", async () => {
+    const user = userEvent.setup();
+    const onClose = mock();
+
+    const node: GraphNode = {
+      id: "select-orders-whitespace-dirty",
+      kind: "select",
+      label: "Project",
+      position: { x: 0, y: 0 },
+      data: {
+        mappings: [{ name: "gross_total", expression: "total" }],
+      },
+    };
+
+    renderModal({ node, onClose });
+
+    const mappingNameInput = screen.getByLabelText("Mapping name 1");
+    await user.click(mappingNameInput);
+    await user.type(mappingNameInput, " ");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.getByRole("dialog", { name: "Discard changes?" })).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  test("focuses the node name input when the modal opens", () => {
+    const node: GraphNode = {
+      id: "select-orders-focus",
+      kind: "select",
+      label: "Project",
+      position: { x: 0, y: 0 },
+      data: {
+        mappings: [{ name: "gross_total", expression: "total" }],
+      },
+    };
+
+    renderModal({ node });
+
+    expect(globalThis.document.activeElement).toBe(
+      screen.getByLabelText("Node name"),
+    );
+  });
+
   test("keeps one blank select mapping row when removing the last row", async () => {
     const user = userEvent.setup();
 

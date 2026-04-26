@@ -650,15 +650,18 @@ function ColumnMapEditor({
 }
 
 export function useEditableNode(node: GraphNode) {
-  const [draft, setDraft] = useState<EditableNodeDraft>(() =>
+  const [initialDraft, setInitialDraft] = useState<EditableNodeDraft>(() =>
     toEditableNodeDraft(node),
   );
+  const [draft, setDraft] = useState<EditableNodeDraft>(initialDraft);
 
   useEffect(() => {
-    setDraft(toEditableNodeDraft(node));
+    const nextDraft = toEditableNodeDraft(node);
+    setDraft(nextDraft);
+    setInitialDraft(nextDraft);
   }, [node.id]);
 
-  return { draft, setDraft };
+  return { draft, initialDraft, setDraft };
 }
 
 export function renderNodeEditor(
