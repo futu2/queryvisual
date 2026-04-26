@@ -13,7 +13,7 @@ describe("RowActionBar", () => {
     const onDuplicate = mock();
     const onRemove = mock();
 
-    const { rerender } = render(
+    const { container, rerender } = render(
       <RowActionBar
         itemName="mapping"
         rowNumber={1}
@@ -29,7 +29,14 @@ describe("RowActionBar", () => {
     const moveDown = screen.getByRole("button", { name: "Move mapping 1 down" });
     const duplicate = screen.getByRole("button", { name: "Duplicate mapping 1" });
     const remove = screen.getByRole("button", { name: "Remove mapping 1" });
+    const wrapper = container.querySelector("div");
 
+    expect(wrapper?.classList.contains("row-action-bar")).toBeTrue();
+    expect(moveUp.classList.contains("row-icon-button")).toBeTrue();
+    expect(moveDown.classList.contains("row-icon-button")).toBeTrue();
+    expect(duplicate.classList.contains("row-icon-button")).toBeTrue();
+    expect(remove.classList.contains("row-icon-button")).toBeTrue();
+    expect(remove.classList.contains("row-icon-button-danger")).toBeTrue();
     expect((moveUp as HTMLButtonElement).disabled).toBeTrue();
     expect((moveDown as HTMLButtonElement).disabled).toBeFalse();
     expect(duplicate.textContent?.trim().length).toBeGreaterThan(0);
@@ -101,6 +108,7 @@ describe("RowCard", () => {
 
     const dragHandle = screen.getByRole("button", { name: "Drag mapping 1" });
     expect(dragHandle.getAttribute("tabindex")).toBe("-1");
+    expect(dragHandle.classList.contains("row-drag-handle")).toBeTrue();
     expect(screen.getByText("Mapping 1")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Action slot" })).toBeTruthy();
     expect(screen.getByText("Body content")).toBeTruthy();

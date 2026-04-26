@@ -18,8 +18,9 @@ export function RowActionBar({
   onRemove,
 }: RowActionBarProps) {
   return (
-    <div className="row-actions" aria-label={`${itemName} ${rowNumber} actions`}>
+    <div className="row-action-bar" aria-label={`${itemName} ${rowNumber} actions`}>
       <button
+        className="row-icon-button"
         type="button"
         aria-label={`Move ${itemName} ${rowNumber} up`}
         onClick={onMoveUp}
@@ -28,6 +29,7 @@ export function RowActionBar({
         ↑
       </button>
       <button
+        className="row-icon-button"
         type="button"
         aria-label={`Move ${itemName} ${rowNumber} down`}
         onClick={onMoveDown}
@@ -36,6 +38,7 @@ export function RowActionBar({
         ↓
       </button>
       <button
+        className="row-icon-button"
         type="button"
         aria-label={`Duplicate ${itemName} ${rowNumber}`}
         onClick={onDuplicate}
@@ -43,6 +46,7 @@ export function RowActionBar({
         ⧉
       </button>
       <button
+        className="row-icon-button row-icon-button-danger"
         type="button"
         aria-label={`Remove ${itemName} ${rowNumber}`}
         onClick={onRemove}
