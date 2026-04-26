@@ -7,7 +7,7 @@ import {
   type NodeChange,
   type NodeMouseHandler,
 } from "@xyflow/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useDocumentContext } from "../../app/state/DocumentContext";
 import type { Diagnostic } from "../../domain/diagnostics/types";
 import {
@@ -15,6 +15,10 @@ import {
   toFlowNodes,
   type FlowNodeRuntime,
 } from "./flowAdapter";
+import {
+  NodeEditorModal,
+  type NodeEditorModalHandle,
+} from "./NodeEditorModal";
 import { QueryNode } from "./nodes/QueryNode";
 
 const nodeTypes = {
@@ -26,6 +30,9 @@ export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
   const [nodeRuntimeById, setNodeRuntimeById] = useState<
     Record<string, FlowNodeRuntime>
   >({});
+  const nodeEditorModalRef = useRef<NodeEditorModalHandle | null>(null);
+  const editedNode =
+    state.document.nodes.find((node) => node.id === state.editorNodeId) ?? null;
 
   useEffect(() => {
     const liveNodeIds = new Set(state.document.nodes.map((node) => node.id));
@@ -55,6 +62,15 @@ export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
   );
   const edges = useMemo(() => toFlowEdges(state.document), [state.document]);
 
+  function runEditorTransition(action: () => void) {
+    if (editedNode && nodeEditorModalRef.current) {
+      nodeEditorModalRef.current.requestClose(action);
+      return;
+    }
+
+    action();
+  }
+
   const onConnect = (connection: Connection) => {
     if (
       !connection.source ||
@@ -78,11 +94,13 @@ export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
   };
 
   const onNodeClick: NodeMouseHandler = (_, node) => {
-    dispatch({ type: "select-node", nodeId: node.id });
-    dispatch({ type: "open-node-editor", nodeId: node.id });
-    if (node.data.node.kind === "output") {
-      dispatch({ type: "set-active-output", nodeId: node.id });
-    }
+    runEditorTransition(() => {
+      dispatch({ type: "select-node", nodeId: node.id });
+      dispatch({ type: "open-node-editor", nodeId: node.id });
+      if (node.data.node.kind === "output") {
+        dispatch({ type: "set-active-output", nodeId: node.id });
+      }
+    });
   };
 
   const onNodesChange = (changes: NodeChange[]) => {
@@ -126,10 +144,12 @@ export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
         viewport={state.document.viewport}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
-        onPaneClick={() => {
-          dispatch({ type: "select-node", nodeId: null });
-          dispatch({ type: "open-node-editor", nodeId: null });
-        }}
+        onPaneClick={() =>
+          runEditorTransition(() => {
+            dispatch({ type: "select-node", nodeId: null });
+            dispatch({ type: "open-node-editor", nodeId: null });
+          })
+        }
         onNodesChange={onNodesChange}
         onViewportChange={(viewport) => dispatch({ type: "set-viewport", viewport })}
       >
@@ -137,6 +157,17 @@ export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
         <MiniMap />
         <Controls />
       </ReactFlow>
+      {editedNode ? (
+        <NodeEditorModal
+          ref={nodeEditorModalRef}
+          node={editedNode}
+          onClose={() => dispatch({ type: "open-node-editor", nodeId: null })}
+          onSave={(node) => {
+            dispatch({ type: "replace-node", node });
+            dispatch({ type: "open-node-editor", nodeId: null });
+          }}
+        />
+      ) : null}
     </div>
   );
 }

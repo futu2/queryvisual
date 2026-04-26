@@ -7,13 +7,10 @@ import { compileOutput } from "./domain/compile/compileOutput";
 import { DebugPanel } from "./features/debug/DebugPanel";
 import { DocumentToolbar } from "./features/document-storage/DocumentToolbar";
 import { GraphCanvas } from "./features/graph-editor/GraphCanvas";
-import { NodeEditorModal } from "./features/graph-editor/NodeEditorModal";
 import { NodePalette } from "./features/graph-editor/NodePalette";
 
 function AppLayout() {
   const { state, dispatch } = useDocumentContext();
-  const editedNode =
-    state.document.nodes.find((node) => node.id === state.editorNodeId) ?? null;
   const outputs = useMemo(
     () =>
       state.document.nodes
@@ -58,16 +55,6 @@ function AppLayout() {
           }
         />
       </section>
-      {editedNode ? (
-        <NodeEditorModal
-          node={editedNode}
-          onClose={() => dispatch({ type: "open-node-editor", nodeId: null })}
-          onSave={(node) => {
-            dispatch({ type: "replace-node", node });
-            dispatch({ type: "open-node-editor", nodeId: null });
-          }}
-        />
-      ) : null}
     </div>
   );
 }
