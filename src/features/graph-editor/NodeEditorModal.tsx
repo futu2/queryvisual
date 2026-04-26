@@ -360,8 +360,10 @@ function NodeEditorModal({
               workspace: state.workspace,
               activeGraphId: state.activeGraphId,
               onOpenGraph: (graphId) => {
-                dispatch({ type: "set-active-graph", graphId });
-                onClose();
+                requestClose(() => {
+                  dispatch({ type: "set-active-graph", graphId });
+                  onClose();
+                });
               },
             })}
             {node.kind === "output" ? (

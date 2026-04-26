@@ -1794,6 +1794,11 @@ describe("NodeEditorModal", () => {
       data: { graphId: "" },
     };
 
+    const cleanNode: GraphNode = {
+      ...node,
+      data: { graphId: "graph-child" },
+    };
+
     const workspace: GraphWorkspace = {
       version: 2,
       metadata: { name: "Workspace" },
@@ -1831,7 +1836,77 @@ describe("NodeEditorModal", () => {
     expect(onSave).toHaveBeenCalled();
     expect(onSave.mock.calls[0][0].data.graphId).toBe("graph-child");
 
+    cleanup();
+
+    render(
+      <DocumentProvider initialWorkspace={workspace}>
+        <NodeEditorModal node={cleanNode} onClose={onClose} onSave={onSave} />
+        <ActiveGraphProbe />
+      </DocumentProvider>,
+    );
+
     await user.click(screen.getByRole("button", { name: "Open child graph" }));
+
+    expect(onClose).toHaveBeenCalled();
+    expect(screen.getByTestId("active-graph-id").textContent).toBe("graph-child");
+  });
+
+  test("open child graph from a dirty subgraph modal requires discard confirmation", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+    const onClose = mock();
+
+    const node: GraphNode = {
+      id: "subgraph-1",
+      kind: "subgraph",
+      label: "Orders Package",
+      position: { x: 0, y: 0 },
+      data: { graphId: "graph-child" },
+    };
+
+    const workspace: GraphWorkspace = {
+      version: 2,
+      metadata: { name: "Workspace" },
+      entryGraphId: "graph-parent",
+      graphs: [
+        {
+          id: "graph-parent",
+          metadata: { name: "Parent" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [node],
+          edges: [],
+        },
+        {
+          id: "graph-child",
+          metadata: { name: "Orders Child" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [],
+          edges: [],
+        },
+      ],
+    };
+
+    render(
+      <DocumentProvider initialWorkspace={workspace}>
+        <NodeEditorModal node={node} onClose={onClose} onSave={onSave} />
+        <ActiveGraphProbe />
+      </DocumentProvider>,
+    );
+
+    await user.type(screen.getByLabelText("Node name"), " (dirty)");
+    await user.click(screen.getByRole("button", { name: "Open child graph" }));
+
+    expect(screen.getByRole("dialog", { name: "Discard changes?" })).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByTestId("active-graph-id").textContent).toBe("graph-parent");
+
+    await user.click(screen.getByRole("button", { name: "Keep editing" }));
+
+    expect(screen.queryByRole("dialog", { name: "Discard changes?" })).toBeNull();
+    expect(screen.getByTestId("active-graph-id").textContent).toBe("graph-parent");
+
+    await user.click(screen.getByRole("button", { name: "Open child graph" }));
+    await user.click(screen.getByRole("button", { name: "Discard changes" }));
 
     expect(onClose).toHaveBeenCalled();
     expect(screen.getByTestId("active-graph-id").textContent).toBe("graph-child");

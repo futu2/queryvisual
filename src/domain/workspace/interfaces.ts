@@ -1,17 +1,25 @@
+import type { ColumnMap } from "../schema/types";
 import type { GraphDefinition, GraphWorkspace } from "../document/types";
 
 export type InferredGraphPort = {
   name: string;
   nodeId: string;
+  handleId: string;
+};
+
+export type InferredGraphInputPort = InferredGraphPort & {
+  columns: ColumnMap;
 };
 
 export type InferredGraphInterface = {
-  inputs: InferredGraphPort[];
+  inputs: InferredGraphInputPort[];
   outputs: InferredGraphPort[];
 };
 
-function byName(a: InferredGraphPort, b: InferredGraphPort) {
-  return a.name.localeCompare(b.name);
+function byNameThenNodeId(a: InferredGraphPort, b: InferredGraphPort) {
+  const byName = a.name.localeCompare(b.name);
+  if (byName !== 0) return byName;
+  return a.nodeId.localeCompare(b.nodeId);
 }
 
 export function findGraphById(
@@ -24,13 +32,22 @@ export function findGraphById(
 export function inferGraphInterface(graph: GraphDefinition): InferredGraphInterface {
   const inputs = graph.nodes
     .filter((node) => node.kind === "graphInput")
-    .map((node) => ({ name: node.data.inputName, nodeId: node.id }))
-    .sort(byName);
+    .map((node) => ({
+      name: node.data.inputName,
+      nodeId: node.id,
+      handleId: `in:${node.id}`,
+      columns: node.data.columns,
+    }))
+    .sort(byNameThenNodeId);
 
   const outputs = graph.nodes
     .filter((node) => node.kind === "output")
-    .map((node) => ({ name: node.data.outputName, nodeId: node.id }))
-    .sort(byName);
+    .map((node) => ({
+      name: node.data.outputName,
+      nodeId: node.id,
+      handleId: `out:${node.id}`,
+    }))
+    .sort(byNameThenNodeId);
 
   return { inputs, outputs };
 }
@@ -50,4 +67,3 @@ export function inferChildGraphInterface(
 
   return { graph, iface: inferGraphInterface(graph) };
 }
-

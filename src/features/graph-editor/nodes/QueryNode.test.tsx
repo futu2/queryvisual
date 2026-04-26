@@ -1,9 +1,12 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { ReactFlowProvider } from "@xyflow/react";
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { createDefaultOutputListenerConfig } from "../../../domain/document/outputListeners";
 import type { GraphWorkspace } from "../../../domain/document/types";
+import { inferChildGraphInterface } from "../../../domain/workspace/interfaces";
 import { QueryNode } from "./QueryNode";
+
+afterEach(cleanup);
 
 function createWorkspaceWithChildInterface(): GraphWorkspace {
   return {
@@ -418,10 +421,131 @@ describe("QueryNode", () => {
     expect(screen.getByText("orders_report")).toBeTruthy();
     expect(screen.getByText("1 inputs / 1 outputs")).toBeTruthy();
     expect(
-      container.querySelector('[data-query-node-handle-marker="target-orders_in"]'),
+      container.querySelector(
+        '[data-query-node-handle-marker="target-in:child-input-orders"]',
+      ),
     ).toBeTruthy();
     expect(
-      container.querySelector('[data-query-node-handle-marker="source-orders_report"]'),
+      container.querySelector(
+        '[data-query-node-handle-marker="source-out:child-output-orders"]',
+      ),
+    ).toBeTruthy();
+  });
+
+  test("child interfaces expose input column maps and stable unique handle ids", () => {
+    const workspace = createWorkspaceWithChildInterface();
+    const inferred = inferChildGraphInterface(workspace, "graph-child");
+
+    expect(inferred.graph?.id).toBe("graph-child");
+    expect(inferred.iface.inputs).toHaveLength(1);
+    expect(inferred.iface.inputs[0]?.name).toBe("orders_in");
+    expect(inferred.iface.inputs[0]?.handleId).toBe("in:child-input-orders");
+    expect(inferred.iface.inputs[0]?.columns).toEqual({ order_id: "int" });
+
+    expect(inferred.iface.outputs).toHaveLength(1);
+    expect(inferred.iface.outputs[0]?.name).toBe("orders_report");
+    expect(inferred.iface.outputs[0]?.handleId).toBe("out:child-output-orders");
+  });
+
+  test("duplicate port names do not create duplicate handle ids", () => {
+    const workspace: GraphWorkspace = {
+      version: 2,
+      metadata: { name: "Workspace" },
+      entryGraphId: "graph-parent",
+      graphs: [
+        {
+          id: "graph-parent",
+          metadata: { name: "Parent" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [],
+          edges: [],
+        },
+        {
+          id: "graph-child",
+          metadata: { name: "Child" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [
+            {
+              id: "child-input-a",
+              kind: "graphInput",
+              label: "Input A",
+              position: { x: 0, y: 0 },
+              data: { inputName: "orders_in", columns: { order_id: "int" } },
+            },
+            {
+              id: "child-input-b",
+              kind: "graphInput",
+              label: "Input B",
+              position: { x: 0, y: 0 },
+              data: { inputName: "orders_in", columns: { order_id: "int" } },
+            },
+            {
+              id: "child-output-a",
+              kind: "output",
+              label: "Out A",
+              position: { x: 0, y: 0 },
+              data: {
+                outputName: "orders_report",
+                listeners: createDefaultOutputListenerConfig("orders_report"),
+              },
+            },
+            {
+              id: "child-output-b",
+              kind: "output",
+              label: "Out B",
+              position: { x: 0, y: 0 },
+              data: {
+                outputName: "orders_report",
+                listeners: createDefaultOutputListenerConfig("orders_report"),
+              },
+            },
+          ],
+          edges: [],
+        },
+      ],
+    };
+
+    const inferred = inferChildGraphInterface(workspace, "graph-child");
+    const inputHandleIds = inferred.iface.inputs.map((port) => port.handleId);
+    const outputHandleIds = inferred.iface.outputs.map((port) => port.handleId);
+
+    expect(new Set(inputHandleIds).size).toBe(inputHandleIds.length);
+    expect(new Set(outputHandleIds).size).toBe(outputHandleIds.length);
+
+    const { container } = render(
+      <ReactFlowProvider>
+        <QueryNode
+          id="subgraph-1"
+          data={{
+            node: {
+              id: "subgraph-1",
+              kind: "subgraph",
+              label: "Duplicate Ports",
+              position: { x: 0, y: 0 },
+              data: { graphId: "graph-child" },
+            },
+            diagnostics: [],
+            workspace,
+          }}
+          selected={false}
+          dragging={false}
+        />
+      </ReactFlowProvider>,
+    );
+
+    expect(screen.getAllByText("orders_in")).toHaveLength(2);
+    expect(screen.getAllByText("orders_report")).toHaveLength(2);
+    expect(
+      container.querySelector('[data-query-node-handle-marker="target-in:child-input-a"]'),
+    ).toBeTruthy();
+    expect(
+      container.querySelector('[data-query-node-handle-marker="target-in:child-input-b"]'),
+    ).toBeTruthy();
+    expect(
+      container.querySelector('[data-query-node-handle-marker="source-out:child-output-a"]'),
+    ).toBeTruthy();
+    expect(
+      container.querySelector('[data-query-node-handle-marker="source-out:child-output-b"]'),
     ).toBeTruthy();
   });
 });

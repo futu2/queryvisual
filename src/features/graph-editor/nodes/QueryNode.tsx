@@ -109,21 +109,21 @@ function TargetHandles({
 
     return (
       <>
-        {iface.inputs.map((port, index) => (
+        {iface.inputs.map((port) => (
           <span
-            key={`subgraph-target-${port.name}`}
+            key={`subgraph-target-${port.handleId}`}
             hidden
-            data-query-node-handle-marker={`target-${port.name}`}
+            data-query-node-handle-marker={`target-${port.handleId}`}
           />
         ))}
         {iface.inputs.map((port, index) => (
           <Handle
-            key={`subgraph-target-handle-${port.name}`}
+            key={`subgraph-target-handle-${port.handleId}`}
             type="target"
-            id={port.name}
+            id={port.handleId}
             position={Position.Left}
             style={{ top: handleTop(index, iface.inputs.length) }}
-            data-query-node-handle={`target-${port.name}`}
+            data-query-node-handle={`target-${port.handleId}`}
           />
         ))}
       </>
@@ -186,7 +186,10 @@ export function QueryNode({ data, selected }: NodeProps<FlowNodeData>) {
               <div className="query-node__ports-column">
                 <div className="query-node__ports-title">Inputs</div>
                 {subgraphInterface.iface.inputs.map((port) => (
-                  <div key={`in-${port.name}`} className="query-node__port-row">
+                  <div
+                    key={`in-${port.handleId}`}
+                    className="query-node__port-row"
+                  >
                     <span className="query-node__port-pill">{port.name}</span>
                   </div>
                 ))}
@@ -194,7 +197,10 @@ export function QueryNode({ data, selected }: NodeProps<FlowNodeData>) {
               <div className="query-node__ports-column">
                 <div className="query-node__ports-title">Outputs</div>
                 {subgraphInterface.iface.outputs.map((port) => (
-                  <div key={`out-${port.name}`} className="query-node__port-row">
+                  <div
+                    key={`out-${port.handleId}`}
+                    className="query-node__port-row"
+                  >
                     <span className="query-node__port-pill">{port.name}</span>
                   </div>
                 ))}
@@ -208,21 +214,21 @@ export function QueryNode({ data, selected }: NodeProps<FlowNodeData>) {
         <>
           {(subgraphInterface?.iface.outputs ?? []).map((port) => (
             <span
-              key={`subgraph-source-marker-${port.name}`}
+              key={`subgraph-source-marker-${port.handleId}`}
               hidden
-              data-query-node-handle-marker={`source-${port.name}`}
+              data-query-node-handle-marker={`source-${port.handleId}`}
             />
           ))}
           {(subgraphInterface?.iface.outputs ?? []).map((port, index) => (
             <Handle
-              key={`subgraph-source-handle-${port.name}`}
+              key={`subgraph-source-handle-${port.handleId}`}
               type="source"
-              id={port.name}
+              id={port.handleId}
               position={Position.Right}
               style={{
                 top: handleTop(index, subgraphInterface?.iface.outputs.length ?? 0),
               }}
-              data-query-node-handle={`source-${port.name}`}
+              data-query-node-handle={`source-${port.handleId}`}
             />
           ))}
         </>
