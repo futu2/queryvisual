@@ -153,7 +153,7 @@ test("backdrop click and Escape on a dirty modal show discard confirmation inste
 
 - [ ] **Step 2: Run the modal tests to verify they fail**
 
-Run: `bun test src/features/graph-editor/NodeEditorModal.test.tsx`  
+Run: `bun test src/features/graph-editor/NodeEditorModal.test.tsx`
 Expected: FAIL in the new `Node name` and `Discard changes` assertions because the modal still renders a static heading and dismisses immediately on close actions.
 
 - [ ] **Step 3: Implement the editable header, guarded close API, and discard dialog**
@@ -390,7 +390,7 @@ export const NodeEditorModal = forwardRef<
 
 - [ ] **Step 4: Run the modal tests to verify they pass**
 
-Run: `bun test src/features/graph-editor/NodeEditorModal.test.tsx`  
+Run: `bun test src/features/graph-editor/NodeEditorModal.test.tsx`
 Expected: PASS with `32 pass, 0 fail`.
 
 - [ ] **Step 5: Commit the modal editor guard work**
@@ -498,7 +498,7 @@ test("saving a renamed node updates the canvas node data label", async () => {
 
 - [ ] **Step 2: Run the canvas tests to verify they fail**
 
-Run: `bun test src/features/graph-editor/GraphCanvas.test.tsx`  
+Run: `bun test src/features/graph-editor/GraphCanvas.test.tsx`
 Expected: FAIL because `GraphCanvas` does not render the modal yet, so the new `Node name` and `Discard changes` assertions cannot pass.
 
 - [ ] **Step 3: Move the modal into GraphCanvas and reuse the guarded close handle for editor transitions**
@@ -675,7 +675,7 @@ export function App() {
 
 - [ ] **Step 4: Run the canvas tests to verify they pass**
 
-Run: `bun test src/features/graph-editor/GraphCanvas.test.tsx`  
+Run: `bun test src/features/graph-editor/GraphCanvas.test.tsx`
 Expected: PASS with `4 pass, 0 fail`.
 
 - [ ] **Step 5: Commit the guarded editor switching flow**
@@ -811,7 +811,7 @@ test("keeps selected and error state classes alongside the type presentation hoo
 
 - [ ] **Step 2: Run the renderer tests to verify they fail**
 
-Run: `bun test src/features/graph-editor/nodes/QueryNode.test.tsx`  
+Run: `bun test src/features/graph-editor/nodes/QueryNode.test.tsx`
 Expected: FAIL because the shared node shell currently has one neutral class list and no family/kind presentation hooks.
 
 - [ ] **Step 3: Add the presentation map, glyph slot, and CSS family/kind variants**
@@ -987,10 +987,10 @@ export function QueryNode({ data, selected }: NodeProps<FlowNodeData>) {
 
 - [ ] **Step 4: Run the renderer tests, then the full suite**
 
-Run: `bun test src/features/graph-editor/nodes/QueryNode.test.tsx`  
+Run: `bun test src/features/graph-editor/nodes/QueryNode.test.tsx`
 Expected: PASS with `4 pass, 0 fail`.
 
-Run: `bun test`  
+Run: `bun test`
 Expected: PASS with `150 pass, 0 fail`.
 
 - [ ] **Step 5: Commit the node presentation pass**
