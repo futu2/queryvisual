@@ -2,6 +2,7 @@ import type { DragEventHandler, ReactNode } from "react";
 
 type RowCardProps = {
   dragLabel: string;
+  testId?: string;
   draggable?: boolean;
   onDragStart?: DragEventHandler<HTMLElement>;
   onDragOver?: DragEventHandler<HTMLElement>;
@@ -13,6 +14,7 @@ type RowCardProps = {
 
 export function RowCard({
   dragLabel,
+  testId,
   draggable = false,
   onDragStart,
   onDragOver,
@@ -33,6 +35,7 @@ export function RowCard({
 
   return (
     <section
+      data-testid={testId}
       className="row-card"
       draggable={draggable}
       onDragStart={draggable ? onDragStart : undefined}

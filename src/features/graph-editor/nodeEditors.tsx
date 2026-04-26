@@ -27,7 +27,9 @@ type FieldRow = {
 type FromTableNode = Extract<GraphNode, { kind: "fromTable" }>;
 type SelectNode = Extract<GraphNode, { kind: "select" }>;
 type AggregationNode = Extract<GraphNode, { kind: "aggregation" }>;
+type SortNode = Extract<GraphNode, { kind: "sort" }>;
 type NamedExpressionDraftRow = DraftRow<NamedExpression>;
+type SortItemDraftRow = DraftRow<SortItem>;
 
 type SelectEditorDraft = Omit<SelectNode, "data"> & {
   data: {
@@ -49,10 +51,17 @@ type FromTableEditorDraft = Omit<FromTableNode, "data"> & {
   };
 };
 
+type SortEditorDraft = Omit<SortNode, "data"> & {
+  data: {
+    items: SortItemDraftRow[];
+  };
+};
+
 type EditableNodeDraft =
-  | Exclude<GraphNode, FromTableNode | SelectNode | AggregationNode>
+  | Exclude<GraphNode, FromTableNode | SelectNode | AggregationNode | SortNode>
   | SelectEditorDraft
   | AggregationEditorDraft
+  | SortEditorDraft
   | FromTableEditorDraft;
 
 const columnTypes: ColumnType[] = [
@@ -74,6 +83,10 @@ function blankNamedExpression(): NamedExpression {
   return { name: "", expression: "" };
 }
 
+function blankSortItem(): SortItem {
+  return { expression: "", direction: "asc" };
+}
+
 function sanitizeNamedExpressions(rows: NamedExpression[]) {
   return rows
     .map((row) => ({
@@ -82,6 +95,10 @@ function sanitizeNamedExpressions(rows: NamedExpression[]) {
       expression: row.expression,
     }))
     .filter((row) => row.name !== "" || row.expression.trim() !== "");
+}
+
+function sanitizeSortItems(rows: SortItem[]) {
+  return rows.filter((row) => row.expression.trim() !== "");
 }
 
 function FromTableFieldRows({
@@ -98,6 +115,7 @@ function FromTableFieldRows({
       {rows.map((row, index) => (
         <div key={row.rowId} className="mapping-row">
           <RowCard
+            testId={`field-row-card-${index + 1}`}
             dragLabel={`Drag field ${index + 1}`}
             draggable={rows.length > 1}
             onDragStart={() => setDraggedRowId(row.rowId)}
@@ -111,7 +129,7 @@ function FromTableFieldRows({
               if (fromIndex === -1) return;
               onChange(moveDraftRow(rows, fromIndex, index));
             }}
-            header={<span data-testid={`field-row-card-${index + 1}`} aria-hidden="true" />}
+            header={null}
             actions={
               <RowActionBar
                 itemName="field"
@@ -189,6 +207,15 @@ function toEditableNodeDraft(node: GraphNode): EditableNodeDraft {
     };
   }
 
+  if (node.kind === "sort") {
+    return {
+      ...node,
+      data: {
+        items: ensureDraftRows(node.data.items, blankSortItem),
+      },
+    };
+  }
+
   if (node.kind !== "fromTable") {
     return node;
   }
@@ -228,6 +255,15 @@ export function serializeNodeEditorDraft(draft: EditableNodeDraft): GraphNode {
       data: {
         groupBy: sanitizeNamedExpressions(groupBy),
         aggregates: sanitizeNamedExpressions(aggregates),
+      },
+    };
+  }
+
+  if (draft.kind === "sort") {
+    return {
+      ...draft,
+      data: {
+        items: sanitizeSortItems(stripDraftRows(draft.data.items)),
       },
     };
   }
@@ -281,6 +317,11 @@ function NamedExpressionRows({
       {rows.map((row, index) => (
         <div key={row.rowId} className="mapping-row">
           <RowCard
+            testId={
+              rowCardTestIdPrefix
+                ? `${rowCardTestIdPrefix}-${index + 1}`
+                : undefined
+            }
             dragLabel={`Drag ${itemName} ${index + 1}`}
             draggable={rows.length > 1}
             onDragStart={() => setDraggedRowId(row.rowId)}
@@ -294,14 +335,7 @@ function NamedExpressionRows({
               if (fromIndex === -1) return;
               onChange(moveDraftRow(rows, fromIndex, index));
             }}
-            header={
-              rowCardTestIdPrefix ? (
-                <span
-                  data-testid={`${rowCardTestIdPrefix}-${index + 1}`}
-                  aria-hidden="true"
-                />
-              ) : null
-            }
+            header={null}
             actions={
               <RowActionBar
                 itemName={itemName}
@@ -351,6 +385,98 @@ function NamedExpressionRows({
         onClick={() => onChange(addDraftRow(rows, blankNamedExpression))}
       >
         {addButtonLabel}
+      </button>
+    </div>
+  );
+}
+
+function SortItemRows({
+  rows,
+  document,
+  nodeId,
+  schemaOverrides,
+  onChange,
+}: {
+  rows: SortItemDraftRow[];
+  document: GraphDocument;
+  nodeId: string;
+  schemaOverrides?: Record<string, ColumnMap>;
+  onChange: (rows: SortItemDraftRow[]) => void;
+}) {
+  const [draggedRowId, setDraggedRowId] = useState<string | null>(null);
+
+  return (
+    <div className="editor-stack">
+      {rows.map((row, index) => (
+        <div key={row.rowId} className="mapping-row">
+          <RowCard
+            testId={`sort-row-card-${index + 1}`}
+            dragLabel={`Drag sort item ${index + 1}`}
+            draggable={rows.length > 1}
+            onDragStart={() => setDraggedRowId(row.rowId)}
+            onDragOver={() => {}}
+            onDrop={() => {
+              if (draggedRowId === null) return;
+              const fromIndex = rows.findIndex(
+                (candidate) => candidate.rowId === draggedRowId,
+              );
+              setDraggedRowId(null);
+              if (fromIndex === -1) return;
+              onChange(moveDraftRow(rows, fromIndex, index));
+            }}
+            header={null}
+            actions={
+              <RowActionBar
+                itemName="sort item"
+                rowNumber={index + 1}
+                rowCount={rows.length}
+                onMoveUp={() => onChange(moveDraftRow(rows, index, index - 1))}
+                onMoveDown={() => onChange(moveDraftRow(rows, index, index + 1))}
+                onDuplicate={() =>
+                  onChange(duplicateDraftRow(rows, index, (item) => ({ ...item })))
+                }
+                onRemove={() => onChange(removeDraftRow(rows, index, blankSortItem))}
+              />
+            }
+          >
+            <ExpressionInput
+              label={`Sort expression ${index + 1}`}
+              value={row.expression}
+              document={document}
+              nodeId={nodeId}
+              schemaOverrides={schemaOverrides}
+              onChange={(expression) => {
+                const next = [...rows];
+                next[index] = { ...row, expression };
+                onChange(next);
+              }}
+            />
+            <label>
+              {`Sort direction ${index + 1}`}
+              <select
+                value={row.direction}
+                onChange={(event) => {
+                  const next = [...rows];
+                  next[index] = {
+                    ...row,
+                    direction: event.target.value as "asc" | "desc",
+                  };
+                  onChange(next);
+                }}
+              >
+                <option value="asc">asc</option>
+                <option value="desc">desc</option>
+              </select>
+            </label>
+          </RowCard>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="row-add-button"
+        onClick={() => onChange(addDraftRow(rows, blankSortItem))}
+      >
+        Add sort item
       </button>
     </div>
   );
@@ -549,41 +675,15 @@ export function renderNodeEditor(
       );
     case "sort":
       return (
-        <div className="editor-stack">
-          {draft.data.items.map((item: SortItem, index: number) => (
-            <div key={index} className="mapping-row">
-              <ExpressionInput
-                label="Expression"
-                value={item.expression}
-                document={document}
-                nodeId={draft.id}
-                schemaOverrides={schemaOverrides}
-                onChange={(expression) => {
-                  const next = [...draft.data.items];
-                  next[index] = { ...item, expression };
-                  setDraft({ ...draft, data: { items: next } });
-                }}
-              />
-              <label>
-                Direction
-                <select
-                  value={item.direction}
-                  onChange={(event) => {
-                    const next = [...draft.data.items];
-                    next[index] = {
-                      ...item,
-                      direction: event.target.value as "asc" | "desc",
-                    };
-                    setDraft({ ...draft, data: { items: next } });
-                  }}
-                >
-                  <option value="asc">asc</option>
-                  <option value="desc">desc</option>
-                </select>
-              </label>
-            </div>
-          ))}
-        </div>
+        <SortItemRows
+          rows={draft.data.items}
+          document={document}
+          nodeId={draft.id}
+          schemaOverrides={schemaOverrides}
+          onChange={(items) =>
+            setDraft({ ...draft, data: { items } })
+          }
+        />
       );
     case "limit":
       return (

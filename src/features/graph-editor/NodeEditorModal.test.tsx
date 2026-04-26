@@ -113,6 +113,9 @@ describe("NodeEditorModal", () => {
     const firstCard = screen.getByTestId("mapping-row-card-1");
     const thirdCard = screen.getByTestId("mapping-row-card-3");
 
+    expect(firstCard.tagName).toBe("SECTION");
+    expect(firstCard.className).toContain("row-card");
+
     fireEvent.dragStart(firstCard);
     fireEvent.dragOver(thirdCard);
     fireEvent.drop(thirdCard);
@@ -366,6 +369,46 @@ describe("NodeEditorModal", () => {
     expect(onSave.mock.calls[0][0].data.aggregates).toEqual([
       { name: "gross_total", expression: "sum(total)" },
       { name: "order_count", expression: "count(order_id)" },
+    ]);
+  });
+
+  test("drag-reorders sort items by dragging row cards", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+
+    const node: GraphNode = {
+      id: "sort-orders",
+      kind: "sort",
+      label: "Sort",
+      position: { x: 0, y: 0 },
+      data: {
+        items: [
+          { expression: "created_at", direction: "desc" },
+          { expression: "customer_id", direction: "asc" },
+          { expression: "order_id", direction: "asc" },
+        ],
+      },
+    };
+
+    renderModal({ node, onSave });
+
+    const firstCard = screen.getByTestId("sort-row-card-1");
+    const thirdCard = screen.getByTestId("sort-row-card-3");
+
+    expect(firstCard.tagName).toBe("SECTION");
+    expect(firstCard.className).toContain("row-card");
+
+    fireEvent.dragStart(firstCard);
+    fireEvent.dragOver(thirdCard);
+    fireEvent.drop(thirdCard);
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalled();
+    expect(onSave.mock.calls[0][0].data.items).toEqual([
+      { expression: "customer_id", direction: "asc" },
+      { expression: "order_id", direction: "asc" },
+      { expression: "created_at", direction: "desc" },
     ]);
   });
 
