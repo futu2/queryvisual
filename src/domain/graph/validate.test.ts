@@ -1,13 +1,176 @@
 import { describe, expect, test } from "bun:test";
 import { createDefaultOutputListenerConfig } from "../document/outputListeners";
 import { createSampleDocument } from "../document/sample";
-import type { GraphDocument } from "../document/types";
+import type { GraphDocument, GraphWorkspace } from "../document/types";
 import { validateOutput } from "./validate";
 
 function outputData(outputName: string) {
   return {
     outputName,
     listeners: createDefaultOutputListenerConfig(outputName),
+  };
+}
+
+function createWorkspaceWithIncompatibleSubgraphInput(): GraphWorkspace {
+  const childGraph = {
+    id: "graph-child",
+    metadata: { name: "Child" },
+    viewport: { x: 0, y: 0, zoom: 1 },
+    nodes: [
+      {
+        id: "child-input",
+        kind: "graphInput" as const,
+        label: "Input",
+        position: { x: 0, y: 0 },
+        data: {
+          inputName: "orders_in",
+          columns: { order_id: "int", total: "float" },
+        },
+      },
+      {
+        id: "child-output",
+        kind: "output" as const,
+        label: "Output",
+        position: { x: 260, y: 0 },
+        data: outputData("child_out"),
+      },
+    ],
+    edges: [
+      {
+        id: "edge-in-out",
+        source: "child-input",
+        sourceHandle: "out",
+        target: "child-output",
+        targetHandle: "in",
+      },
+    ],
+  };
+
+  const parentGraph = {
+    id: "graph-parent",
+    metadata: { name: "Parent" },
+    viewport: { x: 0, y: 0, zoom: 1 },
+    nodes: [
+      {
+        id: "from-parent",
+        kind: "fromTable" as const,
+        label: "T",
+        position: { x: -260, y: 0 },
+        data: {
+          tableRef: { tableName: "t" },
+          // Missing required child column `total`.
+          columns: { order_id: "int" },
+        },
+      },
+      {
+        id: "subgraph-orders",
+        kind: "subgraph" as const,
+        label: "Child graph",
+        position: { x: 0, y: 0 },
+        data: { graphId: "graph-child" },
+      },
+      {
+        id: "output-parent",
+        kind: "output" as const,
+        label: "Output",
+        position: { x: 260, y: 0 },
+        data: outputData("parent_out"),
+      },
+    ],
+    edges: [
+      {
+        id: "edge-parent-subgraph-input",
+        source: "from-parent",
+        sourceHandle: "out",
+        target: "subgraph-orders",
+        targetHandle: "in:child-input",
+      },
+      {
+        id: "edge-subgraph-output",
+        source: "subgraph-orders",
+        sourceHandle: "out:child-output",
+        target: "output-parent",
+        targetHandle: "in",
+      },
+    ],
+  };
+
+  return {
+    version: 2,
+    metadata: { name: "Incompatible Input Workspace" },
+    entryGraphId: "graph-parent",
+    graphs: [parentGraph, childGraph],
+  };
+}
+
+function createWorkspaceWithCycle(): GraphWorkspace {
+  const graphA = {
+    id: "graph-a",
+    metadata: { name: "A" },
+    viewport: { x: 0, y: 0, zoom: 1 },
+    nodes: [
+      {
+        id: "subgraph-a",
+        kind: "subgraph" as const,
+        label: "B",
+        position: { x: 0, y: 0 },
+        data: { graphId: "graph-b" },
+      },
+      {
+        id: "output-a",
+        kind: "output" as const,
+        label: "Output",
+        position: { x: 260, y: 0 },
+        data: outputData("out_a"),
+      },
+    ],
+    edges: [
+      {
+        id: "edge-a-out",
+        source: "subgraph-a",
+        sourceHandle: "out:output-b",
+        target: "output-a",
+        targetHandle: "in",
+      },
+    ],
+  };
+
+  const graphB = {
+    id: "graph-b",
+    metadata: { name: "B" },
+    viewport: { x: 0, y: 0, zoom: 1 },
+    nodes: [
+      {
+        id: "subgraph-b",
+        kind: "subgraph" as const,
+        label: "A",
+        position: { x: 0, y: 0 },
+        data: { graphId: "graph-a" },
+      },
+      {
+        id: "output-b",
+        kind: "output" as const,
+        label: "Output",
+        position: { x: 260, y: 0 },
+        data: outputData("out_b"),
+      },
+    ],
+    edges: [
+      {
+        id: "edge-b-out",
+        source: "subgraph-b",
+        sourceHandle: "out:output-a",
+        target: "output-b",
+        targetHandle: "in",
+      },
+    ],
+  };
+
+  return {
+    version: 2,
+    metadata: { name: "Cyclic Workspace" },
+    entryGraphId: "graph-a",
+    graphs: [graphA, graphB],
   };
 }
 
@@ -211,6 +374,33 @@ describe("validateOutput", () => {
     expect(ambiguous).toBeDefined();
     expect(ambiguous?.ref?.nodeId).toBe("join-1");
     expect(ambiguous?.ref?.field).toBe("predicate");
+  });
+
+  test("rejects a parent subgraph input when required child columns are missing", () => {
+    const workspace = createWorkspaceWithIncompatibleSubgraphInput();
+
+    const result = validateOutput(workspace, "graph-parent", "output-parent");
+
+    expect(
+      result.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.level === "error" &&
+          diagnostic.code === "subgraph.incompatible-input" &&
+          diagnostic.ref?.nodeId === "subgraph-orders",
+      ),
+    ).toBe(true);
+  });
+
+  test("rejects graph dependency cycles", () => {
+    const workspace = createWorkspaceWithCycle();
+
+    const result = validateOutput(workspace, "graph-a", "output-a");
+
+    expect(
+      result.diagnostics.some(
+        (diagnostic) => diagnostic.level === "error" && diagnostic.code === "subgraph.cycle",
+      ),
+    ).toBe(true);
   });
 
   test("reports a missing join input", () => {

@@ -1,17 +1,52 @@
 import type { Diagnostic } from "../diagnostics/types";
 import type {
+  GraphDefinition,
   GraphDocument,
   GraphNode,
+  GraphWorkspace,
   NamedExpression,
 } from "../document/types";
 import type { ExpressionAnalysisDiagnosticCode } from "../expr/analyze";
 import { analyzeExpression } from "../expr/analyze";
-import type { ColumnMap } from "../schema/types";
+import type { ColumnMap, ColumnType } from "../schema/types";
+import { detectGraphCycle } from "../workspace/dependencies";
+import { findGraphById } from "../workspace/interfaces";
 import { buildExpressionScope } from "./expressionScope";
 import type { SemanticOutput } from "./semantic";
 
 function incomingEdges(document: GraphDocument, nodeId: string) {
   return document.edges.filter(edge => edge.target === nodeId);
+}
+
+function outgoingEdges(document: GraphDocument, nodeId: string) {
+  return document.edges.filter(edge => edge.source === nodeId);
+}
+
+function parseOutputHandle(handle: string): string | null {
+  if (!handle.startsWith("out:")) return null;
+  const id = handle.slice("out:".length);
+  return id === "" ? null : id;
+}
+
+function parseInputHandle(handle: string): string | null {
+  if (!handle.startsWith("in:")) return null;
+  const id = handle.slice("in:".length);
+  return id === "" ? null : id;
+}
+
+function isWorkspace(value: unknown): value is GraphWorkspace {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as { version?: unknown }).version === 2 &&
+    Array.isArray((value as { graphs?: unknown }).graphs)
+  );
+}
+
+function isTypeCompatible(provided: ColumnType | undefined, required: ColumnType) {
+  if (!provided) return false;
+  if (provided === "unknown" || required === "unknown") return true;
+  return provided === required;
 }
 
 function orderedReachableNodes(document: GraphDocument, outputId: string) {
@@ -141,12 +176,20 @@ function singleInput(
   return inEdges[0];
 }
 
-export function validateOutput(
-  document: GraphDocument,
-  outputId: string,
-): SemanticOutput {
+function validateGraphOutput(params: {
+  document: GraphDocument;
+  outputId: string;
+  workspace?: GraphWorkspace;
+  graphId?: string;
+  graphInputSchemas?: Record<string, ColumnMap>;
+}): SemanticOutput {
+  const document = params.document;
+  const outputId = params.outputId;
+  const workspace = params.workspace;
+  const graphInputSchemas = params.graphInputSchemas ?? {};
   const nodesById = Object.fromEntries(document.nodes.map(node => [node.id, node]));
   const orderedNodes = orderedReachableNodes(document, outputId);
+  const reachableNodeIds = new Set(orderedNodes.map(node => node.id));
   const diagnostics: Diagnostic[] = [];
   const schemas: Record<string, ColumnMap> = {};
   // Tracks nodes whose output schema/scope is not trustworthy due to structural issues
@@ -158,22 +201,165 @@ export function validateOutput(
     const inputs = incomingEdges(document, node.id);
     switch (node.kind) {
       case "graphInput":
-        schemas[node.id] = node.data.columns;
+        schemas[node.id] = graphInputSchemas[node.id] ?? node.data.columns;
         break;
       case "fromTable":
         schemas[node.id] = node.data.columns;
         break;
       case "subgraph": {
-        diagnostics.push(
-          diagnostic(
-            "subgraph.unsupported",
-            "Subgraph nodes are not supported yet.",
-            node.id,
-            "graphId",
-          ),
+        if (!workspace) {
+          diagnostics.push(
+            diagnostic(
+              "subgraph.unsupported",
+              "Subgraph nodes require a workspace context.",
+              node.id,
+              "graphId",
+            ),
+          );
+          schemas[node.id] = {};
+          invalidStructure.add(node.id);
+          break;
+        }
+
+        const childGraphId = node.data.graphId;
+        const childGraph = findGraphById(workspace, childGraphId);
+        if (!childGraph) {
+          diagnostics.push(
+            diagnostic(
+              "subgraph.missing-graph",
+              `Referenced graph ${childGraphId} does not exist in the workspace.`,
+              node.id,
+              "graphId",
+            ),
+          );
+          schemas[node.id] = {};
+          invalidStructure.add(node.id);
+          break;
+        }
+
+        const outputIds = new Set<string>();
+        for (const edge of outgoingEdges(document, node.id)) {
+          if (!reachableNodeIds.has(edge.target)) continue;
+          const outId = parseOutputHandle(edge.sourceHandle);
+          if (outId) outputIds.add(outId);
+        }
+
+        if (outputIds.size === 0) {
+          diagnostics.push(
+            diagnostic(
+              "subgraph.missing-output",
+              "Subgraph nodes require one connected output handle.",
+              node.id,
+            ),
+          );
+          schemas[node.id] = {};
+          invalidStructure.add(node.id);
+          break;
+        }
+
+        if (outputIds.size > 1) {
+          diagnostics.push(
+            diagnostic(
+              "subgraph.ambiguous-output",
+              "Subgraph nodes may only use one output handle per execution path.",
+              node.id,
+            ),
+          );
+          schemas[node.id] = {};
+          invalidStructure.add(node.id);
+          break;
+        }
+
+        const [childOutputId] = Array.from(outputIds);
+
+        const childInputSchemas: Record<string, ColumnMap> = {};
+        let compatible = true;
+
+        const childInputs = childGraph.nodes.filter(
+          (n): n is Extract<GraphNode, { kind: "graphInput" }> => n.kind === "graphInput",
         );
-        schemas[node.id] = {};
-        invalidStructure.add(node.id);
+        for (const inputNode of childInputs) {
+          const handleId = `in:${inputNode.id}`;
+          const matches = inputs.filter((edge) => edge.targetHandle === handleId);
+          if (matches.length !== 1) {
+            compatible = false;
+            diagnostics.push(
+              diagnostic(
+                matches.length === 0
+                  ? "subgraph.missing-input"
+                  : "subgraph.duplicate-input",
+                `Subgraph nodes require exactly one parent connection for child input ${inputNode.data.inputName}.`,
+                node.id,
+                handleId,
+              ),
+            );
+            continue;
+          }
+
+          const edge = matches[0]!;
+          if (invalidStructure.has(edge.source)) {
+            compatible = false;
+            continue;
+          }
+          const providedSchema = schemas[edge.source] ?? {};
+          const requiredSchema = inputNode.data.columns ?? {};
+          for (const [col, requiredType] of Object.entries(requiredSchema)) {
+            if (!Object.prototype.hasOwnProperty.call(providedSchema, col)) {
+              compatible = false;
+              diagnostics.push(
+                diagnostic(
+                  "subgraph.incompatible-input",
+                  `Missing required input column ${col} for child graph.`,
+                  node.id,
+                  handleId,
+                ),
+              );
+              continue;
+            }
+
+            const providedType = providedSchema[col];
+            if (!isTypeCompatible(providedType, requiredType)) {
+              compatible = false;
+              diagnostics.push(
+                diagnostic(
+                  "subgraph.incompatible-input",
+                  `Incompatible input column ${col} type (${providedType} vs ${requiredType}).`,
+                  node.id,
+                  handleId,
+                ),
+              );
+            }
+          }
+
+          childInputSchemas[inputNode.id] = providedSchema;
+        }
+
+        if (!compatible) {
+          schemas[node.id] = {};
+          invalidStructure.add(node.id);
+          break;
+        }
+
+        const childSemantic = validateOutput(
+          workspace,
+          childGraphId,
+          childOutputId,
+          childInputSchemas,
+        );
+        if (childSemantic.diagnostics.some((d) => d.level === "error")) {
+          diagnostics.push(
+            diagnostic(
+              "subgraph.child-invalid",
+              "Referenced child graph output contains validation errors.",
+              node.id,
+            ),
+          );
+          schemas[node.id] = {};
+          invalidStructure.add(node.id);
+          break;
+        }
+
+        schemas[node.id] = childSemantic.schemas[childOutputId] ?? {};
         break;
       }
       case "join": {
@@ -427,6 +613,7 @@ export function validateOutput(
   }
 
   return {
+    graphId: params.graphId ?? ("id" in document ? (document as GraphDefinition).id : undefined),
     document,
     outputId,
     outputName: outputNode?.kind === "output" ? outputNode.data.outputName : outputId,
@@ -435,4 +622,90 @@ export function validateOutput(
     schemas,
     diagnostics,
   };
+}
+
+export function validateOutput(document: GraphDocument, outputId: string): SemanticOutput;
+export function validateOutput(
+  workspace: GraphWorkspace,
+  graphId: string,
+  outputId: string,
+  graphInputSchemas?: Record<string, ColumnMap>,
+): SemanticOutput;
+export function validateOutput(
+  arg1: GraphDocument | GraphWorkspace,
+  arg2: string,
+  arg3?: string,
+  arg4?: Record<string, ColumnMap>,
+): SemanticOutput {
+  if (isWorkspace(arg1)) {
+    const workspace = arg1;
+    const graphId = arg2;
+    const outputId = arg3 ?? arg2;
+    const graphInputSchemas = arg4 ?? {};
+
+    const cycle = detectGraphCycle(workspace, graphId);
+    if (cycle) {
+      const graph =
+        findGraphById(workspace, graphId) ??
+        ({
+          id: graphId,
+          metadata: { name: graphId },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [],
+          edges: [],
+        } satisfies GraphDefinition);
+
+      return {
+        graphId,
+        document: graph,
+        outputId,
+        outputName: outputId,
+        orderedNodes: [],
+        nodesById: {},
+        schemas: {},
+        diagnostics: [
+          diagnostic(
+            "subgraph.cycle",
+            `Graph dependency cycle detected: ${cycle.path.join(" -> ")}`,
+            outputId,
+          ),
+        ],
+      };
+    }
+
+    const graph = findGraphById(workspace, graphId);
+    if (!graph) {
+      const stub: GraphDefinition = {
+        id: graphId,
+        metadata: { name: graphId },
+        viewport: { x: 0, y: 0, zoom: 1 },
+        nodes: [],
+        edges: [],
+      };
+      return {
+        graphId,
+        document: stub,
+        outputId,
+        outputName: outputId,
+        orderedNodes: [],
+        nodesById: {},
+        schemas: {},
+        diagnostics: [
+          diagnostic("graph.invalid", `Graph ${graphId} does not exist.`, outputId),
+        ],
+      };
+    }
+
+    return validateGraphOutput({
+      document: graph,
+      outputId,
+      workspace,
+      graphId,
+      graphInputSchemas,
+    });
+  }
+
+  const document = arg1;
+  const outputId = arg2;
+  return validateGraphOutput({ document, outputId });
 }

@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { createDefaultOutputListenerConfig } from "../document/outputListeners";
 import { analyzeExpression } from "../expr/analyze";
-import type { GraphDocument } from "../document/types";
+import type { GraphDocument, GraphWorkspace } from "../document/types";
 import { buildExpressionScope } from "./expressionScope";
-import { inferDocumentSchemas, inferNodeSchemas } from "./inferSchemas";
+import {
+  inferDocumentSchemas,
+  inferNodeSchemas,
+  inferWorkspaceGraphSchemas,
+} from "./inferSchemas";
 import { validateOutput } from "./validate";
 
 describe("inferDocumentSchemas", () => {
@@ -443,5 +447,104 @@ describe("inferDocumentSchemas", () => {
     expect(inferred["join-1"]).toEqual(validated["join-1"]);
     expect(inferred["where-1"]).toEqual(validated["where-1"]);
     expect(inferred["output-1"]).toEqual(validated["output-1"]);
+  });
+
+  test("infers subgraph output schemas from referenced child graphs", () => {
+    const childGraph = {
+      id: "graph-child",
+      metadata: { name: "Child" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "from-orders",
+          kind: "fromTable" as const,
+          label: "Orders",
+          position: { x: 0, y: 0 },
+          data: {
+            tableRef: { schemaName: "sales", tableName: "orders" },
+            columns: { total: "float" },
+          },
+        },
+        {
+          id: "output-child",
+          kind: "output" as const,
+          label: "Output",
+          position: { x: 260, y: 0 },
+          data: {
+            outputName: "child_out",
+            listeners: createDefaultOutputListenerConfig("child_out"),
+          },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-child",
+          source: "from-orders",
+          sourceHandle: "out",
+          target: "output-child",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const parentGraph = {
+      id: "graph-parent",
+      metadata: { name: "Parent" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "subgraph-orders",
+          kind: "subgraph" as const,
+          label: "Child graph",
+          position: { x: 0, y: 0 },
+          data: { graphId: "graph-child" },
+        },
+        {
+          id: "select-parent",
+          kind: "select" as const,
+          label: "Select",
+          position: { x: 260, y: 0 },
+          data: { mappings: [{ name: "gross_total", expression: "total" }] },
+        },
+        {
+          id: "output-parent",
+          kind: "output" as const,
+          label: "Output",
+          position: { x: 520, y: 0 },
+          data: {
+            outputName: "parent_out",
+            listeners: createDefaultOutputListenerConfig("parent_out"),
+          },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-subgraph-select",
+          source: "subgraph-orders",
+          sourceHandle: "out:output-child",
+          target: "select-parent",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-select-out",
+          source: "select-parent",
+          sourceHandle: "out",
+          target: "output-parent",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const workspace: GraphWorkspace = {
+      version: 2,
+      metadata: { name: "Workspace" },
+      entryGraphId: "graph-parent",
+      graphs: [parentGraph, childGraph],
+    };
+
+    const schemas = inferWorkspaceGraphSchemas(workspace, "graph-parent");
+
+    expect(schemas["subgraph-orders"]).toEqual({ total: "float" });
+    expect(schemas["select-parent"]).toEqual({ gross_total: "float" });
   });
 });

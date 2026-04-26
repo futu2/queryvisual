@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { createDefaultOutputListenerConfig } from "../document/outputListeners";
 import { createSampleDocument } from "../document/sample";
-import type { GraphDocument } from "../document/types";
+import type { GraphDocument, GraphWorkspace } from "../document/types";
 import { buildExpressionScope, resolveNodeSchema } from "./expressionScope";
+import { inferWorkspaceGraphSchemas } from "./inferSchemas";
 
 describe("buildExpressionScope", () => {
   test("single-input scope exposes input.<col> and bare names for single-input nodes", () => {
@@ -22,6 +23,90 @@ describe("buildExpressionScope", () => {
 
     const inputTotal = scope.suggestions.find(s => s.key === "input.total");
     expect(inputTotal?.type).toBe("float");
+  });
+
+  test("single-input scope can expose child output columns across a subgraph boundary", () => {
+    const childGraph = {
+      id: "graph-child",
+      metadata: { name: "Child" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "from-orders",
+          kind: "fromTable" as const,
+          label: "Orders",
+          position: { x: 0, y: 0 },
+          data: {
+            tableRef: { schemaName: "sales", tableName: "orders" },
+            columns: { total: "float" },
+          },
+        },
+        {
+          id: "output-child",
+          kind: "output" as const,
+          label: "Output",
+          position: { x: 260, y: 0 },
+          data: {
+            outputName: "child_out",
+            listeners: createDefaultOutputListenerConfig("child_out"),
+          },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-child",
+          source: "from-orders",
+          sourceHandle: "out",
+          target: "output-child",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const parentGraph = {
+      id: "graph-parent",
+      metadata: { name: "Parent" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "subgraph-orders",
+          kind: "subgraph" as const,
+          label: "Child graph",
+          position: { x: 0, y: 0 },
+          data: { graphId: "graph-child" },
+        },
+        {
+          id: "select-parent",
+          kind: "select" as const,
+          label: "Select",
+          position: { x: 260, y: 0 },
+          data: { mappings: [{ name: "gross_total", expression: "total" }] },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-subgraph-select",
+          source: "subgraph-orders",
+          sourceHandle: "out:output-child",
+          target: "select-parent",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const workspace: GraphWorkspace = {
+      version: 2,
+      metadata: { name: "Workspace" },
+      entryGraphId: "graph-parent",
+      graphs: [parentGraph, childGraph],
+    };
+
+    const schemas = inferWorkspaceGraphSchemas(workspace, "graph-parent");
+    const scope = buildExpressionScope(parentGraph, "select-parent", { schemas });
+
+    expect(scope.kind).toBe("single");
+    expect(scope.flatTypes["input.total"]).toBe("float");
+    expect(scope.flatTypes.total).toBe("float");
   });
 
   test("join scope exposes left/right qualified names and marks duplicate bare names as ambiguous", () => {

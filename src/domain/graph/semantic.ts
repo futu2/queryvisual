@@ -3,6 +3,9 @@ import type { GraphDocument, GraphNode } from "../document/types";
 import type { ColumnMap } from "../schema/types";
 
 export interface SemanticOutput {
+  // When originating from a workspace graph, this identifies which graph was validated.
+  // Legacy single-document callers leave this undefined.
+  graphId?: string;
   document: GraphDocument;
   outputId: string;
   outputName: string;
