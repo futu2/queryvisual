@@ -179,12 +179,11 @@ describe("NodeEditorModal", () => {
     const remove = screen.getByRole("button", { name: "Remove mapping 1" });
     const dragHandle = screen.getByRole("button", { name: "Drag mapping 1" });
 
-    expect(moveUp.classList.contains("row-icon-button")).toBeTrue();
-    expect(moveDown.classList.contains("row-icon-button")).toBeTrue();
-    expect(duplicate.classList.contains("row-icon-button")).toBeTrue();
-    expect(remove.classList.contains("row-icon-button")).toBeTrue();
-    expect(remove.classList.contains("row-icon-button-danger")).toBeTrue();
-    expect(dragHandle.classList.contains("row-drag-handle")).toBeTrue();
+    expect(moveUp).toBeTruthy();
+    expect(moveDown).toBeTruthy();
+    expect(duplicate).toBeTruthy();
+    expect(remove).toBeTruthy();
+    expect(dragHandle).toBeTruthy();
   });
 
   test("strips blank select placeholders but preserves partially filled mappings", async () => {

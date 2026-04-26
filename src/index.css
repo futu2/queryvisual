@@ -381,9 +381,12 @@ body {
     align-items: start;
   }
 
-  .row-action-bar {
+  .row-card-actions {
     grid-column: 1 / -1;
-    justify-content: flex-start;
     padding-left: 36px;
+  }
+
+  .row-action-bar {
+    justify-content: flex-start;
   }
 }
