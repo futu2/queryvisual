@@ -82,6 +82,7 @@ describe("QueryNode", () => {
                 label: "Input",
                 position: { x: 0, y: 0 },
                 data: {
+                  inputName: "orders",
                   columns: { id: "int" },
                 },
               },
@@ -270,6 +271,7 @@ describe("QueryNode", () => {
                 label: "Input",
                 position: { x: 0, y: 0 },
                 data: {
+                  inputName: "orders",
                   columns: { id: "int" },
                 },
               },

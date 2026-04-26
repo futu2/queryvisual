@@ -24,7 +24,14 @@ function createNode(kind: NodeKind, index: number): GraphNode {
 
   switch (kind) {
     case "graphInput":
-      return { ...base, kind, data: { columns: { id: "int" } } };
+      return {
+        ...base,
+        kind,
+        data: {
+          inputName: `input_${index + 1}`,
+          columns: { id: "int" },
+        },
+      };
     case "fromTable":
       return {
         ...base,

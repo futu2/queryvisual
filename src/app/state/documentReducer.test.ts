@@ -100,6 +100,55 @@ describe("documentReducer", () => {
     expect(next.editorNodeId).toBeNull();
   });
 
+  test("creates a graph and switches active graph to it", () => {
+    const initial = createInitialEditorState(createSampleWorkspace());
+    const next = documentReducer(initial, {
+      type: "create-graph",
+    });
+
+    const createdGraph = next.workspace.graphs[next.workspace.graphs.length - 1];
+    expect(next.workspace.graphs).toHaveLength(initial.workspace.graphs.length + 1);
+    expect(next.activeGraphId).toBe(createdGraph?.id);
+    expect(next.document.id).toBe(createdGraph?.id);
+    expect(next.workspace.entryGraphId).toBe(createdGraph?.id);
+  });
+
+  test("renames a graph and updates active document metadata", () => {
+    const withCreated = documentReducer(createInitialEditorState(createSampleWorkspace()), {
+      type: "create-graph",
+    });
+    const createdGraphId = withCreated.activeGraphId;
+
+    const next = documentReducer(withCreated, {
+      type: "rename-graph",
+      graphId: createdGraphId,
+      name: "Ad Hoc Analytics",
+    });
+
+    expect(
+      next.workspace.graphs.find((graph) => graph.id === createdGraphId)?.metadata.name,
+    ).toBe("Ad Hoc Analytics");
+    expect(next.document.metadata.name).toBe("Ad Hoc Analytics");
+  });
+
+  test("deletes the active graph and switches to another graph", () => {
+    const withCreated = documentReducer(createInitialEditorState(createSampleWorkspace()), {
+      type: "create-graph",
+    });
+    const originalGraphId = withCreated.workspace.graphs[0]?.id;
+    const graphToDelete = withCreated.activeGraphId;
+
+    const next = documentReducer(withCreated, {
+      type: "delete-graph",
+      graphId: graphToDelete,
+    });
+
+    expect(next.workspace.graphs.some((graph) => graph.id === graphToDelete)).toBe(false);
+    expect(next.activeGraphId).toBe(originalGraphId);
+    expect(next.document.id).toBe(originalGraphId);
+    expect(next.workspace.entryGraphId).toBe(originalGraphId);
+  });
+
   test("upserts edges by id", () => {
     const initial = createInitialEditorState(createSampleDocument());
 

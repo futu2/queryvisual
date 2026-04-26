@@ -18,6 +18,9 @@ export interface EditorState {
 export type EditorAction =
   | { type: "replace-workspace"; workspace: GraphWorkspace }
   | { type: "replace-document"; document: GraphDocument }
+  | { type: "create-graph" }
+  | { type: "rename-graph"; graphId: string; name: string }
+  | { type: "delete-graph"; graphId: string }
   | { type: "set-active-graph"; graphId: string }
   | { type: "add-node"; node: GraphNode }
   | { type: "replace-node"; node: GraphNode }
@@ -122,6 +125,16 @@ function updateActiveGraph(
   };
 }
 
+function createEmptyGraph(index: number): GraphDefinition {
+  return {
+    id: `graph-${crypto.randomUUID()}`,
+    metadata: { name: `Graph ${index + 1}` },
+    viewport: { x: 0, y: 0, zoom: 1 },
+    nodes: [],
+    edges: [],
+  };
+}
+
 export function createInitialEditorState(
   documentOrWorkspace: GraphWorkspace | GraphDocument = createSampleWorkspace(),
 ): EditorState {
@@ -145,6 +158,92 @@ export function documentReducer(
       return createInitialEditorState(action.workspace);
     case "replace-document":
       return createInitialEditorState(action.document);
+    case "create-graph": {
+      const nextGraph = createEmptyGraph(state.workspace.graphs.length);
+      return {
+        ...state,
+        workspace: {
+          ...state.workspace,
+          entryGraphId: nextGraph.id,
+          graphs: [...state.workspace.graphs, nextGraph],
+        },
+        activeGraphId: nextGraph.id,
+        document: nextGraph,
+        selectedNodeId: null,
+        editorNodeId: null,
+      };
+    }
+    case "rename-graph": {
+      const graphToRename = getActiveGraphById(state.workspace, action.graphId);
+      if (!graphToRename) {
+        return state;
+      }
+
+      const renamedGraph: GraphDefinition = {
+        ...graphToRename,
+        metadata: {
+          ...graphToRename.metadata,
+          name: action.name,
+        },
+      };
+
+      return {
+        ...state,
+        workspace: {
+          ...state.workspace,
+          graphs: state.workspace.graphs.map((graph) =>
+            graph.id === action.graphId ? renamedGraph : graph,
+          ),
+        },
+        document:
+          state.activeGraphId === action.graphId ? renamedGraph : state.document,
+      };
+    }
+    case "delete-graph": {
+      if (state.workspace.graphs.length <= 1) {
+        return state;
+      }
+
+      const graphExists = state.workspace.graphs.some(
+        (graph) => graph.id === action.graphId,
+      );
+      if (!graphExists) {
+        return state;
+      }
+
+      const nextGraphs = state.workspace.graphs.filter(
+        (graph) => graph.id !== action.graphId,
+      );
+      const nextActiveGraph =
+        getActiveGraphById(state.workspace, state.activeGraphId)?.id !== action.graphId
+          ? getActiveGraphById(
+              { ...state.workspace, graphs: nextGraphs },
+              state.activeGraphId,
+            )
+          : nextGraphs[0];
+
+      if (!nextActiveGraph) {
+        return state;
+      }
+
+      const didSwitchActiveGraph = nextActiveGraph.id !== state.activeGraphId;
+
+      return {
+        ...state,
+        workspace: {
+          ...state.workspace,
+          entryGraphId:
+            state.workspace.entryGraphId === action.graphId
+              ? nextActiveGraph.id
+              : state.workspace.entryGraphId,
+          graphs: nextGraphs,
+        },
+        activeGraphId: nextActiveGraph.id,
+        document: nextActiveGraph,
+        selectedNodeId: didSwitchActiveGraph ? null : state.selectedNodeId,
+        editorNodeId: didSwitchActiveGraph ? null : state.editorNodeId,
+      };
+    }
     case "set-active-graph": {
       const nextActiveGraph = getActiveGraphById(state.workspace, action.graphId);
       if (!nextActiveGraph) {
@@ -153,6 +252,10 @@ export function documentReducer(
 
       return {
         ...state,
+        workspace: {
+          ...state.workspace,
+          entryGraphId: nextActiveGraph.id,
+        },
         activeGraphId: nextActiveGraph.id,
         document: nextActiveGraph,
         selectedNodeId: null,

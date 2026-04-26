@@ -8,6 +8,7 @@ import type { GraphDocument, GraphWorkspace } from "./domain/document/types";
 import { DocumentToolbar } from "./features/document-storage/DocumentToolbar";
 import { GraphCanvas } from "./features/graph-editor/GraphCanvas";
 import { NodePalette } from "./features/graph-editor/NodePalette";
+import { GraphCatalog } from "./features/workspace/GraphCatalog";
 
 export function AppLayout() {
   const { state } = useDocumentContext();
@@ -20,6 +21,7 @@ export function AppLayout() {
         <h1>QueryVisual</h1>
         <p className="muted">Structured graph editor for DQL compilation.</p>
         <DocumentToolbar />
+        <GraphCatalog />
         <NodePalette />
       </aside>
 

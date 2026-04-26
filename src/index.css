@@ -66,6 +66,74 @@ body {
   gap: 10px;
 }
 
+.graph-catalog {
+  display: grid;
+  gap: 10px;
+}
+
+.graph-catalog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.graph-catalog__header h2 {
+  margin: 0;
+}
+
+.graph-catalog__list {
+  display: grid;
+  gap: 8px;
+}
+
+.graph-catalog__item {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(31, 29, 26, 0.16);
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.graph-catalog__name-field {
+  display: block;
+}
+
+.graph-catalog__name-field input {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(31, 29, 26, 0.16);
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.95);
+  font: inherit;
+}
+
+.graph-catalog__item-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.graph-catalog__active-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 10px;
+  border: 1px solid rgba(31, 29, 26, 0.16);
+  background: rgba(31, 29, 26, 0.92);
+  color: #fff;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.graph-catalog__delete-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .ghost-button,
 .solid-button {
   border-radius: 999px;

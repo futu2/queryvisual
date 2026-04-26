@@ -968,12 +968,29 @@ export function renderNodeEditor(
       );
     case "graphInput":
       return (
-        <ColumnMapEditor
-          columns={draft.data.columns}
-          onChange={(columns) =>
-            setDraft({ ...draft, data: { columns } })
-          }
-        />
+        <div className="editor-stack">
+          <label>
+            Input name
+            <input
+              value={draft.data.inputName}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  data: {
+                    ...draft.data,
+                    inputName: event.target.value,
+                  },
+                })
+              }
+            />
+          </label>
+          <ColumnMapEditor
+            columns={draft.data.columns}
+            onChange={(columns) =>
+              setDraft({ ...draft, data: { ...draft.data, columns } })
+            }
+          />
+        </div>
       );
   }
 }

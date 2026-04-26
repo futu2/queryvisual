@@ -1679,6 +1679,40 @@ describe("NodeEditorModal", () => {
     expect(screen.getByRole("button", { name: "Insert left.order_id" })).toBeTruthy();
   });
 
+  test("saves graphInput input name and edited fields", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+
+    const node: GraphNode = {
+      id: "graph-input-1",
+      kind: "graphInput",
+      label: "Input",
+      position: { x: 0, y: 0 },
+      data: {
+        inputName: "orders_input",
+        columns: {
+          order_id: "int",
+        },
+      },
+    };
+
+    renderModal({ node, onSave });
+
+    await user.clear(screen.getByLabelText("Input name"));
+    await user.type(screen.getByLabelText("Input name"), "staged_orders");
+    await user.clear(screen.getByLabelText("Column name 1"));
+    await user.type(screen.getByLabelText("Column name 1"), "order_total");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalled();
+    expect(onSave.mock.calls[0][0].data).toEqual({
+      inputName: "staged_orders",
+      columns: {
+        order_total: "int",
+      },
+    });
+  });
+
   test("uses inferred upstream schemas for downstream predicate checks even without an output node", () => {
     const document: GraphDocument = {
       version: 1,
@@ -1690,7 +1724,7 @@ describe("NodeEditorModal", () => {
           kind: "graphInput",
           label: "Input",
           position: { x: 0, y: 0 },
-          data: { columns: { total: "int" } },
+          data: { inputName: "orders", columns: { total: "int" } },
         },
         {
           id: "select-1",

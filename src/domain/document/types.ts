@@ -44,7 +44,7 @@ export interface GraphNodeBase<TKind extends NodeKind, TData> {
 }
 
 export type GraphNode =
-  | GraphNodeBase<"graphInput", { columns: ColumnMap }>
+  | GraphNodeBase<"graphInput", { inputName: string; columns: ColumnMap }>
   | GraphNodeBase<"fromTable", { tableRef: TableRef; columns: ColumnMap }>
   | GraphNodeBase<"join", { joinType: "inner" | "left" | "right" | "full"; predicate: string }>
   | GraphNodeBase<"where", { predicate: string }>
