@@ -98,7 +98,7 @@ function isNodeData(kind: typeof nodeKinds[number], value: unknown) {
 
   switch (kind) {
     case "graphInput":
-      return isColumnMap(value.columns);
+      return typeof value.inputName === "string" && isColumnMap(value.columns);
     case "fromTable":
       return isTableRef(value.tableRef) && isColumnMap(value.columns);
     case "join":

@@ -41,7 +41,11 @@ export function lowerOutputToIr(semantic: SemanticOutput): IRRelNode | null {
 
       switch (node.kind) {
         case "graphInput":
-          lowered = { kind: "input", name: node.label, schema: node.data.columns };
+          lowered = {
+            kind: "input",
+            name: node.data.inputName,
+            schema: node.data.columns,
+          };
           break;
         case "fromTable":
           lowered = {

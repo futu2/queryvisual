@@ -1679,7 +1679,7 @@ describe("NodeEditorModal", () => {
     expect(screen.getByRole("button", { name: "Insert left.order_id" })).toBeTruthy();
   });
 
-  test("saves graphInput input name and edited fields", async () => {
+  test("saves graphInput input name and added fields", async () => {
     const user = userEvent.setup();
     const onSave = mock();
 
@@ -1700,15 +1700,17 @@ describe("NodeEditorModal", () => {
 
     await user.clear(screen.getByLabelText("Input name"));
     await user.type(screen.getByLabelText("Input name"), "staged_orders");
-    await user.clear(screen.getByLabelText("Column name 1"));
-    await user.type(screen.getByLabelText("Column name 1"), "order_total");
+    await user.click(screen.getByRole("button", { name: "Add field" }));
+    await user.clear(screen.getByLabelText("Column name 2"));
+    await user.type(screen.getByLabelText("Column name 2"), "order_total");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(onSave).toHaveBeenCalled();
     expect(onSave.mock.calls[0][0].data).toEqual({
       inputName: "staged_orders",
       columns: {
-        order_total: "int",
+        order_id: "int",
+        order_total: "string",
       },
     });
   });

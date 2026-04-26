@@ -604,6 +604,18 @@ function SelectMappingRows({
   );
 }
 
+function createNewColumnName(columns: ColumnMap) {
+  let index = Object.keys(columns).length + 1;
+  let candidate = `field_${index}`;
+
+  while (candidate in columns) {
+    index += 1;
+    candidate = `field_${index}`;
+  }
+
+  return candidate;
+}
+
 function ColumnMapEditor({
   columns,
   onChange,
@@ -645,6 +657,18 @@ function ColumnMapEditor({
           </label>
         </div>
       ))}
+      <button
+        type="button"
+        className="row-add-button"
+        onClick={() =>
+          onChange({
+            ...columns,
+            [createNewColumnName(columns)]: "string",
+          })
+        }
+      >
+        Add field
+      </button>
     </div>
   );
 }

@@ -206,9 +206,10 @@ describe("lowerOutputToIr", () => {
         {
           id: "input-1",
           kind: "graphInput",
-          label: "OrdersIn",
+          label: "Orders In Node",
           position: { x: -300, y: 0 },
           data: {
+            inputName: "orders_input",
             columns: {
               customer_id: "int",
               total: "float",
@@ -357,7 +358,7 @@ describe("lowerOutputToIr", () => {
     expect(lowered.input.input.input.input.joinType).toBe("inner");
     expect(lowered.input.input.input.input.left.kind).toBe("input");
     if (lowered.input.input.input.input.left.kind === "input") {
-      expect(lowered.input.input.input.input.left.name).toBe("OrdersIn");
+      expect(lowered.input.input.input.input.left.name).toBe("orders_input");
     }
     expect(lowered.input.input.input.input.right.kind).toBe("scan");
   });
