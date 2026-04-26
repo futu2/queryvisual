@@ -13,12 +13,16 @@ function withRowId<T extends object>(row: T): DraftRow<T> {
   return { ...row, rowId: createRowId() };
 }
 
+function hasRowId<T extends object>(row: T | DraftRow<T>): row is DraftRow<T> {
+  return "rowId" in row && typeof row.rowId === "string";
+}
+
 export function ensureDraftRows<T extends object>(
-  rows: T[],
+  rows: Array<T | DraftRow<T>>,
   createBlank: () => T,
 ): DraftRow<T>[] {
   const source = rows.length > 0 ? rows : [createBlank()];
-  return source.map(withRowId);
+  return source.map((row) => (hasRowId(row) ? row : withRowId(row)));
 }
 
 export function addDraftRow<T extends object>(
