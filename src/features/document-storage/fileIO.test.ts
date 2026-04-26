@@ -135,4 +135,117 @@ describe("fileIO", () => {
       ),
     ).toThrow("Invalid QueryVisual document");
   });
+
+  test("parses legacy output nodes and injects default listeners", () => {
+    const parsed = parseDocumentJson(
+      JSON.stringify({
+        version: 1,
+        metadata: { name: "legacy-output" },
+        viewport: { x: 0, y: 0, zoom: 1 },
+        nodes: [
+          {
+            id: "output-legacy",
+            kind: "output",
+            label: "Legacy Output",
+            position: { x: 0, y: 0 },
+            data: { outputName: "legacy_out" },
+          },
+        ],
+        edges: [],
+      }),
+    );
+
+    const outputNode = parsed.nodes.find((node) => node.id === "output-legacy");
+    expect(outputNode?.kind).toBe("output");
+    if (outputNode?.kind !== "output") {
+      throw new Error("Expected output node");
+    }
+
+    expect(outputNode.data.listeners).toEqual({
+      copyToClipboard: false,
+      logToConsole: false,
+      saveToLocalStorage: {
+        enabled: false,
+        key: "queryvisual.output.legacy_out",
+      },
+    });
+  });
+
+  test("round-trips explicit output listener configuration", () => {
+    const source = parseDocumentJson(
+      JSON.stringify({
+        version: 1,
+        metadata: { name: "explicit-listeners" },
+        viewport: { x: 0, y: 0, zoom: 1 },
+        nodes: [
+          {
+            id: "output-custom",
+            kind: "output",
+            label: "Output",
+            position: { x: 0, y: 0 },
+            data: {
+              outputName: "custom_out",
+              listeners: {
+                copyToClipboard: true,
+                logToConsole: false,
+                saveToLocalStorage: {
+                  enabled: true,
+                  key: "custom.storage.key",
+                },
+              },
+            },
+          },
+        ],
+        edges: [],
+      }),
+    );
+
+    const parsed = parseDocumentJson(serializeDocumentJson(source));
+    const outputNode = parsed.nodes.find((node) => node.id === "output-custom");
+    expect(outputNode?.kind).toBe("output");
+    if (outputNode?.kind !== "output") {
+      throw new Error("Expected output node");
+    }
+
+    expect(outputNode.data.listeners).toEqual({
+      copyToClipboard: true,
+      logToConsole: false,
+      saveToLocalStorage: {
+        enabled: true,
+        key: "custom.storage.key",
+      },
+    });
+  });
+
+  test("rejects malformed explicit output listener payloads", () => {
+    expect(() =>
+      parseDocumentJson(
+        JSON.stringify({
+          version: 1,
+          metadata: { name: "bad-listeners" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [
+            {
+              id: "output-bad",
+              kind: "output",
+              label: "Output",
+              position: { x: 0, y: 0 },
+              data: {
+                outputName: "out",
+                listeners: {
+                  copyToClipboard: "yes",
+                  logToConsole: false,
+                  saveToLocalStorage: {
+                    enabled: false,
+                    key: "out",
+                  },
+                },
+              },
+            },
+          ],
+          edges: [],
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual document");
+  });
 });

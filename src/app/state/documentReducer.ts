@@ -9,7 +9,6 @@ export interface EditorState {
   document: GraphDocument;
   selectedNodeId: string | null;
   editorNodeId: string | null;
-  activeOutputId: string | null;
 }
 
 export type EditorAction =
@@ -17,6 +16,7 @@ export type EditorAction =
   | { type: "add-node"; node: GraphNode }
   | { type: "replace-node"; node: GraphNode }
   | { type: "upsert-edge"; edge: GraphEdge }
+  | { type: "delete-edge"; edgeId: string }
   | {
       type: "set-node-position";
       nodeId: string;
@@ -24,21 +24,10 @@ export type EditorAction =
     }
   | { type: "set-viewport"; viewport: GraphDocument["viewport"] }
   | { type: "open-node-editor"; nodeId: string | null }
-  | { type: "select-node"; nodeId: string | null }
-  | { type: "set-active-output"; nodeId: string | null };
+  | { type: "select-node"; nodeId: string | null };
 
 function assertNever(action: never): never {
   throw new Error(`Unknown action: ${JSON.stringify(action)}`);
-}
-
-function firstOutputId(document: GraphDocument) {
-  return document.nodes.find((node) => node.kind === "output")?.id ?? null;
-}
-
-function isOutputNodeId(document: GraphDocument, nodeId: string) {
-  return document.nodes.some(
-    (node) => node.id === nodeId && node.kind === "output",
-  );
 }
 
 function sameTargetHandle(edge: GraphEdge, candidate: GraphEdge) {
@@ -55,7 +44,6 @@ export function createInitialEditorState(
     document,
     selectedNodeId: null,
     editorNodeId: null,
-    activeOutputId: firstOutputId(document),
   };
 }
 
@@ -99,6 +87,14 @@ export function documentReducer(
           ],
         },
       };
+    case "delete-edge":
+      return {
+        ...state,
+        document: {
+          ...state.document,
+          edges: state.document.edges.filter((edge) => edge.id !== action.edgeId),
+        },
+      };
     case "set-node-position":
       return {
         ...state,
@@ -136,16 +132,6 @@ export function documentReducer(
       return {
         ...state,
         selectedNodeId: action.nodeId,
-      };
-    case "set-active-output":
-      return {
-        ...state,
-        activeOutputId:
-          action.nodeId === null
-            ? null
-            : isOutputNodeId(state.document, action.nodeId)
-              ? action.nodeId
-              : state.activeOutputId,
       };
     default:
       return assertNever(action);

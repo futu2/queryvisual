@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { ReactFlowProvider } from "@xyflow/react";
 import { render, screen } from "@testing-library/react";
+import { createDefaultOutputListenerConfig } from "../../../domain/document/outputListeners";
 import { QueryNode } from "./QueryNode";
 
 describe("QueryNode", () => {
@@ -116,6 +117,7 @@ describe("QueryNode", () => {
                 position: { x: 0, y: 0 },
                 data: {
                   outputName: "result",
+                  listeners: createDefaultOutputListenerConfig("result"),
                 },
               },
               diagnostics: [],
@@ -318,15 +320,16 @@ describe("QueryNode", () => {
         <QueryNode
           id="output-1"
           data={{
-            node: {
-              id: "output-1",
-              kind: "output",
-              label: "Output",
-              position: { x: 0, y: 0 },
-              data: {
-                outputName: "result",
+              node: {
+                id: "output-1",
+                kind: "output",
+                label: "Output",
+                position: { x: 0, y: 0 },
+                data: {
+                  outputName: "result",
+                  listeners: createDefaultOutputListenerConfig("result"),
+                },
               },
-            },
             diagnostics: [],
           }}
           selected={false}

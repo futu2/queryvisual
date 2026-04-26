@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createDefaultOutputListenerConfig } from "../document/outputListeners";
 import { createSampleDocument } from "../document/sample";
 import type { GraphDocument } from "../document/types";
 import type { SemanticOutput } from "../graph/semantic";
@@ -6,6 +7,13 @@ import { validateOutput } from "../graph/validate";
 import { lowerOutputToIr } from "./lower";
 import type { IRRelNode } from "./types";
 import { optimizeOutput } from "./optimize";
+
+function outputData(outputName: string) {
+  return {
+    outputName,
+    listeners: createDefaultOutputListenerConfig(outputName),
+  };
+}
 
 describe("optimizeOutput", () => {
   test("merges adjacent filters into one predicate", () => {
@@ -99,7 +107,7 @@ describe("lowerOutputToIr", () => {
           kind: "output",
           label: "Output",
           position: { x: 200, y: 0 },
-          data: { outputName: "missing_input" },
+          data: outputData("missing_input"),
         },
       ],
       edges: [
@@ -155,7 +163,7 @@ describe("lowerOutputToIr", () => {
           kind: "output",
           label: "Output",
           position: { x: 400, y: 0 },
-          data: { outputName: "cycle_out" },
+          data: outputData("cycle_out"),
         },
       ],
       edges: [
@@ -271,7 +279,7 @@ describe("lowerOutputToIr", () => {
           kind: "output",
           label: "Output",
           position: { x: 900, y: 100 },
-          data: { outputName: "full_out" },
+          data: outputData("full_out"),
         },
       ],
       edges: [

@@ -1,7 +1,15 @@
 import { describe, expect, test } from "bun:test";
+import { createDefaultOutputListenerConfig } from "../document/outputListeners";
 import { createSampleDocument } from "../document/sample";
 import type { GraphDocument } from "../document/types";
 import { validateOutput } from "./validate";
+
+function outputData(outputName: string) {
+  return {
+    outputName,
+    listeners: createDefaultOutputListenerConfig(outputName),
+  };
+}
 
 describe("validateOutput", () => {
   test("validates the sample output without errors", () => {
@@ -41,7 +49,7 @@ describe("validateOutput", () => {
           kind: "output",
           label: "Output",
           position: { x: 200, y: 0 },
-          data: { outputName: "out" },
+          data: outputData("out"),
         },
       ],
       edges: [
@@ -102,7 +110,7 @@ describe("validateOutput", () => {
           kind: "output",
           label: "Output",
           position: { x: 200, y: 0 },
-          data: { outputName: "out" },
+          data: outputData("out"),
         },
       ],
       edges: [
@@ -168,7 +176,7 @@ describe("validateOutput", () => {
           kind: "output",
           label: "Output",
           position: { x: 200, y: 100 },
-          data: { outputName: "out" },
+          data: outputData("out"),
         },
       ],
       edges: [
@@ -234,7 +242,7 @@ describe("validateOutput", () => {
           kind: "output",
           label: "Output",
           position: { x: 200, y: 0 },
-          data: { outputName: "bad_join" },
+          data: outputData("bad_join"),
         },
       ],
       edges: [
@@ -326,7 +334,7 @@ describe("validateOutput", () => {
           kind: "output",
           label: "Output",
           position: { x: 600, y: 100 },
-          data: { outputName: "bad_exprs" },
+          data: outputData("bad_exprs"),
         },
       ],
       edges: [
@@ -418,7 +426,7 @@ describe("validateOutput", () => {
           kind: "output",
           label: "Output",
           position: { x: 200, y: 100 },
-          data: { outputName: "dup_input" },
+          data: outputData("dup_input"),
         },
       ],
       edges: [
@@ -511,7 +519,7 @@ describe("validateOutput", () => {
           kind: "output",
           label: "Output",
           position: { x: 400, y: 200 },
-          data: { outputName: "out" },
+          data: outputData("out"),
         },
       ],
       edges: [
@@ -607,7 +615,7 @@ describe("validateOutput", () => {
           kind: "output",
           label: "Output",
           position: { x: 400, y: 100 },
-          data: { outputName: "out" },
+          data: outputData("out"),
         },
       ],
       edges: [
@@ -687,7 +695,7 @@ describe("validateOutput", () => {
           kind: "output",
           label: "Output",
           position: { x: 200, y: 100 },
-          data: { outputName: "bad_join_predicate" },
+          data: outputData("bad_join_predicate"),
         },
       ],
       edges: [
@@ -767,7 +775,7 @@ describe("validateOutput", () => {
           kind: "output",
           label: "Output",
           position: { x: 200, y: 200 },
-          data: { outputName: "dup_join_input" },
+          data: outputData("dup_join_input"),
         },
       ],
       edges: [
@@ -840,7 +848,7 @@ describe("validateOutput", () => {
           kind: "output",
           label: "Output",
           position: { x: 200, y: 0 },
-          data: { outputName: "out" },
+          data: outputData("out"),
         },
       ],
       edges: [
@@ -899,7 +907,7 @@ describe("validateOutput", () => {
           kind: "output",
           label: "Output",
           position: { x: 200, y: 0 },
-          data: { outputName: "out" },
+          data: outputData("out"),
         },
       ],
       edges: [

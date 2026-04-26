@@ -2,12 +2,14 @@ import {
   forwardRef,
   type KeyboardEvent as ReactKeyboardEvent,
   useEffect,
+  useId,
   useImperativeHandle,
   useMemo,
   useRef,
   useState,
 } from "react";
 import { flushSync } from "react-dom";
+import type { CompileOutputResult } from "../../domain/compile/compileOutput";
 import type { GraphNode } from "../../domain/document/types";
 import { useDocumentContext } from "../../app/state/DocumentContext";
 import { inferNodeSchemas } from "../../domain/graph/inferSchemas";
@@ -16,6 +18,7 @@ import {
   serializeNodeEditorDraft,
   useEditableNode,
 } from "./nodeEditors";
+import type { OutputListenerStatus } from "../output-runtime/outputRuntime";
 
 export type NodeEditorModalHandle = {
   requestClose: (closeAction?: () => void) => void;
@@ -23,13 +26,165 @@ export type NodeEditorModalHandle = {
 
 type NodeEditorModalProps = {
   node: GraphNode;
+  outputRuntime?: {
+    compileResult: CompileOutputResult | null;
+    listenerStatus: OutputListenerStatus | null;
+  } | null;
   onClose: () => void;
   onSave: (node: GraphNode) => void;
 };
 
+type OutputInspectorTab = "diagnostics" | "semantic" | "ir" | "optimized-ir" | "sql";
+
+function formatRuntimeTimestamp(timestamp: number | null) {
+  if (!timestamp) {
+    return "Never";
+  }
+
+  return new Date(timestamp).toLocaleString();
+}
+
+function renderJson(value: unknown) {
+  return JSON.stringify(value, null, 2);
+}
+
+function OutputRuntimeInspector({
+  outputId,
+  compileResult,
+  listenerStatus,
+}: {
+  outputId: string;
+  compileResult: CompileOutputResult | null;
+  listenerStatus: OutputListenerStatus | null;
+}) {
+  const [activeTab, setActiveTab] = useState<OutputInspectorTab>("sql");
+  const tabsBaseId = useId();
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const panelId = `${tabsBaseId}-panel`;
+
+  useEffect(() => {
+    setActiveTab("sql");
+  }, [compileResult, listenerStatus, outputId]);
+
+  const tabDefinitions: Array<{ id: OutputInspectorTab; label: string }> = [
+    { id: "diagnostics", label: "Diagnostics" },
+    { id: "semantic", label: "Semantic" },
+    { id: "ir", label: "IR" },
+    { id: "optimized-ir", label: "Optimized IR" },
+    { id: "sql", label: "SQL" },
+  ];
+  const diagnostics = compileResult?.semantic.diagnostics ?? [];
+  const hasRuntimeData = Boolean(compileResult || listenerStatus);
+  const activeTabId = `${tabsBaseId}-${activeTab}`;
+
+  let tabContent: string;
+  if (!hasRuntimeData) {
+    tabContent = "No runtime data available yet.";
+  } else if (activeTab === "diagnostics") {
+    tabContent =
+      diagnostics.length > 0
+        ? diagnostics.map((diagnostic) => diagnostic.message).join("\n")
+        : "No diagnostics.";
+  } else if (activeTab === "semantic") {
+    tabContent = compileResult ? renderJson(compileResult.semantic) : "No semantic output.";
+  } else if (activeTab === "ir") {
+    tabContent = compileResult?.ir ? renderJson(compileResult.ir) : "No IR generated.";
+  } else if (activeTab === "optimized-ir") {
+    tabContent = compileResult?.optimizedIr
+      ? renderJson(compileResult.optimizedIr)
+      : "No optimized IR generated.";
+  } else {
+    tabContent = compileResult?.sql.trim()
+      ? compileResult.sql
+      : "No SQL generated.";
+  }
+
+  return (
+    <section className="output-runtime-section" aria-label="Output runtime inspection">
+      <h3>Output Runtime</h3>
+      <div className="output-runtime-status" role="status" aria-live="polite">
+        <div>
+          <strong>Last run:</strong> {formatRuntimeTimestamp(listenerStatus?.lastRunAt ?? null)}
+        </div>
+        <div>
+          <strong>Last error:</strong> {listenerStatus?.lastErrorMessage ?? "None"}
+        </div>
+      </div>
+      <div className="output-runtime-tabs" role="tablist" aria-label="Output runtime tabs">
+        {tabDefinitions.map((tab, index) => {
+          const isActive = tab.id === activeTab;
+          const tabId = `${tabsBaseId}-${tab.id}`;
+
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              id={tabId}
+              aria-selected={isActive}
+              aria-controls={panelId}
+              tabIndex={isActive ? 0 : -1}
+              className={isActive ? "output-runtime-tab is-active" : "output-runtime-tab"}
+              onClick={() => setActiveTab(tab.id)}
+              onKeyDown={(event) => {
+                if (
+                  event.key !== "ArrowRight" &&
+                  event.key !== "ArrowLeft" &&
+                  event.key !== "Home" &&
+                  event.key !== "End"
+                ) {
+                  return;
+                }
+
+                event.preventDefault();
+                const currentIndex = tabDefinitions.findIndex(
+                  (candidate) => candidate.id === activeTab,
+                );
+                if (currentIndex === -1) {
+                  return;
+                }
+
+                let nextIndex = currentIndex;
+                if (event.key === "ArrowRight") {
+                  nextIndex = (currentIndex + 1) % tabDefinitions.length;
+                } else if (event.key === "ArrowLeft") {
+                  nextIndex =
+                    (currentIndex - 1 + tabDefinitions.length) % tabDefinitions.length;
+                } else if (event.key === "Home") {
+                  nextIndex = 0;
+                } else if (event.key === "End") {
+                  nextIndex = tabDefinitions.length - 1;
+                }
+
+                const nextTab = tabDefinitions[nextIndex];
+                setActiveTab(nextTab.id);
+                tabRefs.current[nextIndex]?.focus();
+              }}
+              ref={(element) => {
+                tabRefs.current[index] = element;
+              }}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+      <div
+        role="tabpanel"
+        id={panelId}
+        aria-labelledby={activeTabId}
+        className="output-runtime-panel"
+      >
+        <pre>{tabContent}</pre>
+      </div>
+    </section>
+  );
+}
+
 export const NodeEditorModal = forwardRef<NodeEditorModalHandle, NodeEditorModalProps>(
 function NodeEditorModal({
   node,
+  outputRuntime = null,
   onClose,
   onSave,
 }, ref) {
@@ -197,6 +352,13 @@ function NodeEditorModal({
 
           <section className="modal-body">
             {renderNodeEditor(draft, setDraft, graphDocument, schemaOverrides)}
+            {node.kind === "output" ? (
+              <OutputRuntimeInspector
+                outputId={node.id}
+                compileResult={outputRuntime?.compileResult ?? null}
+                listenerStatus={outputRuntime?.listenerStatus ?? null}
+              />
+            ) : null}
           </section>
 
           <footer className="modal-footer">

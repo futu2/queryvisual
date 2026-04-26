@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createDefaultOutputListenerConfig } from "../document/outputListeners";
 import { analyzeExpression } from "../expr/analyze";
 import type { GraphDocument } from "../document/types";
 import { buildExpressionScope } from "./expressionScope";
@@ -274,7 +275,10 @@ describe("inferDocumentSchemas", () => {
           kind: "output",
           label: "Output",
           position: { x: 1200, y: 100 },
-          data: { outputName: "full_out" },
+          data: {
+            outputName: "full_out",
+            listeners: createDefaultOutputListenerConfig("full_out"),
+          },
         },
       ],
       edges: [
@@ -388,7 +392,10 @@ describe("inferDocumentSchemas", () => {
           kind: "output",
           label: "Output",
           position: { x: 600, y: 120 },
-          data: { outputName: "out" },
+          data: {
+            outputName: "out",
+            listeners: createDefaultOutputListenerConfig("out"),
+          },
         },
       ],
       edges: [

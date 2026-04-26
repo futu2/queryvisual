@@ -26,6 +26,15 @@ export interface SortItem {
   direction: "asc" | "desc";
 }
 
+export interface OutputListenerConfig {
+  copyToClipboard: boolean;
+  logToConsole: boolean;
+  saveToLocalStorage: {
+    enabled: boolean;
+    key: string;
+  };
+}
+
 export interface GraphNodeBase<TKind extends NodeKind, TData> {
   id: string;
   kind: TKind;
@@ -43,7 +52,7 @@ export type GraphNode =
   | GraphNodeBase<"aggregation", { groupBy: NamedExpression[]; aggregates: NamedExpression[] }>
   | GraphNodeBase<"sort", { items: SortItem[] }>
   | GraphNodeBase<"limit", { count: number; offset: number | null }>
-  | GraphNodeBase<"output", { outputName: string }>;
+  | GraphNodeBase<"output", { outputName: string; listeners: OutputListenerConfig }>;
 
 export interface GraphEdge {
   id: string;

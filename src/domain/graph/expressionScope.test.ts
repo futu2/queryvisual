@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createDefaultOutputListenerConfig } from "../document/outputListeners";
 import { createSampleDocument } from "../document/sample";
 import type { GraphDocument } from "../document/types";
 import { buildExpressionScope, resolveNodeSchema } from "./expressionScope";
@@ -728,7 +729,10 @@ describe("resolveNodeSchema", () => {
           kind: "output",
           label: "Output",
           position: { x: 600, y: 0 },
-          data: { outputName: "out" },
+          data: {
+            outputName: "out",
+            listeners: createDefaultOutputListenerConfig("out"),
+          },
         },
         {
           id: "select-1",

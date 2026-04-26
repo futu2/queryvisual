@@ -1,4 +1,8 @@
 import type { GraphDocument } from "../../domain/document/types";
+import {
+  isOutputListenerConfig,
+  normalizeOutputListenerConfig,
+} from "../../domain/document/outputListeners";
 
 const columnTypes = [
   "boolean",
@@ -119,8 +123,33 @@ function isNodeData(kind: typeof nodeKinds[number], value: unknown) {
         (value.offset === null || typeof value.offset === "number")
       );
     case "output":
-      return typeof value.outputName === "string";
+      return (
+        typeof value.outputName === "string" &&
+        (value.listeners === undefined || isOutputListenerConfig(value.listeners))
+      );
   }
+}
+
+function normalizeDocumentOutputs(document: GraphDocument): GraphDocument {
+  return {
+    ...document,
+    nodes: document.nodes.map((node) => {
+      if (node.kind !== "output") {
+        return node;
+      }
+
+      return {
+        ...node,
+        data: {
+          outputName: node.data.outputName,
+          listeners: normalizeOutputListenerConfig(
+            node.data.outputName,
+            (node.data as Record<string, unknown>).listeners,
+          ),
+        },
+      };
+    }),
+  };
 }
 
 function isGraphNode(value: unknown) {
@@ -183,7 +212,7 @@ export function parseDocumentJson(raw: string): GraphDocument {
     throw new Error("Invalid QueryVisual document");
   }
 
-  return parsed as GraphDocument;
+  return normalizeDocumentOutputs(parsed as GraphDocument);
 }
 
 export function downloadDocument(graphDocument: GraphDocument) {

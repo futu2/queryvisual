@@ -2,30 +2,15 @@ import {
   DocumentProvider,
   useDocumentContext,
 } from "./app/state/DocumentContext";
-import { useMemo } from "react";
-import { compileOutput } from "./domain/compile/compileOutput";
-import { DebugPanel } from "./features/debug/DebugPanel";
+import { useOutputRuntime } from "./features/output-runtime/outputRuntime";
+import type { GraphDocument } from "./domain/document/types";
 import { DocumentToolbar } from "./features/document-storage/DocumentToolbar";
 import { GraphCanvas } from "./features/graph-editor/GraphCanvas";
 import { NodePalette } from "./features/graph-editor/NodePalette";
 
-function AppLayout() {
-  const { state, dispatch } = useDocumentContext();
-  const outputs = useMemo(
-    () =>
-      state.document.nodes
-        .filter((node) => node.kind === "output")
-        .map((node) => ({ id: node.id, name: node.data.outputName })),
-    [state.document.nodes],
-  );
-  const compileResult = useMemo(() => {
-    if (!state.activeOutputId) {
-      return null;
-    }
-
-    return compileOutput(state.document, state.activeOutputId);
-  }, [state.activeOutputId, state.document.edges, state.document.nodes]);
-  const diagnostics = compileResult?.semantic.diagnostics ?? [];
+export function AppLayout() {
+  const { state } = useDocumentContext();
+  const outputRuntime = useOutputRuntime(state.document);
 
   return (
     <div className="app-shell">
@@ -41,27 +26,15 @@ function AppLayout() {
         style={{ display: "flex", flexDirection: "column", gap: 12 }}
       >
         <h2>Canvas</h2>
-        <GraphCanvas diagnostics={diagnostics} />
+        <GraphCanvas outputRuntime={outputRuntime} />
       </main>
-
-      <section className="pane debug-pane">
-        <h2>Outputs</h2>
-        <DebugPanel
-          result={compileResult}
-          outputs={outputs}
-          activeOutputId={state.activeOutputId}
-          onSelectOutput={(outputId) =>
-            dispatch({ type: "set-active-output", nodeId: outputId })
-          }
-        />
-      </section>
     </div>
   );
 }
 
-export function App() {
+export function App({ initialDocument }: { initialDocument?: GraphDocument }) {
   return (
-    <DocumentProvider>
+    <DocumentProvider initialDocument={initialDocument}>
       <AppLayout />
     </DocumentProvider>
   );

@@ -1,4 +1,5 @@
 import { useDocumentContext } from "../../app/state/DocumentContext";
+import { createDefaultOutputListenerConfig } from "../../domain/document/outputListeners";
 import type { GraphNode, NodeKind } from "../../domain/document/types";
 
 const paletteItems: Array<{ kind: NodeKind; label: string }> = [
@@ -65,7 +66,10 @@ function createNode(kind: NodeKind, index: number): GraphNode {
       return {
         ...base,
         kind,
-        data: { outputName: `output_${index + 1}` },
+        data: {
+          outputName: `output_${index + 1}`,
+          listeners: createDefaultOutputListenerConfig(`output_${index + 1}`),
+        },
       };
   }
 }

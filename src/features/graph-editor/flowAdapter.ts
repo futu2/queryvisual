@@ -1,6 +1,7 @@
 import type { Edge, Node } from "@xyflow/react";
 import type { Diagnostic } from "../../domain/diagnostics/types";
 import type { GraphDocument, GraphNode } from "../../domain/document/types";
+import type { DeletableEdgeData } from "./edges/DeletableEdge";
 
 export interface FlowNodeData {
   node: GraphNode;
@@ -38,12 +39,19 @@ export function toFlowNodes(
   }));
 }
 
-export function toFlowEdges(document: GraphDocument): Edge[] {
+export function toFlowEdges(
+  document: GraphDocument,
+  onDelete: (edgeId: string) => void,
+): Array<Edge<DeletableEdgeData, "deletableEdge">> {
   return document.edges.map((edge) => ({
     id: edge.id,
+    type: "deletableEdge",
     source: edge.source,
     sourceHandle: edge.sourceHandle,
     target: edge.target,
     targetHandle: edge.targetHandle,
+    data: {
+      onDelete,
+    },
   }));
 }

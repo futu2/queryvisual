@@ -9,12 +9,13 @@ import {
 } from "@xyflow/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDocumentContext } from "../../app/state/DocumentContext";
-import type { Diagnostic } from "../../domain/diagnostics/types";
+import type { OutputRuntimeSnapshot } from "../output-runtime/outputRuntime";
 import {
   toFlowEdges,
   toFlowNodes,
   type FlowNodeRuntime,
 } from "./flowAdapter";
+import { DeletableEdge } from "./edges/DeletableEdge";
 import {
   NodeEditorModal,
   type NodeEditorModalHandle,
@@ -25,7 +26,11 @@ const nodeTypes = {
   queryNode: QueryNode,
 };
 
-export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
+const edgeTypes = {
+  deletableEdge: DeletableEdge,
+};
+
+export function GraphCanvas({ outputRuntime }: { outputRuntime: OutputRuntimeSnapshot }) {
   const { state, dispatch } = useDocumentContext();
   const [nodeRuntimeById, setNodeRuntimeById] = useState<
     Record<string, FlowNodeRuntime>
@@ -54,13 +59,29 @@ export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
     () =>
       toFlowNodes(
         state.document,
-        diagnostics,
+        outputRuntime.diagnostics,
         state.selectedNodeId,
         nodeRuntimeById,
       ),
-    [diagnostics, nodeRuntimeById, state.document, state.selectedNodeId],
+    [nodeRuntimeById, outputRuntime.diagnostics, state.document, state.selectedNodeId],
   );
-  const edges = useMemo(() => toFlowEdges(state.document), [state.document]);
+  const edges = useMemo(
+    () =>
+      toFlowEdges(state.document, (edgeId) =>
+        dispatch({ type: "delete-edge", edgeId }),
+      ),
+    [dispatch, state.document],
+  );
+  const editedOutputRuntime = useMemo(() => {
+    if (!editedNode || editedNode.kind !== "output") {
+      return null;
+    }
+
+    return {
+      compileResult: outputRuntime.resultsByOutputId[editedNode.id] ?? null,
+      listenerStatus: outputRuntime.listenerStatusByOutputId[editedNode.id] ?? null,
+    };
+  }, [editedNode, outputRuntime.listenerStatusByOutputId, outputRuntime.resultsByOutputId]);
 
   function runEditorTransition(action: () => void) {
     if (editedNode && nodeEditorModalRef.current) {
@@ -101,9 +122,6 @@ export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
     runEditorTransition(() => {
       dispatch({ type: "select-node", nodeId: node.id });
       dispatch({ type: "open-node-editor", nodeId: node.id });
-      if (node.data.node.kind === "output") {
-        dispatch({ type: "set-active-output", nodeId: node.id });
-      }
     });
   };
 
@@ -145,6 +163,7 @@ export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         viewport={state.document.viewport}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
@@ -165,6 +184,7 @@ export function GraphCanvas({ diagnostics }: { diagnostics: Diagnostic[] }) {
         <NodeEditorModal
           ref={nodeEditorModalRef}
           node={editedNode}
+          outputRuntime={editedOutputRuntime}
           onClose={() => dispatch({ type: "open-node-editor", nodeId: null })}
           onSave={(node) => {
             dispatch({ type: "replace-node", node });

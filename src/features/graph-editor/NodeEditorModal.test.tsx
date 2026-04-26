@@ -5,6 +5,8 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import type { GraphDocument } from "../../domain/document/types";
 import type { GraphNode } from "../../domain/document/types";
 import { DocumentProvider } from "../../app/state/DocumentContext";
+import type { CompileOutputResult } from "../../domain/compile/compileOutput";
+import type { OutputListenerStatus } from "../output-runtime/outputRuntime";
 import { NodeEditorModal, type NodeEditorModalHandle } from "./NodeEditorModal";
 
 afterEach(cleanup);
@@ -52,11 +54,16 @@ function renderModal({
   document,
   onClose = () => {},
   onSave = () => {},
+  outputRuntime = null,
 }: {
   node: GraphNode;
   document?: GraphDocument;
   onClose?: () => void;
   onSave?: (node: GraphNode) => void;
+  outputRuntime?: {
+    compileResult: CompileOutputResult;
+    listenerStatus: OutputListenerStatus;
+  } | null;
 }) {
   const fallbackDocument: GraphDocument = {
     version: 1,
@@ -68,7 +75,12 @@ function renderModal({
 
   return render(
     <DocumentProvider initialDocument={document ?? fallbackDocument}>
-      <NodeEditorModal node={node} onClose={onClose} onSave={onSave} />
+      <NodeEditorModal
+        node={node}
+        onClose={onClose}
+        onSave={onSave}
+        outputRuntime={outputRuntime}
+      />
     </DocumentProvider>,
   );
 }
@@ -942,6 +954,409 @@ describe("NodeEditorModal", () => {
 
     expect(customClose).toHaveBeenCalledTimes(1);
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  test("output modal saves listener settings and renders runtime tabs", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+    const node: GraphNode = {
+      id: "output-orders",
+      kind: "output",
+      label: "Orders Report",
+      position: { x: 0, y: 0 },
+      data: {
+        outputName: "orders_report",
+        listeners: {
+          copyToClipboard: false,
+          logToConsole: false,
+          saveToLocalStorage: {
+            enabled: false,
+            key: "queryvisual.output.orders_report",
+          },
+        },
+      },
+    };
+    const outputRuntime = {
+      compileResult: {
+        semantic: {
+          document: {
+            version: 1,
+            metadata: { name: "Test document" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [node],
+            edges: [],
+          },
+          outputId: node.id,
+          outputName: "orders_report",
+          orderedNodes: [node],
+          nodesById: { [node.id]: node },
+          schemas: {},
+          diagnostics: [],
+        },
+        ir: null,
+        optimizedIr: null,
+        sql: "SELECT order_id FROM sales.orders",
+      } satisfies CompileOutputResult,
+      listenerStatus: {
+        lastSuccessfulSql: "SELECT order_id FROM sales.orders",
+        lastRunAt: 1704067200000,
+        lastErrorMessage: "saveToLocalStorage: write failed",
+        lastSuccessfulSqlByListener: {
+          copyToClipboard: "SELECT order_id FROM sales.orders",
+          logToConsole: null,
+          saveToLocalStorage: null,
+        },
+        lastEnabledByListener: {
+          copyToClipboard: true,
+          logToConsole: false,
+          saveToLocalStorage: true,
+        },
+      } satisfies OutputListenerStatus,
+    };
+
+    renderModal({ node, onSave, outputRuntime });
+
+    expect(screen.getByRole("tab", { name: "Diagnostics" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Semantic" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "IR" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Optimized IR" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "SQL" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "SQL" }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
+    expect(screen.getByText("SELECT order_id FROM sales.orders")).toBeTruthy();
+    expect(screen.getByText("saveToLocalStorage: write failed")).toBeTruthy();
+
+    await user.clear(screen.getByLabelText("Output name"));
+    await user.type(screen.getByLabelText("Output name"), "orders_runtime");
+    await user.click(screen.getByLabelText("Copy to clipboard"));
+    await user.click(screen.getByLabelText("Log to console"));
+    await user.click(screen.getByLabelText("Save to localStorage"));
+    await user.clear(screen.getByLabelText("localStorage key"));
+    await user.type(
+      screen.getByLabelText("localStorage key"),
+      "queryvisual.output.orders_runtime",
+    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave.mock.calls[0][0].data).toEqual({
+      outputName: "orders_runtime",
+      listeners: {
+        copyToClipboard: true,
+        logToConsole: true,
+        saveToLocalStorage: {
+          enabled: true,
+          key: "queryvisual.output.orders_runtime",
+        },
+      },
+    });
+  });
+
+  test("output runtime tab selection resets to SQL when runtime data changes", async () => {
+    const user = userEvent.setup();
+    const node: GraphNode = {
+      id: "output-orders-reset",
+      kind: "output",
+      label: "Orders Report",
+      position: { x: 0, y: 0 },
+      data: {
+        outputName: "orders_report",
+        listeners: {
+          copyToClipboard: false,
+          logToConsole: false,
+          saveToLocalStorage: {
+            enabled: false,
+            key: "queryvisual.output.orders_report",
+          },
+        },
+      },
+    };
+    const baseRuntime = {
+      compileResult: {
+        semantic: {
+          document: {
+            version: 1,
+            metadata: { name: "Test document" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [node],
+            edges: [],
+          },
+          outputId: node.id,
+          outputName: "orders_report",
+          orderedNodes: [node],
+          nodesById: { [node.id]: node },
+          schemas: {},
+          diagnostics: [],
+        },
+        ir: null,
+        optimizedIr: null,
+        sql: "SELECT order_id FROM sales.orders",
+      } satisfies CompileOutputResult,
+      listenerStatus: {
+        lastSuccessfulSql: "SELECT order_id FROM sales.orders",
+        lastRunAt: 1704067200000,
+        lastErrorMessage: null,
+        lastSuccessfulSqlByListener: {
+          copyToClipboard: null,
+          logToConsole: null,
+          saveToLocalStorage: null,
+        },
+        lastEnabledByListener: {
+          copyToClipboard: false,
+          logToConsole: false,
+          saveToLocalStorage: false,
+        },
+      } satisfies OutputListenerStatus,
+    };
+
+    const renderResult = renderModal({ node, outputRuntime: baseRuntime });
+
+    await user.click(screen.getByRole("tab", { name: "Diagnostics" }));
+    expect(screen.getByRole("tab", { name: "Diagnostics" }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
+
+    const nextRuntime = {
+      ...baseRuntime,
+      compileResult: {
+        ...baseRuntime.compileResult,
+        sql: "SELECT customer_id FROM sales.orders",
+      },
+    };
+
+    renderResult.rerender(
+      <DocumentProvider
+        initialDocument={{
+          version: 1,
+          metadata: { name: "Test document" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [node],
+          edges: [],
+        }}
+      >
+        <NodeEditorModal
+          node={node}
+          onClose={() => {}}
+          onSave={() => {}}
+          outputRuntime={nextRuntime}
+        />
+      </DocumentProvider>,
+    );
+
+    expect(screen.getByRole("tab", { name: "SQL" }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
+    expect(screen.getByText("SELECT customer_id FROM sales.orders")).toBeTruthy();
+  });
+
+  test("switching between output nodes without runtime data resets tab selection to SQL", async () => {
+    const user = userEvent.setup();
+    const firstOutputNode: GraphNode = {
+      id: "output-orders-a",
+      kind: "output",
+      label: "Orders A",
+      position: { x: 0, y: 0 },
+      data: {
+        outputName: "orders_a",
+        listeners: {
+          copyToClipboard: false,
+          logToConsole: false,
+          saveToLocalStorage: {
+            enabled: false,
+            key: "queryvisual.output.orders_a",
+          },
+        },
+      },
+    };
+    const secondOutputNode: GraphNode = {
+      id: "output-orders-b",
+      kind: "output",
+      label: "Orders B",
+      position: { x: 0, y: 0 },
+      data: {
+        outputName: "orders_b",
+        listeners: {
+          copyToClipboard: false,
+          logToConsole: false,
+          saveToLocalStorage: {
+            enabled: false,
+            key: "queryvisual.output.orders_b",
+          },
+        },
+      },
+    };
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "Test document" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [firstOutputNode, secondOutputNode],
+      edges: [],
+    };
+
+    const renderResult = render(
+      <DocumentProvider initialDocument={document}>
+        <NodeEditorModal
+          node={firstOutputNode}
+          onClose={() => {}}
+          onSave={() => {}}
+          outputRuntime={null}
+        />
+      </DocumentProvider>,
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Diagnostics" }));
+    expect(screen.getByRole("tab", { name: "Diagnostics" }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
+
+    renderResult.rerender(
+      <DocumentProvider initialDocument={document}>
+        <NodeEditorModal
+          node={secondOutputNode}
+          onClose={() => {}}
+          onSave={() => {}}
+          outputRuntime={null}
+        />
+      </DocumentProvider>,
+    );
+
+    expect(screen.getByRole("tab", { name: "SQL" }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
+  });
+
+  test("output runtime tabs expose aria wiring and arrow-key navigation", () => {
+    const node: GraphNode = {
+      id: "output-orders-a11y",
+      kind: "output",
+      label: "Orders A11y",
+      position: { x: 0, y: 0 },
+      data: {
+        outputName: "orders_a11y",
+        listeners: {
+          copyToClipboard: false,
+          logToConsole: false,
+          saveToLocalStorage: {
+            enabled: false,
+            key: "queryvisual.output.orders_a11y",
+          },
+        },
+      },
+    };
+    const outputRuntime = {
+      compileResult: {
+        semantic: {
+          document: {
+            version: 1,
+            metadata: { name: "Test document" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [node],
+            edges: [],
+          },
+          outputId: node.id,
+          outputName: "orders_a11y",
+          orderedNodes: [node],
+          nodesById: { [node.id]: node },
+          schemas: {},
+          diagnostics: [],
+        },
+        ir: null,
+        optimizedIr: null,
+        sql: "SELECT order_id FROM sales.orders",
+      } satisfies CompileOutputResult,
+      listenerStatus: {
+        lastSuccessfulSql: null,
+        lastRunAt: null,
+        lastErrorMessage: null,
+        lastSuccessfulSqlByListener: {
+          copyToClipboard: null,
+          logToConsole: null,
+          saveToLocalStorage: null,
+        },
+        lastEnabledByListener: {
+          copyToClipboard: false,
+          logToConsole: false,
+          saveToLocalStorage: false,
+        },
+      } satisfies OutputListenerStatus,
+    };
+
+    renderModal({ node, outputRuntime });
+
+    const panel = screen.getByRole("tabpanel");
+    const sqlTab = screen.getByRole("tab", { name: "SQL" });
+    const diagnosticsTab = screen.getByRole("tab", { name: "Diagnostics" });
+
+    expect(sqlTab.getAttribute("tabindex")).toBe("0");
+    expect(diagnosticsTab.getAttribute("tabindex")).toBe("-1");
+    expect(sqlTab.getAttribute("id")).toBeTruthy();
+    expect(panel.getAttribute("id")).toBeTruthy();
+    expect(sqlTab.getAttribute("aria-controls")).toBe(panel.getAttribute("id"));
+    expect(panel.getAttribute("aria-labelledby")).toBe(sqlTab.getAttribute("id"));
+
+    sqlTab.focus();
+    fireEvent.keyDown(sqlTab, { key: "ArrowRight" });
+
+    expect(diagnosticsTab.getAttribute("aria-selected")).toBe("true");
+    expect(diagnosticsTab.getAttribute("tabindex")).toBe("0");
+    expect(sqlTab.getAttribute("tabindex")).toBe("-1");
+    expect(globalThis.document.activeElement).toBe(diagnosticsTab);
+    expect(panel.getAttribute("aria-labelledby")).toBe(diagnosticsTab.getAttribute("id"));
+  });
+
+  test("non-output nodes keep current modal behavior without output runtime tabs", () => {
+    const node: GraphNode = {
+      id: "where-1",
+      kind: "where",
+      label: "Filter",
+      position: { x: 0, y: 0 },
+      data: {
+        predicate: "status = 'paid'",
+      },
+    };
+    const outputRuntime = {
+      compileResult: {
+        semantic: {
+          document: {
+            version: 1,
+            metadata: { name: "Test document" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [node],
+            edges: [],
+          },
+          outputId: "output-ignored",
+          outputName: "ignored",
+          orderedNodes: [],
+          nodesById: {},
+          schemas: {},
+          diagnostics: [],
+        },
+        ir: null,
+        optimizedIr: null,
+        sql: "SELECT 1",
+      } satisfies CompileOutputResult,
+      listenerStatus: {
+        lastSuccessfulSql: null,
+        lastRunAt: null,
+        lastErrorMessage: null,
+        lastSuccessfulSqlByListener: {
+          copyToClipboard: null,
+          logToConsole: null,
+          saveToLocalStorage: null,
+        },
+        lastEnabledByListener: {
+          copyToClipboard: false,
+          logToConsole: false,
+          saveToLocalStorage: false,
+        },
+      } satisfies OutputListenerStatus,
+    };
+
+    renderModal({ node, outputRuntime });
+
+    expect(screen.queryByRole("tab", { name: "SQL" })).toBeNull();
+    expect(screen.getByLabelText("Predicate")).toBeTruthy();
   });
 
   test("discard confirmation clears before a custom close callback that does not unmount the modal returns", async () => {

@@ -827,15 +827,104 @@ export function renderNodeEditor(
       );
     case "output":
       return (
-        <label>
-          Output name
-          <input
-            value={draft.data.outputName}
-            onChange={(event) =>
-              setDraft({ ...draft, data: { outputName: event.target.value } })
-            }
-          />
-        </label>
+        <div className="editor-stack">
+          <label>
+            Output name
+            <input
+              value={draft.data.outputName}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  data: {
+                    ...draft.data,
+                    outputName: event.target.value,
+                  },
+                })
+              }
+            />
+          </label>
+          <label className="editor-checkbox-row">
+            <input
+              type="checkbox"
+              checked={draft.data.listeners.copyToClipboard}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  data: {
+                    ...draft.data,
+                    listeners: {
+                      ...draft.data.listeners,
+                      copyToClipboard: event.target.checked,
+                    },
+                  },
+                })
+              }
+            />
+            Copy to clipboard
+          </label>
+          <label className="editor-checkbox-row">
+            <input
+              type="checkbox"
+              checked={draft.data.listeners.logToConsole}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  data: {
+                    ...draft.data,
+                    listeners: {
+                      ...draft.data.listeners,
+                      logToConsole: event.target.checked,
+                    },
+                  },
+                })
+              }
+            />
+            Log to console
+          </label>
+          <label className="editor-checkbox-row">
+            <input
+              type="checkbox"
+              checked={draft.data.listeners.saveToLocalStorage.enabled}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  data: {
+                    ...draft.data,
+                    listeners: {
+                      ...draft.data.listeners,
+                      saveToLocalStorage: {
+                        ...draft.data.listeners.saveToLocalStorage,
+                        enabled: event.target.checked,
+                      },
+                    },
+                  },
+                })
+              }
+            />
+            Save to localStorage
+          </label>
+          <label>
+            localStorage key
+            <input
+              value={draft.data.listeners.saveToLocalStorage.key}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  data: {
+                    ...draft.data,
+                    listeners: {
+                      ...draft.data.listeners,
+                      saveToLocalStorage: {
+                        ...draft.data.listeners.saveToLocalStorage,
+                        key: event.target.value,
+                      },
+                    },
+                  },
+                })
+              }
+            />
+          </label>
+        </div>
       );
     case "join":
       return (
