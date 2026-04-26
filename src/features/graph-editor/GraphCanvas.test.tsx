@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import userEvent from "@testing-library/user-event";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { DocumentProvider, useDocumentContext } from "../../app/state/DocumentContext";
 import { createSampleDocument } from "../../domain/document/sample";
 import type { OutputRuntimeSnapshot } from "../output-runtime/outputRuntime";
@@ -11,6 +11,11 @@ mock.module("@xyflow/react", () => ({
   ReactFlow: (props: Record<string, unknown>) => {
     reactFlowProps = props;
     const nodes = Array.isArray(props.nodes) ? props.nodes : [];
+    const edges = Array.isArray(props.edges) ? props.edges : [];
+    const edgeTypes =
+      typeof props.edgeTypes === "object" && props.edgeTypes !== null
+        ? (props.edgeTypes as Record<string, (...args: Array<unknown>) => JSX.Element>)
+        : {};
 
     return (
       <div data-testid="react-flow">
@@ -46,18 +51,55 @@ mock.module("@xyflow/react", () => ({
             </span>
           );
         })}
+        {edges.map((edge) => {
+          if (
+            typeof edge !== "object" ||
+            edge === null ||
+            !("id" in edge) ||
+            typeof edge.id !== "string" ||
+            !("type" in edge) ||
+            typeof edge.type !== "string"
+          ) {
+            return null;
+          }
+
+          const EdgeComponent = edgeTypes[edge.type];
+          if (!EdgeComponent) {
+            return null;
+          }
+
+          return (
+            <EdgeComponent
+              key={edge.id}
+              id={edge.id}
+              sourceX={0}
+              sourceY={0}
+              targetX={100}
+              targetY={0}
+              sourcePosition="right"
+              targetPosition="left"
+              selected={false}
+              data={"data" in edge ? edge.data : undefined}
+            />
+          );
+        })}
         <span data-testid="flow-pane">pane</span>
       </div>
     );
   },
   Background: () => null,
+  BaseEdge: () => <div data-testid="base-edge" />,
   Controls: () => null,
+  EdgeLabelRenderer: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   Handle: () => null,
   MiniMap: () => null,
   Position: {
     Left: "left",
     Right: "right",
   },
+  getBezierPath: () => ["M0,0 L100,0", 50, 0],
 }));
 
 const { GraphCanvas } = await import("./GraphCanvas");
@@ -434,5 +476,40 @@ describe("GraphCanvas", () => {
     expect(screen.getByRole("dialog", { name: "Edit output node" })).toBeTruthy();
     await userEvent.setup().click(screen.getByRole("tab", { name: "SQL" }));
     expect(screen.getByText("SELECT order_id FROM sales.orders")).toBeTruthy();
+  });
+
+  test("clicking the edge delete affordance removes only the targeted edge", async () => {
+    render(
+      <DocumentProvider initialDocument={createSampleDocument()}>
+        <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
+      </DocumentProvider>,
+    );
+
+    const hitboxes = await screen.findAllByTestId("deletable-edge-hitbox");
+    fireEvent.mouseEnter(hitboxes[1]!);
+
+    const deleteButton = await screen.findByRole("button", { name: "Delete edge" });
+    fireEvent.click(deleteButton);
+
+    const remainingEdges = Array.isArray(reactFlowProps?.edges) ? reactFlowProps.edges : [];
+
+    expect(
+      remainingEdges.find(
+        (edge) =>
+          typeof edge === "object" &&
+          edge !== null &&
+          "id" in edge &&
+          edge.id === "edge-select-output",
+      ),
+    ).toBeUndefined();
+    expect(
+      remainingEdges.find(
+        (edge) =>
+          typeof edge === "object" &&
+          edge !== null &&
+          "id" in edge &&
+          edge.id === "edge-from-select",
+      ),
+    ).toBeTruthy();
   });
 });

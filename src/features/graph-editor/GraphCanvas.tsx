@@ -15,6 +15,7 @@ import {
   toFlowNodes,
   type FlowNodeRuntime,
 } from "./flowAdapter";
+import { DeletableEdge } from "./edges/DeletableEdge";
 import {
   NodeEditorModal,
   type NodeEditorModalHandle,
@@ -23,6 +24,10 @@ import { QueryNode } from "./nodes/QueryNode";
 
 const nodeTypes = {
   queryNode: QueryNode,
+};
+
+const edgeTypes = {
+  deletableEdge: DeletableEdge,
 };
 
 export function GraphCanvas({ outputRuntime }: { outputRuntime: OutputRuntimeSnapshot }) {
@@ -60,7 +65,13 @@ export function GraphCanvas({ outputRuntime }: { outputRuntime: OutputRuntimeSna
       ),
     [nodeRuntimeById, outputRuntime.diagnostics, state.document, state.selectedNodeId],
   );
-  const edges = useMemo(() => toFlowEdges(state.document), [state.document]);
+  const edges = useMemo(
+    () =>
+      toFlowEdges(state.document, (edgeId) =>
+        dispatch({ type: "delete-edge", edgeId }),
+      ),
+    [dispatch, state.document],
+  );
   const editedOutputRuntime = useMemo(() => {
     if (!editedNode || editedNode.kind !== "output") {
       return null;
@@ -152,6 +163,7 @@ export function GraphCanvas({ outputRuntime }: { outputRuntime: OutputRuntimeSna
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         viewport={state.document.viewport}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
