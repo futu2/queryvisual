@@ -2,6 +2,7 @@ import {
   forwardRef,
   type KeyboardEvent as ReactKeyboardEvent,
   useEffect,
+  useId,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -48,17 +49,22 @@ function renderJson(value: unknown) {
 }
 
 function OutputRuntimeInspector({
+  outputId,
   compileResult,
   listenerStatus,
 }: {
+  outputId: string;
   compileResult: CompileOutputResult | null;
   listenerStatus: OutputListenerStatus | null;
 }) {
   const [activeTab, setActiveTab] = useState<OutputInspectorTab>("sql");
+  const tabsBaseId = useId();
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const panelId = `${tabsBaseId}-panel`;
 
   useEffect(() => {
     setActiveTab("sql");
-  }, [compileResult, listenerStatus]);
+  }, [compileResult, listenerStatus, outputId]);
 
   const tabDefinitions: Array<{ id: OutputInspectorTab; label: string }> = [
     { id: "diagnostics", label: "Diagnostics" },
@@ -69,6 +75,7 @@ function OutputRuntimeInspector({
   ];
   const diagnostics = compileResult?.semantic.diagnostics ?? [];
   const hasRuntimeData = Boolean(compileResult || listenerStatus);
+  const activeTabId = `${tabsBaseId}-${activeTab}`;
 
   let tabContent: string;
   if (!hasRuntimeData) {
@@ -104,24 +111,70 @@ function OutputRuntimeInspector({
         </div>
       </div>
       <div className="output-runtime-tabs" role="tablist" aria-label="Output runtime tabs">
-        {tabDefinitions.map((tab) => {
+        {tabDefinitions.map((tab, index) => {
           const isActive = tab.id === activeTab;
+          const tabId = `${tabsBaseId}-${tab.id}`;
 
           return (
             <button
               key={tab.id}
               type="button"
               role="tab"
+              id={tabId}
               aria-selected={isActive}
+              aria-controls={panelId}
+              tabIndex={isActive ? 0 : -1}
               className={isActive ? "output-runtime-tab is-active" : "output-runtime-tab"}
               onClick={() => setActiveTab(tab.id)}
+              onKeyDown={(event) => {
+                if (
+                  event.key !== "ArrowRight" &&
+                  event.key !== "ArrowLeft" &&
+                  event.key !== "Home" &&
+                  event.key !== "End"
+                ) {
+                  return;
+                }
+
+                event.preventDefault();
+                const currentIndex = tabDefinitions.findIndex(
+                  (candidate) => candidate.id === activeTab,
+                );
+                if (currentIndex === -1) {
+                  return;
+                }
+
+                let nextIndex = currentIndex;
+                if (event.key === "ArrowRight") {
+                  nextIndex = (currentIndex + 1) % tabDefinitions.length;
+                } else if (event.key === "ArrowLeft") {
+                  nextIndex =
+                    (currentIndex - 1 + tabDefinitions.length) % tabDefinitions.length;
+                } else if (event.key === "Home") {
+                  nextIndex = 0;
+                } else if (event.key === "End") {
+                  nextIndex = tabDefinitions.length - 1;
+                }
+
+                const nextTab = tabDefinitions[nextIndex];
+                setActiveTab(nextTab.id);
+                tabRefs.current[nextIndex]?.focus();
+              }}
+              ref={(element) => {
+                tabRefs.current[index] = element;
+              }}
             >
               {tab.label}
             </button>
           );
         })}
       </div>
-      <div role="tabpanel" className="output-runtime-panel">
+      <div
+        role="tabpanel"
+        id={panelId}
+        aria-labelledby={activeTabId}
+        className="output-runtime-panel"
+      >
         <pre>{tabContent}</pre>
       </div>
     </section>
@@ -301,6 +354,7 @@ function NodeEditorModal({
             {renderNodeEditor(draft, setDraft, graphDocument, schemaOverrides)}
             {node.kind === "output" ? (
               <OutputRuntimeInspector
+                outputId={node.id}
                 compileResult={outputRuntime?.compileResult ?? null}
                 listenerStatus={outputRuntime?.listenerStatus ?? null}
               />

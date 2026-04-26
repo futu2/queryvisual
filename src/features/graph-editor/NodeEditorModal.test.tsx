@@ -1150,6 +1150,161 @@ describe("NodeEditorModal", () => {
     expect(screen.getByText("SELECT customer_id FROM sales.orders")).toBeTruthy();
   });
 
+  test("switching between output nodes without runtime data resets tab selection to SQL", async () => {
+    const user = userEvent.setup();
+    const firstOutputNode: GraphNode = {
+      id: "output-orders-a",
+      kind: "output",
+      label: "Orders A",
+      position: { x: 0, y: 0 },
+      data: {
+        outputName: "orders_a",
+        listeners: {
+          copyToClipboard: false,
+          logToConsole: false,
+          saveToLocalStorage: {
+            enabled: false,
+            key: "queryvisual.output.orders_a",
+          },
+        },
+      },
+    };
+    const secondOutputNode: GraphNode = {
+      id: "output-orders-b",
+      kind: "output",
+      label: "Orders B",
+      position: { x: 0, y: 0 },
+      data: {
+        outputName: "orders_b",
+        listeners: {
+          copyToClipboard: false,
+          logToConsole: false,
+          saveToLocalStorage: {
+            enabled: false,
+            key: "queryvisual.output.orders_b",
+          },
+        },
+      },
+    };
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "Test document" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [firstOutputNode, secondOutputNode],
+      edges: [],
+    };
+
+    const renderResult = render(
+      <DocumentProvider initialDocument={document}>
+        <NodeEditorModal
+          node={firstOutputNode}
+          onClose={() => {}}
+          onSave={() => {}}
+          outputRuntime={null}
+        />
+      </DocumentProvider>,
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Diagnostics" }));
+    expect(screen.getByRole("tab", { name: "Diagnostics" }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
+
+    renderResult.rerender(
+      <DocumentProvider initialDocument={document}>
+        <NodeEditorModal
+          node={secondOutputNode}
+          onClose={() => {}}
+          onSave={() => {}}
+          outputRuntime={null}
+        />
+      </DocumentProvider>,
+    );
+
+    expect(screen.getByRole("tab", { name: "SQL" }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
+  });
+
+  test("output runtime tabs expose aria wiring and arrow-key navigation", () => {
+    const node: GraphNode = {
+      id: "output-orders-a11y",
+      kind: "output",
+      label: "Orders A11y",
+      position: { x: 0, y: 0 },
+      data: {
+        outputName: "orders_a11y",
+        listeners: {
+          copyToClipboard: false,
+          logToConsole: false,
+          saveToLocalStorage: {
+            enabled: false,
+            key: "queryvisual.output.orders_a11y",
+          },
+        },
+      },
+    };
+    const outputRuntime = {
+      compileResult: {
+        semantic: {
+          document: {
+            version: 1,
+            metadata: { name: "Test document" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [node],
+            edges: [],
+          },
+          outputId: node.id,
+          outputName: "orders_a11y",
+          orderedNodes: [node],
+          nodesById: { [node.id]: node },
+          schemas: {},
+          diagnostics: [],
+        },
+        ir: null,
+        optimizedIr: null,
+        sql: "SELECT order_id FROM sales.orders",
+      } satisfies CompileOutputResult,
+      listenerStatus: {
+        lastSuccessfulSql: null,
+        lastRunAt: null,
+        lastErrorMessage: null,
+        lastSuccessfulSqlByListener: {
+          copyToClipboard: null,
+          logToConsole: null,
+          saveToLocalStorage: null,
+        },
+        lastEnabledByListener: {
+          copyToClipboard: false,
+          logToConsole: false,
+          saveToLocalStorage: false,
+        },
+      } satisfies OutputListenerStatus,
+    };
+
+    renderModal({ node, outputRuntime });
+
+    const panel = screen.getByRole("tabpanel");
+    const sqlTab = screen.getByRole("tab", { name: "SQL" });
+    const diagnosticsTab = screen.getByRole("tab", { name: "Diagnostics" });
+
+    expect(sqlTab.getAttribute("tabindex")).toBe("0");
+    expect(diagnosticsTab.getAttribute("tabindex")).toBe("-1");
+    expect(sqlTab.getAttribute("id")).toBeTruthy();
+    expect(panel.getAttribute("id")).toBeTruthy();
+    expect(sqlTab.getAttribute("aria-controls")).toBe(panel.getAttribute("id"));
+    expect(panel.getAttribute("aria-labelledby")).toBe(sqlTab.getAttribute("id"));
+
+    sqlTab.focus();
+    fireEvent.keyDown(sqlTab, { key: "ArrowRight" });
+
+    expect(diagnosticsTab.getAttribute("aria-selected")).toBe("true");
+    expect(diagnosticsTab.getAttribute("tabindex")).toBe("0");
+    expect(sqlTab.getAttribute("tabindex")).toBe("-1");
+    expect(globalThis.document.activeElement).toBe(diagnosticsTab);
+    expect(panel.getAttribute("aria-labelledby")).toBe(diagnosticsTab.getAttribute("id"));
+  });
+
   test("non-output nodes keep current modal behavior without output runtime tabs", () => {
     const node: GraphNode = {
       id: "where-1",
