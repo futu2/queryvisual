@@ -21,17 +21,6 @@ const PRESENTATION_BY_KIND: Record<
   output: { family: "terminal", glyph: "OUT" },
 };
 
-function handleTop(index: number, count: number) {
-  if (count <= 1) {
-    return 48;
-  }
-
-  const min = 32;
-  const max = 72;
-  const ratio = index / (count - 1);
-  return min + (max - min) * ratio;
-}
-
 function formatInterfaceSummary(inputCount: number, outputCount: number) {
   return `${inputCount} inputs / ${outputCount} outputs`;
 }
@@ -105,29 +94,7 @@ function TargetHandles({
   }
 
   if (node.kind === "subgraph") {
-    const { iface } = inferChildGraphInterface(workspace, node.data.graphId);
-
-    return (
-      <>
-        {iface.inputs.map((port) => (
-          <span
-            key={`subgraph-target-${port.handleId}`}
-            hidden
-            data-query-node-handle-marker={`target-${port.handleId}`}
-          />
-        ))}
-        {iface.inputs.map((port, index) => (
-          <Handle
-            key={`subgraph-target-handle-${port.handleId}`}
-            type="target"
-            id={port.handleId}
-            position={Position.Left}
-            style={{ top: handleTop(index, iface.inputs.length) }}
-            data-query-node-handle={`target-${port.handleId}`}
-          />
-        ))}
-      </>
-    );
+    return null;
   }
 
   return (
@@ -190,6 +157,16 @@ export function QueryNode({ data, selected }: NodeProps<FlowNodeData>) {
                     key={`in-${port.handleId}`}
                     className="query-node__port-row"
                   >
+                    <span
+                      hidden
+                      data-query-node-handle-marker={`target-${port.handleId}`}
+                    />
+                    <Handle
+                      type="target"
+                      id={port.handleId}
+                      position={Position.Left}
+                      data-query-node-handle={`target-${port.handleId}`}
+                    />
                     <span className="query-node__port-pill">{port.name}</span>
                   </div>
                 ))}
@@ -201,6 +178,16 @@ export function QueryNode({ data, selected }: NodeProps<FlowNodeData>) {
                     key={`out-${port.handleId}`}
                     className="query-node__port-row"
                   >
+                    <span
+                      hidden
+                      data-query-node-handle-marker={`source-${port.handleId}`}
+                    />
+                    <Handle
+                      type="source"
+                      id={port.handleId}
+                      position={Position.Right}
+                      data-query-node-handle={`source-${port.handleId}`}
+                    />
                     <span className="query-node__port-pill">{port.name}</span>
                   </div>
                 ))}
@@ -210,29 +197,7 @@ export function QueryNode({ data, selected }: NodeProps<FlowNodeData>) {
         </div>
       ) : null}
       {hasErrors ? <span className="query-node__badge">error</span> : null}
-      {data.node.kind === "output" ? null : data.node.kind === "subgraph" ? (
-        <>
-          {(subgraphInterface?.iface.outputs ?? []).map((port) => (
-            <span
-              key={`subgraph-source-marker-${port.handleId}`}
-              hidden
-              data-query-node-handle-marker={`source-${port.handleId}`}
-            />
-          ))}
-          {(subgraphInterface?.iface.outputs ?? []).map((port, index) => (
-            <Handle
-              key={`subgraph-source-handle-${port.handleId}`}
-              type="source"
-              id={port.handleId}
-              position={Position.Right}
-              style={{
-                top: handleTop(index, subgraphInterface?.iface.outputs.length ?? 0),
-              }}
-              data-query-node-handle={`source-${port.handleId}`}
-            />
-          ))}
-        </>
-      ) : (
+      {data.node.kind === "output" || data.node.kind === "subgraph" ? null : (
         <>
           <span hidden data-query-node-handle-marker="source-out" />
           <Handle

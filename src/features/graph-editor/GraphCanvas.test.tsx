@@ -95,7 +95,9 @@ mock.module("@xyflow/react", () => ({
   EdgeLabelRenderer: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
-  Handle: () => null,
+  Handle: ({ id, ...rest }: Record<string, unknown>) => (
+    <div data-handleid={typeof id === "string" ? id : undefined} {...rest} />
+  ),
   MiniMap: () => null,
   Position: {
     Left: "left",

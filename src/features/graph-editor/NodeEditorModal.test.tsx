@@ -1911,4 +1911,65 @@ describe("NodeEditorModal", () => {
     expect(onClose).toHaveBeenCalled();
     expect(screen.getByTestId("active-graph-id").textContent).toBe("graph-child");
   });
+
+  test("changing the child graph draft then opening the child graph uses discard protection and jumps to the draft target", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+    const onClose = mock();
+
+    const node: GraphNode = {
+      id: "subgraph-1",
+      kind: "subgraph",
+      label: "Orders Package",
+      position: { x: 0, y: 0 },
+      data: { graphId: "graph-child-a" },
+    };
+
+    const workspace: GraphWorkspace = {
+      version: 2,
+      metadata: { name: "Workspace" },
+      entryGraphId: "graph-parent",
+      graphs: [
+        {
+          id: "graph-parent",
+          metadata: { name: "Parent" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [node],
+          edges: [],
+        },
+        {
+          id: "graph-child-a",
+          metadata: { name: "Child A" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [],
+          edges: [],
+        },
+        {
+          id: "graph-child-b",
+          metadata: { name: "Child B" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [],
+          edges: [],
+        },
+      ],
+    };
+
+    render(
+      <DocumentProvider initialWorkspace={workspace}>
+        <NodeEditorModal node={node} onClose={onClose} onSave={onSave} />
+        <ActiveGraphProbe />
+      </DocumentProvider>,
+    );
+
+    await user.selectOptions(screen.getByLabelText("Child graph"), "graph-child-b");
+    await user.click(screen.getByRole("button", { name: "Open child graph" }));
+
+    expect(screen.getByRole("dialog", { name: "Discard changes?" })).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Discard changes" }));
+
+    expect(onClose).toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByTestId("active-graph-id").textContent).toBe("graph-child-b");
+  });
 });

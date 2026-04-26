@@ -548,4 +548,91 @@ describe("QueryNode", () => {
       container.querySelector('[data-query-node-handle-marker="source-out:child-output-b"]'),
     ).toBeTruthy();
   });
+
+  test("subgraph handles are laid out per port row for larger interfaces (no bunching band)", () => {
+    const childInputs = Array.from({ length: 6 }, (_, index) => ({
+      id: `child-input-${index + 1}`,
+      kind: "graphInput" as const,
+      label: `Input ${index + 1}`,
+      position: { x: 0, y: index * 40 },
+      data: {
+        inputName: `in_${index + 1}`,
+        columns: { id: "int" as const },
+      },
+    }));
+
+    const childOutputs = Array.from({ length: 6 }, (_, index) => ({
+      id: `child-output-${index + 1}`,
+      kind: "output" as const,
+      label: `Output ${index + 1}`,
+      position: { x: 260, y: index * 40 },
+      data: {
+        outputName: `out_${index + 1}`,
+        listeners: createDefaultOutputListenerConfig(`out_${index + 1}`),
+      },
+    }));
+
+    const workspace: GraphWorkspace = {
+      version: 2,
+      metadata: { name: "Workspace" },
+      entryGraphId: "graph-parent",
+      graphs: [
+        {
+          id: "graph-parent",
+          metadata: { name: "Parent" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [],
+          edges: [],
+        },
+        {
+          id: "graph-child",
+          metadata: { name: "Child" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [...childInputs, ...childOutputs],
+          edges: [],
+        },
+      ],
+    };
+
+    const { container } = render(
+      <ReactFlowProvider>
+        <QueryNode
+          id="subgraph-1"
+          data={{
+            node: {
+              id: "subgraph-1",
+              kind: "subgraph",
+              label: "Big Interface",
+              position: { x: 0, y: 0 },
+              data: { graphId: "graph-child" },
+            },
+            diagnostics: [],
+            workspace,
+          }}
+          selected={false}
+          dragging={false}
+        />
+      </ReactFlowProvider>,
+    );
+
+    const inputHandles = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-query-node-handle^="target-in:"]'),
+    );
+    expect(inputHandles).toHaveLength(6);
+    const inputRows = inputHandles
+      .map((handle) => handle.closest(".query-node__port-row"))
+      .filter((row): row is Element => Boolean(row));
+    expect(inputRows).toHaveLength(6);
+    expect(new Set(inputRows).size).toBe(6);
+
+    const outputHandles = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-query-node-handle^="source-out:"]'),
+    );
+    expect(outputHandles).toHaveLength(6);
+    const outputRows = outputHandles
+      .map((handle) => handle.closest(".query-node__port-row"))
+      .filter((row): row is Element => Boolean(row));
+    expect(outputRows).toHaveLength(6);
+    expect(new Set(outputRows).size).toBe(6);
+  });
 });
