@@ -1,6 +1,5 @@
 import type {
   GraphDefinition,
-  GraphDocument,
   GraphDocumentBase,
   GraphWorkspace,
   LegacyGraphDocument,
@@ -191,15 +190,23 @@ function isGraphDefinition(value: unknown): value is GraphDefinition {
 }
 
 function isGraphWorkspace(value: unknown): value is GraphWorkspace {
+  if (
+    !isRecord(value) ||
+    value.version !== 2 ||
+    !isRecord(value.metadata) ||
+    typeof value.metadata.name !== "string" ||
+    typeof value.entryGraphId !== "string" ||
+    !Array.isArray(value.graphs) ||
+    !value.graphs.every(isGraphDefinition)
+  ) {
+    return false;
+  }
+
+  const graphIds = value.graphs.map((graph) => graph.id);
+
   return (
-    isRecord(value) &&
-    value.version === 2 &&
-    isRecord(value.metadata) &&
-    typeof value.metadata.name === "string" &&
-    typeof value.entryGraphId === "string" &&
-    Array.isArray(value.graphs) &&
-    value.graphs.every(isGraphDefinition) &&
-    value.graphs.some((graph) => graph.id === value.entryGraphId)
+    new Set(graphIds).size === graphIds.length &&
+    graphIds.includes(value.entryGraphId)
   );
 }
 
@@ -257,11 +264,11 @@ function migrateLegacyDocumentToWorkspace(
   });
 }
 
-export function serializeDocumentJson(document: GraphDocument) {
+export function serializeDocumentJson(document: LegacyGraphDocument) {
   return JSON.stringify(document, null, 2);
 }
 
-export function parseDocumentJson(raw: string): GraphDocument {
+export function parseDocumentJson(raw: string): LegacyGraphDocument {
   let parsed: unknown;
 
   try {
@@ -301,7 +308,7 @@ export function parseWorkspaceJson(raw: string): GraphWorkspace {
   return normalizeWorkspace(parsed);
 }
 
-export function downloadDocument(graphDocument: GraphDocument) {
+export function downloadDocument(graphDocument: LegacyGraphDocument) {
   const blob = new Blob([serializeDocumentJson(graphDocument)], {
     type: "application/json",
   });

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createSampleDocument } from "../../domain/document/sample";
+import type { LegacyGraphDocument } from "../../domain/document/types";
 import {
   parseDocumentJson,
   parseWorkspaceJson,
@@ -7,9 +8,21 @@ import {
   serializeWorkspaceJson,
 } from "./fileIO";
 
+function createLegacySampleDocument(): LegacyGraphDocument {
+  const sample = createSampleDocument();
+
+  return {
+    version: 1,
+    metadata: sample.metadata,
+    viewport: sample.viewport,
+    nodes: sample.nodes,
+    edges: sample.edges,
+  };
+}
+
 describe("fileIO", () => {
   test("round-trips graph documents as JSON", () => {
-    const source = createSampleDocument();
+    const source = createLegacySampleDocument();
     const parsed = parseDocumentJson(serializeDocumentJson(source));
 
     expect(parsed.metadata.name).toBe(source.metadata.name);
@@ -63,6 +76,34 @@ describe("fileIO", () => {
     expect(serializeWorkspaceJson(workspace)).toContain(
       '"entryGraphId": "graph-main"',
     );
+  });
+
+  test("rejects workspaces with duplicate graph ids", () => {
+    expect(() =>
+      parseWorkspaceJson(
+        JSON.stringify({
+          version: 2,
+          metadata: { name: "workspace" },
+          entryGraphId: "graph-main",
+          graphs: [
+            {
+              id: "graph-main",
+              metadata: { name: "Main A" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+            {
+              id: "graph-main",
+              metadata: { name: "Main B" },
+              viewport: { x: 10, y: 20, zoom: 0.8 },
+              nodes: [],
+              edges: [],
+            },
+          ],
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual workspace");
   });
 
   test("rejects invalid top-level document shapes", () => {
