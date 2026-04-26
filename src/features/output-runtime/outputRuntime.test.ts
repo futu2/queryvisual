@@ -160,6 +160,33 @@ describe("useOutputRuntime and applyOutputListeners", () => {
     });
   });
 
+  test("default console listener prefixes logs with the output name", async () => {
+    const originalConsoleLog = console.log;
+    const consoleSpy = mock(() => {});
+    console.log = consoleSpy as typeof console.log;
+
+    try {
+      await applyOutputListeners({
+        document: createDocumentWithListenerOutputs(),
+        resultsByOutputId: compileDocumentOutputs(createDocumentWithListenerOutputs())
+          .resultsByOutputId,
+        previousStatusByOutputId: {},
+        deps: {
+          clipboardWriteText: mock(() => {}),
+          localStorageSetItem: mock(() => {}),
+          now: () => 1700000000000,
+        },
+      });
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        "[QueryVisual output orders_report]",
+        expect.stringContaining("SELECT"),
+      );
+    } finally {
+      console.log = originalConsoleLog;
+    }
+  });
+
   test("skips unchanged SQL and empty SQL listener runs", async () => {
     const document = createDocumentWithListenerOutputs();
     const runtime = compileDocumentOutputs(document);

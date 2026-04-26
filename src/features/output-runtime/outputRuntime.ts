@@ -43,8 +43,8 @@ export interface OutputRuntimeDependencies {
 const defaultRuntimeDependencies: OutputRuntimeDependencies = {
   clipboardWriteText: (sql) =>
     navigator.clipboard?.writeText?.(sql) ?? Promise.resolve(),
-  consoleLog: (sql) => {
-    console.log(sql);
+  consoleLog: (sql, context) => {
+    console.log(`[QueryVisual output ${context.outputName}]`, sql);
   },
   localStorageSetItem: (key, sql) => {
     localStorage.setItem(key, sql);
