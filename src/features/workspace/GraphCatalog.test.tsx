@@ -66,6 +66,24 @@ function CatalogWithEditorGuardHarness() {
   );
 }
 
+function createWorkspaceWithSecondaryGraph() {
+  const workspace = createSampleWorkspace();
+
+  return {
+    ...workspace,
+    graphs: [
+      ...workspace.graphs,
+      {
+        id: "graph-secondary",
+        metadata: { name: "Secondary Graph" },
+        viewport: { x: 0, y: 0, zoom: 1 },
+        nodes: [],
+        edges: [],
+      },
+    ],
+  };
+}
+
 describe("GraphCatalog", () => {
   test("creates, renames, and switches graphs through the catalog", async () => {
     const user = userEvent.setup();
@@ -121,5 +139,27 @@ describe("GraphCatalog", () => {
 
     expect(screen.getByRole("dialog", { name: "Discard changes?" })).toBeTruthy();
     expect(screen.queryByLabelText("Graph name Graph 2")).toBeNull();
+  });
+
+  test("deleting an inactive graph bypasses discard confirmation and keeps dirty editor open", async () => {
+    const user = userEvent.setup();
+
+    await act(async () => {
+      render(
+        <DocumentProvider initialWorkspace={createWorkspaceWithSecondaryGraph()}>
+          <CatalogWithEditorGuardHarness />
+        </DocumentProvider>,
+      );
+    });
+
+    await user.clear(await screen.findByLabelText("Node name"));
+    await user.type(screen.getByLabelText("Node name"), "Dirty orders");
+    await user.click(screen.getByRole("button", { name: "Delete Secondary Graph" }));
+
+    expect(screen.queryByRole("dialog", { name: "Discard changes?" })).toBeNull();
+    expect(screen.queryByLabelText("Graph name Secondary Graph")).toBeNull();
+    expect((screen.getByLabelText("Node name") as HTMLInputElement).value).toBe(
+      "Dirty orders",
+    );
   });
 });

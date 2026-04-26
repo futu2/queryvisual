@@ -68,9 +68,14 @@ export function GraphCatalog({
                   type="button"
                   aria-label={`Delete ${graph.metadata.name}`}
                   onClick={() => {
-                    transition(() =>
-                      dispatch({ type: "delete-graph", graphId: graph.id }),
-                    );
+                    if (isActive) {
+                      transition(() =>
+                        dispatch({ type: "delete-graph", graphId: graph.id }),
+                      );
+                      return;
+                    }
+
+                    dispatch({ type: "delete-graph", graphId: graph.id });
                   }}
                   disabled={!canDelete}
                 >

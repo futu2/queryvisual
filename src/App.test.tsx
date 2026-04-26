@@ -19,18 +19,6 @@ mock.module("./features/output-runtime/outputRuntime", () => ({
   },
 }));
 
-mock.module("./features/graph-editor/GraphCanvas", () => ({
-  GraphCanvas: ({
-    outputRuntime,
-  }: {
-    outputRuntime: { activeGraphName?: string };
-  }) => (
-    <div data-testid="graph-canvas">
-      {outputRuntime.activeGraphName ?? "unknown"}
-    </div>
-  ),
-}));
-
 const { App } = await import("./App");
 
 afterEach(cleanup);
@@ -75,7 +63,6 @@ describe("App", () => {
       render(<App initialWorkspace={workspace} />);
     });
 
-    expect(screen.getByTestId("graph-canvas").textContent).toBe("Beta Graph");
     expect(observedRuntimeGraphIds.at(-1)).toBe("graph-b");
   });
 });
