@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   compileOutput,
   type CompileOutputResult,
@@ -6,10 +6,15 @@ import {
 import type { Diagnostic } from "../../domain/diagnostics/types";
 import type { GraphDocument, GraphNode } from "../../domain/document/types";
 
+type Awaitable<T> = T | Promise<T>;
+type OutputListenerName = "copyToClipboard" | "logToConsole" | "saveToLocalStorage";
+
 export interface OutputListenerStatus {
   lastSuccessfulSql: string | null;
   lastRunAt: number | null;
   lastErrorMessage: string | null;
+  lastSuccessfulSqlByListener: Record<OutputListenerName, string | null>;
+  lastEnabledByListener: Record<OutputListenerName, boolean>;
 }
 
 export interface OutputRuntimeSnapshot {
@@ -22,16 +27,16 @@ export interface OutputRuntimeDependencies {
   clipboardWriteText: (
     sql: string,
     context: { outputId: string; outputName: string },
-  ) => void;
+  ) => Awaitable<void>;
   consoleLog: (
     sql: string,
     context: { outputId: string; outputName: string },
-  ) => void;
+  ) => Awaitable<void>;
   localStorageSetItem: (
     key: string,
     sql: string,
     context: { outputId: string; outputName: string },
-  ) => void;
+  ) => Awaitable<void>;
   now: () => number;
 }
 
@@ -53,6 +58,16 @@ export function createInitialListenerStatus(): OutputListenerStatus {
     lastSuccessfulSql: null,
     lastRunAt: null,
     lastErrorMessage: null,
+    lastSuccessfulSqlByListener: {
+      copyToClipboard: null,
+      logToConsole: null,
+      saveToLocalStorage: null,
+    },
+    lastEnabledByListener: {
+      copyToClipboard: false,
+      logToConsole: false,
+      saveToLocalStorage: false,
+    },
   };
 }
 
@@ -102,12 +117,34 @@ export function compileDocumentOutputs(document: GraphDocument): Pick<
   };
 }
 
-export function applyOutputListeners(params: {
+function normalizeListenerStatus(
+  status: OutputListenerStatus | undefined,
+): OutputListenerStatus {
+  if (!status) {
+    return createInitialListenerStatus();
+  }
+
+  const defaults = createInitialListenerStatus();
+  return {
+    ...defaults,
+    ...status,
+    lastSuccessfulSqlByListener: {
+      ...defaults.lastSuccessfulSqlByListener,
+      ...status.lastSuccessfulSqlByListener,
+    },
+    lastEnabledByListener: {
+      ...defaults.lastEnabledByListener,
+      ...status.lastEnabledByListener,
+    },
+  };
+}
+
+export async function applyOutputListeners(params: {
   document: GraphDocument;
   resultsByOutputId: Record<string, CompileOutputResult>;
   previousStatusByOutputId: Record<string, OutputListenerStatus>;
   deps?: Partial<OutputRuntimeDependencies>;
-}) {
+}): Promise<Record<string, OutputListenerStatus>> {
   const dependencies: OutputRuntimeDependencies = {
     ...defaultRuntimeDependencies,
     ...params.deps,
@@ -116,8 +153,9 @@ export function applyOutputListeners(params: {
 
   for (const outputNode of listOutputNodes(params.document)) {
     const outputId = outputNode.id;
-    const previousStatus =
-      params.previousStatusByOutputId[outputId] ?? createInitialListenerStatus();
+    const previousStatus = normalizeListenerStatus(
+      params.previousStatusByOutputId[outputId],
+    );
     const compileResult = params.resultsByOutputId[outputId];
 
     if (!compileResult) {
@@ -126,41 +164,91 @@ export function applyOutputListeners(params: {
     }
 
     const sql = compileResult.sql.trim();
-    if (!sql || previousStatus.lastSuccessfulSql === sql) {
-      nextStatusByOutputId[outputId] = previousStatus;
-      continue;
-    }
-
     const context = {
       outputId,
       outputName: outputNode.data.outputName,
     };
     const listeners = outputNode.data.listeners;
+    const nextEnabledByListener: OutputListenerStatus["lastEnabledByListener"] = {
+      copyToClipboard: listeners.copyToClipboard,
+      logToConsole: listeners.logToConsole,
+      saveToLocalStorage: listeners.saveToLocalStorage.enabled,
+    };
     const nextStatus: OutputListenerStatus = {
       ...previousStatus,
-      lastRunAt: dependencies.now(),
+      lastEnabledByListener: nextEnabledByListener,
     };
 
-    try {
-      if (listeners.copyToClipboard) {
-        dependencies.clipboardWriteText(sql, context);
-      }
-      if (listeners.logToConsole) {
-        dependencies.consoleLog(sql, context);
-      }
-      if (listeners.saveToLocalStorage.enabled) {
-        dependencies.localStorageSetItem(
-          listeners.saveToLocalStorage.key,
-          sql,
-          context,
-        );
+    if (!sql) {
+      nextStatusByOutputId[outputId] = nextStatus;
+      continue;
+    }
+
+    const listenerRuns: Array<{
+      name: OutputListenerName;
+      enabled: boolean;
+      run: () => Awaitable<void>;
+    }> = [
+      {
+        name: "copyToClipboard",
+        enabled: listeners.copyToClipboard,
+        run: () => dependencies.clipboardWriteText(sql, context),
+      },
+      {
+        name: "logToConsole",
+        enabled: listeners.logToConsole,
+        run: () => dependencies.consoleLog(sql, context),
+      },
+      {
+        name: "saveToLocalStorage",
+        enabled: listeners.saveToLocalStorage.enabled,
+        run: () =>
+          dependencies.localStorageSetItem(
+            listeners.saveToLocalStorage.key,
+            sql,
+            context,
+          ),
+      },
+    ];
+    const errors: string[] = [];
+    let attemptedRuns = 0;
+    let successfulRuns = 0;
+
+    for (const listener of listenerRuns) {
+      if (!listener.enabled) {
+        continue;
       }
 
-      nextStatus.lastSuccessfulSql = sql;
-      nextStatus.lastErrorMessage = null;
-    } catch (error) {
-      nextStatus.lastErrorMessage =
-        error instanceof Error ? error.message : String(error);
+      const wasEnabled = previousStatus.lastEnabledByListener[listener.name];
+      const lastSuccessfulSqlForListener =
+        previousStatus.lastSuccessfulSqlByListener[listener.name];
+      const shouldRun =
+        !wasEnabled || lastSuccessfulSqlForListener !== sql;
+
+      if (!shouldRun) {
+        continue;
+      }
+
+      attemptedRuns += 1;
+      try {
+        await listener.run();
+        successfulRuns += 1;
+        nextStatus.lastSuccessfulSqlByListener[listener.name] = sql;
+      } catch (error) {
+        errors.push(
+          `${listener.name}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+
+    if (attemptedRuns > 0) {
+      nextStatus.lastRunAt = dependencies.now();
+      nextStatus.lastErrorMessage = errors.length > 0 ? errors.join(" | ") : null;
+      if (successfulRuns > 0) {
+        nextStatus.lastSuccessfulSql = sql;
+      }
     }
 
     nextStatusByOutputId[outputId] = nextStatus;
@@ -177,16 +265,33 @@ export function useOutputRuntime(
   const [listenerStatusByOutputId, setListenerStatusByOutputId] = useState<
     Record<string, OutputListenerStatus>
   >({});
+  const listenerStatusRef = useRef(listenerStatusByOutputId);
 
   useEffect(() => {
-    setListenerStatusByOutputId((previousStatusByOutputId) =>
-      applyOutputListeners({
+    listenerStatusRef.current = listenerStatusByOutputId;
+  }, [listenerStatusByOutputId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const runListeners = async () => {
+      const nextStatusByOutputId = await applyOutputListeners({
         document,
         resultsByOutputId: compiledSnapshot.resultsByOutputId,
-        previousStatusByOutputId,
+        previousStatusByOutputId: listenerStatusRef.current,
         deps,
-      }),
-    );
+      });
+
+      if (!cancelled) {
+        listenerStatusRef.current = nextStatusByOutputId;
+        setListenerStatusByOutputId(nextStatusByOutputId);
+      }
+    };
+
+    void runListeners();
+
+    return () => {
+      cancelled = true;
+    };
   }, [compiledSnapshot.resultsByOutputId, deps, document]);
 
   return {

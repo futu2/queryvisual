@@ -151,21 +151,21 @@ describe("useOutputRuntime and applyOutputListeners", () => {
     });
 
     const latestSnapshot = onSnapshot.mock.calls.at(-1)?.[0] as OutputRuntimeSnapshot;
-    expect(latestSnapshot.listenerStatusByOutputId["output-orders"]).toEqual({
+    expect(latestSnapshot.listenerStatusByOutputId["output-orders"]).toMatchObject({
       lastSuccessfulSql: expect.stringContaining("SELECT"),
       lastRunAt: 1700000000000,
       lastErrorMessage: null,
     });
   });
 
-  test("skips unchanged SQL and empty SQL listener runs", () => {
+  test("skips unchanged SQL and empty SQL listener runs", async () => {
     const document = createDocumentWithListenerOutputs();
     const runtime = compileDocumentOutputs(document);
     const clipboardWrite = mock(() => {});
     const log = mock(() => {});
     const setItem = mock(() => {});
 
-    const firstStatus = applyOutputListeners({
+    const firstStatus = await applyOutputListeners({
       document,
       resultsByOutputId: runtime.resultsByOutputId,
       previousStatusByOutputId: {},
@@ -181,7 +181,7 @@ describe("useOutputRuntime and applyOutputListeners", () => {
     expect(log).toHaveBeenCalledTimes(1);
     expect(setItem).toHaveBeenCalledTimes(1);
 
-    applyOutputListeners({
+    await applyOutputListeners({
       document,
       resultsByOutputId: runtime.resultsByOutputId,
       previousStatusByOutputId: firstStatus,
@@ -196,6 +196,104 @@ describe("useOutputRuntime and applyOutputListeners", () => {
     expect(clipboardWrite).toHaveBeenCalledTimes(1);
     expect(log).toHaveBeenCalledTimes(1);
     expect(setItem).toHaveBeenCalledTimes(1);
-    expect(firstStatus["output-empty"]).toEqual(createInitialListenerStatus());
+    expect(firstStatus["output-empty"]).toMatchObject({
+      lastSuccessfulSql: null,
+      lastRunAt: null,
+      lastErrorMessage: null,
+    });
+  });
+
+  test("runs newly enabled listener even when SQL is unchanged", async () => {
+    const sample = createSampleDocument();
+    const disabledDocument = {
+      ...sample,
+      nodes: sample.nodes.map((node) =>
+        node.id === "output-orders"
+          ? {
+              ...node,
+              data: {
+                ...node.data,
+                listeners: {
+                  copyToClipboard: false,
+                  logToConsole: false,
+                  saveToLocalStorage: {
+                    enabled: false,
+                    key: "queryvisual.output.orders_report",
+                  },
+                },
+              },
+            }
+          : node,
+      ),
+    };
+    const enabledDocument = {
+      ...disabledDocument,
+      nodes: disabledDocument.nodes.map((node) =>
+        node.id === "output-orders"
+          ? {
+              ...node,
+              data: {
+                ...node.data,
+                listeners: {
+                  ...node.data.listeners,
+                  copyToClipboard: true,
+                },
+              },
+            }
+          : node,
+      ),
+    };
+    const clipboardWrite = mock(() => {});
+
+    const firstStatus = await applyOutputListeners({
+      document: disabledDocument,
+      resultsByOutputId: compileDocumentOutputs(disabledDocument).resultsByOutputId,
+      previousStatusByOutputId: {},
+      deps: {
+        clipboardWriteText: clipboardWrite,
+        now: () => 1700000000000,
+      },
+    });
+
+    await applyOutputListeners({
+      document: enabledDocument,
+      resultsByOutputId: compileDocumentOutputs(enabledDocument).resultsByOutputId,
+      previousStatusByOutputId: firstStatus,
+      deps: {
+        clipboardWriteText: clipboardWrite,
+        now: () => 1700000001000,
+      },
+    });
+
+    expect(clipboardWrite).toHaveBeenCalledTimes(1);
+  });
+
+  test("isolates listener failures and records lastErrorMessage", async () => {
+    const document = createDocumentWithListenerOutputs();
+    const runtime = compileDocumentOutputs(document);
+    const clipboardWrite = mock(async () => {
+      throw new Error("clipboard write failed");
+    });
+    const log = mock(() => {});
+    const setItem = mock(() => {});
+
+    const status = await applyOutputListeners({
+      document,
+      resultsByOutputId: runtime.resultsByOutputId,
+      previousStatusByOutputId: {},
+      deps: {
+        clipboardWriteText: clipboardWrite,
+        consoleLog: log,
+        localStorageSetItem: setItem,
+        now: () => 1700000000000,
+      },
+    });
+
+    expect(clipboardWrite).toHaveBeenCalledTimes(1);
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(setItem).toHaveBeenCalledTimes(1);
+    expect(status["output-orders"].lastErrorMessage).toContain(
+      "clipboard write failed",
+    );
   });
 });
