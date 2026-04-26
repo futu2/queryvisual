@@ -37,33 +37,15 @@ mock.module("@xyflow/react", () => ({
               : "";
 
           return (
-            <button
+            <span
               key={nodeId}
-              type="button"
-              data-testid={`flow-node-${nodeId}`}
-              onClick={() => {
-                const onNodeClick = props.onNodeClick;
-                if (typeof onNodeClick === "function") {
-                  onNodeClick({ type: "click" }, node);
-                }
-              }}
+              data-testid={`flow-node-label-${nodeId}`}
             >
               {label}
-            </button>
+            </span>
           );
         })}
-        <button
-          type="button"
-          data-testid="flow-pane"
-          onClick={() => {
-            const onPaneClick = props.onPaneClick;
-            if (typeof onPaneClick === "function") {
-              onPaneClick({ type: "click" });
-            }
-          }}
-        >
-          pane
-        </button>
+        <span data-testid="flow-pane">pane</span>
       </div>
     );
   },
@@ -79,6 +61,54 @@ mock.module("@xyflow/react", () => ({
 
 const { GraphCanvas } = await import("./GraphCanvas");
 
+function getFlowNodes() {
+  return Array.isArray(reactFlowProps?.nodes) ? reactFlowProps.nodes : [];
+}
+
+function getFlowNode(nodeId: string) {
+  return getFlowNodes().find(
+    (node) =>
+      typeof node === "object" &&
+      node !== null &&
+      "id" in node &&
+      node.id === nodeId,
+  );
+}
+
+async function invokeNodeClick(nodeId: string) {
+  const onNodeClick = reactFlowProps?.onNodeClick;
+  if (typeof onNodeClick !== "function") {
+    throw new Error("Missing onNodeClick handler");
+  }
+
+  const node = getFlowNode(nodeId);
+  if (
+    typeof node !== "object" ||
+    node === null ||
+    !("data" in node) ||
+    typeof node.data !== "object" ||
+    node.data === null ||
+    !("node" in node.data)
+  ) {
+    throw new Error(`Missing flow node for ${nodeId}`);
+  }
+
+  await act(async () => {
+    onNodeClick({ type: "click" }, node);
+  });
+}
+
+async function invokePaneClick() {
+  const onPaneClick = reactFlowProps?.onPaneClick;
+  if (typeof onPaneClick !== "function") {
+    throw new Error("Missing onPaneClick handler");
+  }
+
+  await act(async () => {
+    onPaneClick({ type: "click" });
+  });
+}
+
 function PositionProbe() {
   const { state } = useDocumentContext();
   const node = state.document.nodes.find((candidate) => candidate.id === "from-orders");
@@ -90,30 +120,50 @@ function PositionProbe() {
   );
 }
 
+function EditorStateProbe() {
+  const { state, dispatch } = useDocumentContext();
+
+  return (
+    <>
+      <span data-testid="selected-node-id">{state.selectedNodeId ?? "null"}</span>
+      <span data-testid="active-output-id">{state.activeOutputId ?? "null"}</span>
+      <button
+        type="button"
+        data-testid="clear-active-output"
+        onClick={() => dispatch({ type: "set-active-output", nodeId: null })}
+      >
+        clear
+      </button>
+    </>
+  );
+}
+
 afterEach(() => {
   cleanup();
   reactFlowProps = null;
 });
 
 describe("GraphCanvas", () => {
-  test("clicking another node while dirty requires discard confirmation before switching", async () => {
+  test("defers node switching through React Flow onNodeClick until discard is confirmed", async () => {
     const user = userEvent.setup();
 
     render(
       <DocumentProvider initialDocument={createSampleDocument()}>
         <GraphCanvas diagnostics={[]} />
+        <EditorStateProbe />
       </DocumentProvider>,
     );
 
-    await user.click(screen.getByTestId("flow-node-from-orders"));
+    await invokeNodeClick("from-orders");
     await user.clear(screen.getByLabelText("Node name"));
     await user.type(screen.getByLabelText("Node name"), "Paid orders");
-    await user.click(screen.getByTestId("flow-node-select-orders"));
+    await invokeNodeClick("select-orders");
 
     expect(screen.getByRole("dialog", { name: "Discard changes?" })).toBeTruthy();
     expect((screen.getByLabelText("Node name") as HTMLInputElement).value).toBe(
       "Paid orders",
     );
+    expect(screen.getByTestId("selected-node-id").textContent).toBe("from-orders");
 
     await user.click(screen.getByRole("button", { name: "Keep editing" }));
 
@@ -121,14 +171,16 @@ describe("GraphCanvas", () => {
     expect((screen.getByLabelText("Node name") as HTMLInputElement).value).toBe(
       "Paid orders",
     );
+    expect(screen.getByTestId("selected-node-id").textContent).toBe("from-orders");
 
-    await user.click(screen.getByTestId("flow-node-select-orders"));
+    await invokeNodeClick("select-orders");
     await user.click(screen.getByRole("button", { name: "Discard changes" }));
 
     expect(screen.queryByRole("dialog", { name: "Discard changes?" })).toBeNull();
     expect((screen.getByLabelText("Node name") as HTMLInputElement).value).toBe(
       "Project",
     );
+    expect(screen.getByTestId("selected-node-id").textContent).toBe("select-orders");
   });
 
   test("saving a renamed node updates the canvas node data label", async () => {
@@ -140,19 +192,12 @@ describe("GraphCanvas", () => {
       </DocumentProvider>,
     );
 
-    await user.click(screen.getByTestId("flow-node-from-orders"));
+    await invokeNodeClick("from-orders");
     await user.clear(screen.getByLabelText("Node name"));
     await user.type(screen.getByLabelText("Node name"), "Paid orders");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
-    const nodes = Array.isArray(reactFlowProps?.nodes) ? reactFlowProps.nodes : [];
-    const fromOrders = nodes.find(
-      (node) =>
-        typeof node === "object" &&
-        node !== null &&
-        "id" in node &&
-        node.id === "from-orders",
-    );
+    const fromOrders = getFlowNode("from-orders");
 
     expect(fromOrders).toMatchObject({
       data: {
@@ -161,7 +206,96 @@ describe("GraphCanvas", () => {
         },
       },
     });
-    expect(screen.getByTestId("flow-node-from-orders").textContent).toBe("Paid orders");
+    expect(screen.getByTestId("flow-node-label-from-orders").textContent).toBe(
+      "Paid orders",
+    );
+  });
+
+  test("onPaneClick while dirty shows discard confirmation and keep editing preserves selection and active output", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <DocumentProvider initialDocument={createSampleDocument()}>
+        <GraphCanvas diagnostics={[]} />
+        <EditorStateProbe />
+      </DocumentProvider>,
+    );
+
+    await user.click(screen.getByTestId("clear-active-output"));
+    await invokeNodeClick("from-orders");
+    await user.clear(screen.getByLabelText("Node name"));
+    await user.type(screen.getByLabelText("Node name"), "Paid orders");
+
+    await invokePaneClick();
+
+    expect(screen.getByRole("dialog", { name: "Discard changes?" })).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Keep editing" }));
+
+    expect(screen.queryByRole("dialog", { name: "Discard changes?" })).toBeNull();
+    expect(screen.getByTestId("selected-node-id").textContent).toBe("from-orders");
+    expect(screen.getByTestId("active-output-id").textContent).toBe("null");
+    expect((screen.getByLabelText("Node name") as HTMLInputElement).value).toBe(
+      "Paid orders",
+    );
+  });
+
+  test("confirming discard after a deferred pane close applies the requested state change", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <DocumentProvider initialDocument={createSampleDocument()}>
+        <GraphCanvas diagnostics={[]} />
+        <EditorStateProbe />
+      </DocumentProvider>,
+    );
+
+    await invokeNodeClick("from-orders");
+    await user.clear(screen.getByLabelText("Node name"));
+    await user.type(screen.getByLabelText("Node name"), "Paid orders");
+
+    await invokePaneClick();
+    await user.click(screen.getByRole("button", { name: "Discard changes" }));
+
+    expect(screen.queryByRole("dialog", { name: "Discard changes?" })).toBeNull();
+    expect(screen.queryByLabelText("Node name")).toBeNull();
+    expect(screen.getByTestId("selected-node-id").textContent).toBe("null");
+  });
+
+  test("keep editing preserves active output until an output node switch is discarded", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <DocumentProvider initialDocument={createSampleDocument()}>
+        <GraphCanvas diagnostics={[]} />
+        <EditorStateProbe />
+      </DocumentProvider>,
+    );
+
+    await user.click(screen.getByTestId("clear-active-output"));
+    await invokeNodeClick("from-orders");
+    await user.clear(screen.getByLabelText("Node name"));
+    await user.type(screen.getByLabelText("Node name"), "Paid orders");
+
+    await invokeNodeClick("output-orders");
+
+    expect(screen.getByRole("dialog", { name: "Discard changes?" })).toBeTruthy();
+    expect(screen.getByTestId("selected-node-id").textContent).toBe("from-orders");
+    expect(screen.getByTestId("active-output-id").textContent).toBe("null");
+
+    await user.click(screen.getByRole("button", { name: "Keep editing" }));
+
+    expect(screen.getByTestId("selected-node-id").textContent).toBe("from-orders");
+    expect(screen.getByTestId("active-output-id").textContent).toBe("null");
+
+    await invokeNodeClick("output-orders");
+    await user.click(screen.getByRole("button", { name: "Discard changes" }));
+
+    expect(screen.getByTestId("selected-node-id").textContent).toBe("output-orders");
+    expect(screen.getByTestId("active-output-id").textContent).toBe("output-orders");
+    expect((screen.getByLabelText("Node name") as HTMLInputElement).value).toBe(
+      "Orders Report",
+    );
   });
 
   test("updates node position from React Flow node changes during drag", () => {
@@ -226,14 +360,7 @@ describe("GraphCanvas", () => {
       ]);
     });
 
-    const nodes = Array.isArray(reactFlowProps?.nodes) ? reactFlowProps.nodes : [];
-    const fromOrders = nodes.find(
-      (node) =>
-        typeof node === "object" &&
-        node !== null &&
-        "id" in node &&
-        node.id === "from-orders",
-    );
+    const fromOrders = getFlowNode("from-orders");
 
     expect(fromOrders).toMatchObject({
       measured: { width: 180, height: 86 },
