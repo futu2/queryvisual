@@ -41,9 +41,8 @@ export interface OutputRuntimeDependencies {
 }
 
 const defaultRuntimeDependencies: OutputRuntimeDependencies = {
-  clipboardWriteText: (sql) => {
-    navigator.clipboard?.writeText?.(sql);
-  },
+  clipboardWriteText: (sql) =>
+    navigator.clipboard?.writeText?.(sql) ?? Promise.resolve(),
   consoleLog: (sql) => {
     console.log(sql);
   },
@@ -261,7 +260,18 @@ export function useOutputRuntime(
   document: GraphDocument,
   deps?: Partial<OutputRuntimeDependencies>,
 ): OutputRuntimeSnapshot {
-  const compiledSnapshot = useMemo(() => compileDocumentOutputs(document), [document]);
+  const runtimeDocument = useMemo(
+    () => ({
+      ...document,
+      nodes: document.nodes,
+      edges: document.edges,
+    }),
+    [document.edges, document.nodes],
+  );
+  const compiledSnapshot = useMemo(
+    () => compileDocumentOutputs(runtimeDocument),
+    [runtimeDocument],
+  );
   const [listenerStatusByOutputId, setListenerStatusByOutputId] = useState<
     Record<string, OutputListenerStatus>
   >({});
@@ -275,7 +285,7 @@ export function useOutputRuntime(
     let cancelled = false;
     const runListeners = async () => {
       const nextStatusByOutputId = await applyOutputListeners({
-        document,
+        document: runtimeDocument,
         resultsByOutputId: compiledSnapshot.resultsByOutputId,
         previousStatusByOutputId: listenerStatusRef.current,
         deps,
@@ -292,7 +302,7 @@ export function useOutputRuntime(
     return () => {
       cancelled = true;
     };
-  }, [compiledSnapshot.resultsByOutputId, deps, document]);
+  }, [compiledSnapshot.resultsByOutputId, deps, runtimeDocument]);
 
   return {
     ...compiledSnapshot,

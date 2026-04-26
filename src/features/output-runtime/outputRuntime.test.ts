@@ -6,7 +6,6 @@ import { createDefaultOutputListenerConfig } from "../../domain/document/outputL
 import {
   applyOutputListeners,
   compileDocumentOutputs,
-  createInitialListenerStatus,
   useOutputRuntime,
   type OutputRuntimeSnapshot,
 } from "./outputRuntime";
@@ -295,5 +294,106 @@ describe("useOutputRuntime and applyOutputListeners", () => {
     expect(status["output-orders"].lastErrorMessage).toContain(
       "clipboard write failed",
     );
+  });
+
+  test("captures async errors from default clipboard dependency", async () => {
+    const sample = createSampleDocument();
+    const document = {
+      ...sample,
+      nodes: sample.nodes.map((node) =>
+        node.id === "output-orders"
+          ? {
+              ...node,
+              data: {
+                ...node.data,
+                listeners: {
+                  copyToClipboard: true,
+                  logToConsole: false,
+                  saveToLocalStorage: {
+                    enabled: false,
+                    key: "queryvisual.output.orders_report",
+                  },
+                },
+              },
+            }
+          : node,
+      ),
+    };
+    const originalClipboard = navigator.clipboard;
+    const writeText = mock(async () => {
+      throw new Error("default clipboard failed");
+    });
+
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText,
+      },
+    });
+
+    try {
+      const status = await applyOutputListeners({
+        document,
+        resultsByOutputId: compileDocumentOutputs(document).resultsByOutputId,
+        previousStatusByOutputId: {},
+      });
+
+      expect(writeText).toHaveBeenCalledTimes(1);
+      expect(status["output-orders"].lastErrorMessage).toContain(
+        "default clipboard failed",
+      );
+    } finally {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: originalClipboard,
+      });
+    }
+  });
+
+  test("does not rerun runtime listener pass on viewport-only document updates", async () => {
+    const clipboardWrite = mock(() => {});
+    const onSnapshot = mock(() => {});
+    const document = createDocumentWithListenerOutputs();
+    const deps = {
+      clipboardWriteText: clipboardWrite,
+      consoleLog: mock(() => {}),
+      localStorageSetItem: mock(() => {}),
+      now: () => 1700000000000,
+    };
+    const { rerender } = render(
+      createElement(RuntimeProbe, {
+        document,
+        onSnapshot,
+        deps,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(clipboardWrite).toHaveBeenCalledTimes(1);
+    });
+    onSnapshot.mockClear();
+
+    rerender(
+      createElement(RuntimeProbe, {
+        document: {
+          ...document,
+          viewport: {
+            x: 120,
+            y: 80,
+            zoom: 1.25,
+          },
+        },
+        onSnapshot,
+        deps,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(onSnapshot).toHaveBeenCalledTimes(1);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(onSnapshot).toHaveBeenCalledTimes(1);
+    expect(clipboardWrite).toHaveBeenCalledTimes(1);
   });
 });

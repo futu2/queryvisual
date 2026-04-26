@@ -423,11 +423,6 @@ body {
     border-bottom: 1px solid rgba(31, 29, 26, 0.12);
   }
 
-  .debug-pane {
-    border-left: 0;
-    border-bottom: 0;
-  }
-
   .modal-card {
     width: calc(100vw - 24px);
     max-height: calc(100vh - 24px);
