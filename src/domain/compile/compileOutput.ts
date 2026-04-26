@@ -41,6 +41,7 @@ function parseInputHandle(handle: string): string | null {
 function lowerWorkspaceOutputToIr(params: {
   workspace: GraphWorkspace;
   semantic: SemanticOutput;
+  graphInputRelations?: Record<string, IRRelNode>;
 }): IRRelNode | null {
   if (params.semantic.diagnostics.some((diagnostic) => diagnostic.level === "error")) {
     return null;
@@ -66,6 +67,20 @@ function lowerWorkspaceOutputToIr(params: {
     return schemas;
   }
 
+  function subgraphInputRelations(subgraphNodeId: string) {
+    const relations: Record<string, IRRelNode> = {};
+    for (const edge of params.semantic.document.edges) {
+      if (edge.target !== subgraphNodeId) continue;
+      const childInputId = parseInputHandle(edge.targetHandle);
+      if (!childInputId) continue;
+
+      const relation = lowerEdgeSource(edge);
+      if (!relation) continue;
+      relations[childInputId] = relation;
+    }
+    return relations;
+  }
+
   function lowerEdgeSource(edge: { source: string; sourceHandle: string }): IRRelNode | null {
     const sourceNode = params.semantic.nodesById[edge.source];
     if (!sourceNode) return null;
@@ -83,6 +98,7 @@ function lowerWorkspaceOutputToIr(params: {
       childGraphId,
       childOutputId,
       subgraphInputSchemas(sourceNode.id),
+      subgraphInputRelations(sourceNode.id),
     );
     if (childResult.semantic.diagnostics.some((diagnostic) => diagnostic.level === "error")) {
       return null;
@@ -109,13 +125,19 @@ function lowerWorkspaceOutputToIr(params: {
       let lowered: IRRelNode | null = null;
 
       switch (node.kind) {
-        case "graphInput":
+        case "graphInput": {
+          const overridden = params.graphInputRelations?.[node.id];
+          if (overridden) {
+            lowered = overridden;
+            break;
+          }
           lowered = {
             kind: "input",
             name: node.data.inputName,
             schema: params.semantic.schemas[node.id] ?? node.data.columns,
           };
           break;
+        }
         case "fromTable":
           lowered = {
             kind: "scan",
@@ -236,21 +258,24 @@ export function compileOutput(
   graphId: string,
   outputId: string,
   graphInputSchemas?: Record<string, ColumnMap>,
+  graphInputRelations?: Record<string, IRRelNode>,
 ): CompileOutputResult;
 export function compileOutput(
   arg1: GraphDocument | GraphWorkspace,
   arg2: string,
   arg3?: string,
   arg4?: Record<string, ColumnMap>,
+  arg5?: Record<string, IRRelNode>,
 ): CompileOutputResult {
   if (isWorkspace(arg1)) {
     const workspace = arg1;
     const graphId = arg2;
     const outputId = arg3 ?? arg2;
     const graphInputSchemas = arg4 ?? {};
+    const graphInputRelations = arg5 ?? {};
 
     const semantic = validateOutput(workspace, graphId, outputId, graphInputSchemas);
-    const ir = lowerWorkspaceOutputToIr({ workspace, semantic });
+    const ir = lowerWorkspaceOutputToIr({ workspace, semantic, graphInputRelations });
     const optimizedIr = ir ? optimizeOutput(ir) : null;
 
     return {
