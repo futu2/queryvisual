@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
+import { createRef } from "react";
 import userEvent from "@testing-library/user-event";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { GraphDocument } from "../../domain/document/types";
 import type { GraphNode } from "../../domain/document/types";
 import { DocumentProvider } from "../../app/state/DocumentContext";
-import { NodeEditorModal } from "./NodeEditorModal";
+import { NodeEditorModal, type NodeEditorModalHandle } from "./NodeEditorModal";
 
 afterEach(cleanup);
 
@@ -797,6 +798,47 @@ describe("NodeEditorModal", () => {
     await user.click(screen.getByRole("button", { name: "Discard changes" }));
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test("dirty requestClose uses the provided close callback after discard is confirmed", async () => {
+    const user = userEvent.setup();
+    const onClose = mock();
+    const customClose = mock();
+    const ref = createRef<NodeEditorModalHandle>();
+    const node: GraphNode = {
+      id: "where-custom-discard",
+      kind: "where",
+      label: "Filter orders",
+      position: { x: 0, y: 0 },
+      data: {
+        predicate: "status = 'paid'",
+      },
+    };
+
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "Test document" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [node],
+      edges: [],
+    };
+
+    render(
+      <DocumentProvider initialDocument={document}>
+        <NodeEditorModal ref={ref} node={node} onClose={onClose} onSave={() => {}} />
+      </DocumentProvider>,
+    );
+
+    await user.clear(screen.getByLabelText("Node name"));
+    await user.type(screen.getByLabelText("Node name"), "Paid orders");
+
+    act(() => {
+      ref.current?.requestClose(customClose);
+    });
+    await user.click(screen.getByRole("button", { name: "Discard changes" }));
+
+    expect(customClose).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   test("backdrop click and Escape on a dirty modal show discard confirmation instead of closing", async () => {

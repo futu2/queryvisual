@@ -35,6 +35,9 @@ function NodeEditorModal({
   } = useDocumentContext();
   const { draft, setDraft } = useEditableNode(node);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
+  const [pendingCloseAction, setPendingCloseAction] = useState<(() => void) | null>(
+    null,
+  );
 
   const schemaOverrides = useMemo(
     () => inferNodeSchemas(graphDocument, node.id),
@@ -52,6 +55,7 @@ function NodeEditorModal({
       return;
     }
 
+    setPendingCloseAction(() => closeAction);
     setShowDiscardDialog(true);
   }
 
@@ -62,6 +66,17 @@ function NodeEditorModal({
     }),
     [isDirty, onClose],
   );
+
+  function handleKeepEditing() {
+    setPendingCloseAction(null);
+    setShowDiscardDialog(false);
+  }
+
+  function handleDiscardChanges() {
+    const closeAction = pendingCloseAction ?? onClose;
+    setPendingCloseAction(null);
+    closeAction();
+  }
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -142,14 +157,14 @@ function NodeEditorModal({
                 <button
                   type="button"
                   className="ghost-button"
-                  onClick={() => setShowDiscardDialog(false)}
+                  onClick={handleKeepEditing}
                 >
                   Keep editing
                 </button>
                 <button
                   type="button"
                   className="solid-button"
-                  onClick={onClose}
+                  onClick={handleDiscardChanges}
                 >
                   Discard changes
                 </button>
