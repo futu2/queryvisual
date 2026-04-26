@@ -33,9 +33,18 @@
 }
 
 .query-node--join {
-  box-shadow:
-    inset 4px 0 0 rgba(143, 87, 23, 0.18),
-    0 8px 20px rgba(68, 55, 40, 0.08);
+  padding-left: 22px;
+}
+
+.query-node__accent {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 10px;
+  width: 4px;
+  border-radius: 999px;
+  background: rgba(143, 87, 23, 0.22);
+  pointer-events: none;
 }
 
 .query-node__header {

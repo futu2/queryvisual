@@ -46,8 +46,22 @@ function TargetHandles({ node }: { node: GraphNode }) {
   if (node.kind === "join") {
     return (
       <>
-        <Handle type="target" id="left" position={Position.Left} style={{ top: 34 }} />
-        <Handle type="target" id="right" position={Position.Left} style={{ top: 62 }} />
+        <span hidden data-query-node-handle-marker="target-left" />
+        <Handle
+          type="target"
+          id="left"
+          position={Position.Left}
+          style={{ top: 34 }}
+          data-query-node-handle="target-left"
+        />
+        <span hidden data-query-node-handle-marker="target-right" />
+        <Handle
+          type="target"
+          id="right"
+          position={Position.Left}
+          style={{ top: 62 }}
+          data-query-node-handle="target-right"
+        />
       </>
     );
   }
@@ -56,7 +70,17 @@ function TargetHandles({ node }: { node: GraphNode }) {
     return null;
   }
 
-  return <Handle type="target" id="in" position={Position.Left} />;
+  return (
+    <>
+      <span hidden data-query-node-handle-marker="target-in" />
+      <Handle
+        type="target"
+        id="in"
+        position={Position.Left}
+        data-query-node-handle="target-in"
+      />
+    </>
+  );
 }
 
 export function QueryNode({ data, selected }: NodeProps<FlowNodeData>) {
@@ -72,6 +96,7 @@ export function QueryNode({ data, selected }: NodeProps<FlowNodeData>) {
       data-node-family={presentation.family}
     >
       <TargetHandles node={data.node} />
+      {data.node.kind === "join" ? <span className="query-node__accent" aria-hidden="true" /> : null}
       <div className="query-node__header">
         <span className="query-node__glyph" aria-hidden="true">
           {presentation.glyph}
@@ -82,7 +107,15 @@ export function QueryNode({ data, selected }: NodeProps<FlowNodeData>) {
       <div className="query-node__summary">{summaryText(data.node)}</div>
       {hasErrors ? <span className="query-node__badge">error</span> : null}
       {data.node.kind === "output" ? null : (
-        <Handle type="source" id="out" position={Position.Right} />
+        <>
+          <span hidden data-query-node-handle-marker="source-out" />
+          <Handle
+            type="source"
+            id="out"
+            position={Position.Right}
+            data-query-node-handle="source-out"
+          />
+        </>
       )}
     </div>
   );
