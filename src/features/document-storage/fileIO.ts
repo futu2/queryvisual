@@ -131,8 +131,8 @@ function isNodeData(kind: typeof nodeKinds[number], value: unknown) {
       return isTableRef(value.tableRef) && isColumnMap(value.columns);
     case "subgraph":
       return (
-        typeof value.graphId === "string" ||
-        (value.target !== undefined && isSubgraphTarget(value.target))
+        typeof value.graphId === "string" &&
+        (value.target === undefined || isSubgraphTarget(value.target))
       );
     case "join":
       return (

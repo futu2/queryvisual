@@ -71,6 +71,44 @@ describe("fileIO", () => {
     expect(serializeDocumentJson(parsed)).toContain('"sourceHandle": "orders_report"');
   });
 
+  test("rejects subgraph nodes with a malformed target even when graphId is present", () => {
+    expect(() =>
+      parseWorkspaceJson(
+        JSON.stringify({
+          version: 2,
+          metadata: { name: "workspace" },
+          entryGraphId: "graph-main",
+          graphs: [
+            {
+              id: "graph-main",
+              metadata: { name: "Main" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [
+                {
+                  id: "subgraph-1",
+                  kind: "subgraph",
+                  label: "Orders",
+                  position: { x: 0, y: 0 },
+                  data: { graphId: "graph-child", target: { kind: "local" } },
+                },
+              ],
+              edges: [],
+            },
+            {
+              id: "graph-child",
+              metadata: { name: "Child" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+          ],
+          installedPackages: [],
+          packageManifest: null,
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual workspace");
+  });
+
   test("rejects legacy documents that include a package-target subgraph node", () => {
     expect(() =>
       parseDocumentJson(
