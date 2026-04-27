@@ -24,6 +24,7 @@ export type EditorAction =
   | { type: "set-active-graph"; graphId: string }
   | { type: "add-node"; node: GraphNode }
   | { type: "replace-node"; node: GraphNode }
+  | { type: "delete-node"; nodeId: string }
   | { type: "upsert-edge"; edge: GraphEdge }
   | { type: "delete-edge"; edgeId: string }
   | {
@@ -269,6 +270,23 @@ export function documentReducer(
           node.id === action.node.id ? action.node : node,
         ),
       }));
+    case "delete-node": {
+      const nextState = updateActiveGraph(state, (graph) => ({
+        ...graph,
+        nodes: graph.nodes.filter((node) => node.id !== action.nodeId),
+        edges: graph.edges.filter(
+          (edge) => edge.source !== action.nodeId && edge.target !== action.nodeId,
+        ),
+      }));
+
+      return {
+        ...nextState,
+        selectedNodeId:
+          nextState.selectedNodeId === action.nodeId ? null : nextState.selectedNodeId,
+        editorNodeId:
+          nextState.editorNodeId === action.nodeId ? null : nextState.editorNodeId,
+      };
+    }
     case "upsert-edge":
       return updateActiveGraph(state, (graph) => ({
         ...graph,

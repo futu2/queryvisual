@@ -1,5 +1,5 @@
 import { Handle, Position, type NodeProps, useUpdateNodeInternals } from "@xyflow/react";
-import { useLayoutEffect, useMemo } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 import type { GraphNode } from "../../../domain/document/types";
 import { formatTableRef } from "../../../domain/schema/types";
 import { inferChildGraphInterface } from "../../../domain/workspace/interfaces";
@@ -146,6 +146,7 @@ function TargetHandles({
 
 export function QueryNode({ id, data, selected }: NodeProps<FlowNodeData>) {
   const { t } = useI18n();
+  const [isHovered, setIsHovered] = useState(false);
   const hasErrors = data.diagnostics.some(
     (diagnostic) => diagnostic.level === "error",
   );
@@ -183,9 +184,29 @@ export function QueryNode({ id, data, selected }: NodeProps<FlowNodeData>) {
       className={`query-node query-node--${presentation.family} query-node--${data.node.kind} ${selected ? "is-selected" : ""} ${hasErrors ? "has-errors" : ""}`}
       data-node-kind={data.node.kind}
       data-node-family={presentation.family}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       <TargetHandles node={data.node} workspace={data.workspace} />
       {data.node.kind === "join" ? <span className="query-node__accent" aria-hidden="true" /> : null}
+      {data.onDelete && (selected || isHovered) ? (
+        <button
+          type="button"
+          className="query-node__delete"
+          aria-label={t("queryNode.delete")}
+          onMouseDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            data.onDelete?.(id);
+          }}
+        >
+          ×
+        </button>
+      ) : null}
       <div className="query-node__header">
         <span className="query-node__glyph" aria-hidden="true">
           {presentation.glyph}

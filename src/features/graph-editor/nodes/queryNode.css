@@ -102,9 +102,38 @@
 .query-node__badge {
   position: absolute;
   top: 12px;
-  right: 12px;
+  right: 44px;
   font-size: 11px;
   color: #ae3f2f;
+}
+
+.query-node__delete {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #8f3428;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  box-shadow: 0 3px 10px rgba(38, 26, 18, 0.14);
+  cursor: pointer;
+}
+
+.query-node__delete:hover {
+  background: #fff2ef;
+}
+
+.query-node__delete:focus-visible {
+  outline: 2px solid rgba(174, 63, 47, 0.4);
+  outline-offset: 2px;
 }
 
 .query-node.is-selected {

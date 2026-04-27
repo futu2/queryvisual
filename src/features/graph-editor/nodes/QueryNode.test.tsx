@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
+import userEvent from "@testing-library/user-event";
 import { cleanup, render, screen } from "@testing-library/react";
 import { createDefaultOutputListenerConfig } from "../../../domain/document/outputListeners";
 import type { GraphWorkspace } from "../../../domain/document/types";
@@ -317,6 +318,40 @@ describe("QueryNode", () => {
     expect(screen.getByText("筛选")).toBeTruthy();
     expect(screen.getByText("Custom Where Label")).toBeTruthy();
     expect(screen.getByText("id > 0")).toBeTruthy();
+  });
+
+  test("selected nodes expose a delete affordance that calls the provided handler", async () => {
+    const user = userEvent.setup();
+    const onDelete = mock();
+
+    renderWithI18n(
+      <ReactFlowProvider>
+        <QueryNode
+          id="where-delete"
+          data={
+            {
+              node: {
+                id: "where-delete",
+                kind: "where",
+                label: "Where",
+                position: { x: 0, y: 0 },
+                data: {
+                  predicate: "total > 0",
+                },
+              },
+              diagnostics: [],
+              onDelete,
+            } as never
+          }
+          selected={true}
+          dragging={false}
+        />
+      </ReactFlowProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Delete node" }));
+
+    expect(onDelete).toHaveBeenCalledWith("where-delete");
   });
 
   test("source transform and terminal nodes expose family and kind hooks", () => {

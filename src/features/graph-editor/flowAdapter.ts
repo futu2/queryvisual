@@ -7,6 +7,7 @@ export interface FlowNodeData {
   node: GraphNode;
   diagnostics: Diagnostic[];
   workspace?: GraphWorkspace;
+  onDelete?: (nodeId: string) => void;
 }
 
 export interface FlowNodeRuntime {
@@ -25,6 +26,7 @@ export function toFlowNodes(
   diagnostics: Diagnostic[],
   selectedNodeId: string | null,
   runtimeByNodeId: Record<string, FlowNodeRuntime> = {},
+  onDelete?: (nodeId: string) => void,
 ): Array<Node<FlowNodeData>> {
   return document.nodes.map((node) => ({
     ...runtimeByNodeId[node.id],
@@ -38,6 +40,7 @@ export function toFlowNodes(
         (diagnostic) => diagnostic.ref?.nodeId === node.id,
       ),
       workspace,
+      onDelete,
     },
   }));
 }

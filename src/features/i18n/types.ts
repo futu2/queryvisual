@@ -132,6 +132,7 @@ export type MessageKey =
   | "queryNode.summary.groupsAndAggs"
   | "queryNode.summary.sortKeys"
   | "queryNode.summary.limit"
+  | "queryNode.delete"
   | "edge.delete";
 
 export type Messages = Record<MessageKey, string>;

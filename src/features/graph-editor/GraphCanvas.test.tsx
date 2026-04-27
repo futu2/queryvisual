@@ -16,6 +16,10 @@ mock.module("@xyflow/react", () => ({
     reactFlowProps = props;
     const nodes = Array.isArray(props.nodes) ? props.nodes : [];
     const edges = Array.isArray(props.edges) ? props.edges : [];
+    const nodeTypes =
+      typeof props.nodeTypes === "object" && props.nodeTypes !== null
+        ? (props.nodeTypes as Record<string, (...args: Array<unknown>) => JSX.Element>)
+        : {};
     const edgeTypes =
       typeof props.edgeTypes === "object" && props.edgeTypes !== null
         ? (props.edgeTypes as Record<string, (...args: Array<unknown>) => JSX.Element>)
@@ -45,14 +49,22 @@ mock.module("@xyflow/react", () => ({
             typeof nodeData.label === "string"
               ? nodeData.label
               : "";
+          const nodeType =
+            "type" in node && typeof node.type === "string" ? node.type : "";
+          const NodeComponent = nodeTypes[nodeType];
 
           return (
-            <span
-              key={nodeId}
-              data-testid={`flow-node-label-${nodeId}`}
-            >
-              {label}
-            </span>
+            <div key={nodeId}>
+              <span data-testid={`flow-node-label-${nodeId}`}>{label}</span>
+              {NodeComponent ? (
+                <NodeComponent
+                  id={nodeId}
+                  data={"data" in node ? node.data : undefined}
+                  selected={"selected" in node ? Boolean(node.selected) : false}
+                  dragging={"dragging" in node ? Boolean(node.dragging) : false}
+                />
+              ) : null}
+            </div>
           );
         })}
         {edges.map((edge) => {
@@ -582,5 +594,26 @@ describe("GraphCanvas", () => {
           edge.id === "edge-from-select",
       ),
     ).toBeTruthy();
+  });
+
+  test("hovering a node exposes a delete affordance that removes that node", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialDocument={createSampleDocument()}>
+          <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
+        </DocumentProvider>
+      </I18nProvider>,
+    );
+
+    const selectNode = container.querySelector('[data-node-kind="select"]');
+    if (!selectNode) {
+      throw new Error("Missing select node");
+    }
+
+    fireEvent.mouseEnter(selectNode);
+    await user.click(screen.getByRole("button", { name: "Delete node" }));
+
+    expect(screen.queryByTestId("flow-node-label-select-orders")).toBeNull();
   });
 });

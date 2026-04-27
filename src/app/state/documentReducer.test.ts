@@ -237,6 +237,26 @@ describe("documentReducer", () => {
     expect(next.document.edges.some((edge) => edge.id === "edge-from-select")).toBe(true);
   });
 
+  test("deletes a node and any connected edges together", () => {
+    const initial = createInitialEditorState(createSampleDocument());
+
+    const next = documentReducer(
+      initial,
+      {
+        type: "delete-node",
+        nodeId: "select-orders",
+      } as never,
+    );
+
+    expect(next.document.nodes.some((node) => node.id === "select-orders")).toBe(false);
+    expect(
+      next.document.edges.some(
+        (edge) => edge.source === "select-orders" || edge.target === "select-orders",
+      ),
+    ).toBe(false);
+    expect(next.document.nodes.some((node) => node.id === "from-orders")).toBe(true);
+  });
+
   test("throws on unknown runtime actions", () => {
     const initial = createInitialEditorState(createSampleDocument());
 

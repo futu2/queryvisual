@@ -78,8 +78,10 @@ export function GraphCanvas({
         outputRuntime.diagnostics,
         state.selectedNodeId,
         nodeRuntimeById,
+        (nodeId) => dispatch({ type: "delete-node", nodeId }),
       ),
     [
+      dispatch,
       nodeRuntimeById,
       outputRuntime.diagnostics,
       state.document,

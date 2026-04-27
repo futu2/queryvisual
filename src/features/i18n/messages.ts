@@ -130,6 +130,7 @@ export const enMessages: Messages = {
   "queryNode.summary.groupsAndAggs": "{groups} groups · {aggs} aggs",
   "queryNode.summary.sortKeys": "{count} sort keys",
   "queryNode.summary.limit": "limit {count}",
+  "queryNode.delete": "Delete node",
   "edge.delete": "Delete edge",
 };
 
@@ -263,6 +264,7 @@ export const zhCNMessages: Messages = {
   "queryNode.summary.groupsAndAggs": "{groups} 个分组键 · {aggs} 个聚合",
   "queryNode.summary.sortKeys": "{count} 个排序键",
   "queryNode.summary.limit": "限制 {count}",
+  "queryNode.delete": "删除节点",
   "edge.delete": "删除连线",
 };
 
