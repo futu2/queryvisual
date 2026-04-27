@@ -216,6 +216,32 @@ function inferNodeSchema(
         break;
       }
 
+      const childInputNameCounts = new Map<string, number>();
+      const childOutputNameCounts = new Map<string, number>();
+      for (const childNode of childGraph.nodes) {
+        if (childNode.kind === "graphInput") {
+          childInputNameCounts.set(
+            childNode.data.inputName,
+            (childInputNameCounts.get(childNode.data.inputName) ?? 0) + 1,
+          );
+        }
+        if (childNode.kind === "output") {
+          childOutputNameCounts.set(
+            childNode.data.outputName,
+            (childOutputNameCounts.get(childNode.data.outputName) ?? 0) + 1,
+          );
+        }
+      }
+      if (
+        [...childInputNameCounts.values()].some((count) => count > 1) ||
+        [...childOutputNameCounts.values()].some((count) => count > 1)
+      ) {
+        // Child interface is ambiguous; fail closed instead of inferring schemas against an invalid
+        // interface contract.
+        result = invalidSchema();
+        break;
+      }
+
       const visitingGraphs = context.visitingGraphs ?? new Set<string>();
       const childInputSchemas: Record<string, ColumnMap> = {};
       let inputsOk = true;

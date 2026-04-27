@@ -673,4 +673,227 @@ describe("inferDocumentSchemas", () => {
     expect(schemas["subgraph-orders"]).toEqual({});
     expect(schemas["select-parent"]).toEqual({});
   });
+
+  test("fails closed when a referenced child graph has duplicate graphInput.inputName values", () => {
+    const childGraph = {
+      id: "graph-child",
+      metadata: { name: "Child" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "child-input-a",
+          kind: "graphInput" as const,
+          label: "Input A",
+          position: { x: 0, y: 0 },
+          data: {
+            inputName: "orders_in",
+            columns: { order_id: "int" },
+          },
+        },
+        {
+          id: "child-input-b",
+          kind: "graphInput" as const,
+          label: "Input B",
+          position: { x: 0, y: 200 },
+          data: {
+            inputName: "orders_in",
+            columns: { order_id: "int" },
+          },
+        },
+        {
+          id: "child-output",
+          kind: "output" as const,
+          label: "Output",
+          position: { x: 260, y: 0 },
+          data: {
+            outputName: "child_out",
+            listeners: createDefaultOutputListenerConfig("child_out"),
+          },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-a-out",
+          source: "child-input-a",
+          sourceHandle: "out",
+          target: "child-output",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const parentGraph = {
+      id: "graph-parent",
+      metadata: { name: "Parent" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "from-parent",
+          kind: "fromTable" as const,
+          label: "T",
+          position: { x: -260, y: 0 },
+          data: {
+            tableRef: { tableName: "t" },
+            columns: { order_id: "int" },
+          },
+        },
+        {
+          id: "subgraph-child",
+          kind: "subgraph" as const,
+          label: "Child graph",
+          position: { x: 0, y: 0 },
+          data: { graphId: "graph-child" },
+        },
+        {
+          id: "select-parent",
+          kind: "select" as const,
+          label: "Select",
+          position: { x: 260, y: 0 },
+          data: { mappings: [{ name: "order_id", expression: "order_id" }] },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-parent-subgraph-input",
+          source: "from-parent",
+          sourceHandle: "out",
+          target: "subgraph-child",
+          targetHandle: "in:child-input-a",
+        },
+        {
+          id: "edge-subgraph-select",
+          source: "subgraph-child",
+          sourceHandle: "out:child-output",
+          target: "select-parent",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const workspace: GraphWorkspace = {
+      version: 2,
+      metadata: { name: "Workspace" },
+      entryGraphId: "graph-parent",
+      graphs: [parentGraph, childGraph],
+    };
+
+    const schemas = inferWorkspaceGraphSchemas(workspace, "graph-parent");
+    expect(schemas["subgraph-child"]).toEqual({});
+    expect(schemas["select-parent"]).toEqual({});
+  });
+
+  test("fails closed when a referenced child graph has duplicate output.outputName values", () => {
+    const childGraph = {
+      id: "graph-child",
+      metadata: { name: "Child" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "child-input",
+          kind: "graphInput" as const,
+          label: "Input",
+          position: { x: 0, y: 0 },
+          data: {
+            inputName: "orders_in",
+            columns: { order_id: "int" },
+          },
+        },
+        {
+          id: "child-output-a",
+          kind: "output" as const,
+          label: "Output A",
+          position: { x: 260, y: 0 },
+          data: {
+            outputName: "child_out",
+            listeners: createDefaultOutputListenerConfig("child_out"),
+          },
+        },
+        {
+          id: "child-output-b",
+          kind: "output" as const,
+          label: "Output B",
+          position: { x: 260, y: 200 },
+          data: {
+            outputName: "child_out",
+            listeners: createDefaultOutputListenerConfig("child_out"),
+          },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-in-out-a",
+          source: "child-input",
+          sourceHandle: "out",
+          target: "child-output-a",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-in-out-b",
+          source: "child-input",
+          sourceHandle: "out",
+          target: "child-output-b",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const parentGraph = {
+      id: "graph-parent",
+      metadata: { name: "Parent" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "from-parent",
+          kind: "fromTable" as const,
+          label: "T",
+          position: { x: -260, y: 0 },
+          data: {
+            tableRef: { tableName: "t" },
+            columns: { order_id: "int" },
+          },
+        },
+        {
+          id: "subgraph-child",
+          kind: "subgraph" as const,
+          label: "Child graph",
+          position: { x: 0, y: 0 },
+          data: { graphId: "graph-child" },
+        },
+        {
+          id: "select-parent",
+          kind: "select" as const,
+          label: "Select",
+          position: { x: 260, y: 0 },
+          data: { mappings: [{ name: "order_id", expression: "order_id" }] },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-parent-subgraph-input",
+          source: "from-parent",
+          sourceHandle: "out",
+          target: "subgraph-child",
+          targetHandle: "in:child-input",
+        },
+        {
+          id: "edge-subgraph-select",
+          source: "subgraph-child",
+          sourceHandle: "out:child-output-a",
+          target: "select-parent",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const workspace: GraphWorkspace = {
+      version: 2,
+      metadata: { name: "Workspace" },
+      entryGraphId: "graph-parent",
+      graphs: [parentGraph, childGraph],
+    };
+
+    const schemas = inferWorkspaceGraphSchemas(workspace, "graph-parent");
+    expect(schemas["subgraph-child"]).toEqual({});
+    expect(schemas["select-parent"]).toEqual({});
+  });
 });
