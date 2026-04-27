@@ -208,6 +208,62 @@ function createWorkspaceWithParentChildGraphs(options?: {
   };
 }
 
+function createWorkspaceWithDuplicateOutputIds(): GraphWorkspace {
+  const createGraph = (graphId: string, graphName: string) => ({
+    id: graphId,
+    metadata: { name: graphName },
+    viewport: { x: 0, y: 0, zoom: 1 },
+    nodes: [
+      {
+        id: "from-shared",
+        kind: "fromTable" as const,
+        label: "Orders",
+        position: { x: 0, y: 0 },
+        data: {
+          tableRef: { schemaName: "sales", tableName: "orders" },
+          columns: { total: "float" },
+        },
+      },
+      {
+        id: "output-shared",
+        kind: "output" as const,
+        label: "Output",
+        position: { x: 260, y: 0 },
+        data: {
+          outputName: `${graphName}_out`,
+          listeners: {
+            copyToClipboard: true,
+            logToConsole: false,
+            saveToLocalStorage: {
+              enabled: false,
+              key: `queryvisual.output.${graphId}`,
+            },
+          },
+        },
+      },
+    ],
+    edges: [
+      {
+        id: `edge-${graphId}-output`,
+        source: "from-shared",
+        sourceHandle: "out",
+        target: "output-shared",
+        targetHandle: "in",
+      },
+    ],
+  });
+
+  return {
+    version: 2,
+    metadata: { name: "Workspace" },
+    entryGraphId: "graph-a",
+    graphs: [
+      createGraph("graph-a", "Alpha"),
+      createGraph("graph-b", "Beta"),
+    ],
+  };
+}
+
 function RuntimeProbe({
   workspace,
   activeGraphId,
@@ -341,6 +397,56 @@ describe("useOutputRuntime and applyOutputListeners", () => {
       expect(clipboardWrite.mock.calls[0]?.[1]).toEqual({
         outputId: "output-child",
         outputName: "orders_base",
+      });
+    });
+  });
+
+  test("switching graphs reruns listeners independently when output ids collide across graphs", async () => {
+    const clipboardWrite = mock(() => {});
+    const onSnapshot = mock(() => {});
+    const workspace = createWorkspaceWithDuplicateOutputIds();
+
+    const { rerender } = render(
+      createElement(RuntimeProbe, {
+        workspace,
+        activeGraphId: "graph-a",
+        onSnapshot,
+        deps: {
+          clipboardWriteText: clipboardWrite,
+          consoleLog: mock(() => {}),
+          localStorageSetItem: mock(() => {}),
+          now: () => 1700000000000,
+        },
+      }),
+    );
+
+    await waitFor(() => {
+      expect(clipboardWrite).toHaveBeenCalledTimes(1);
+      expect(clipboardWrite.mock.calls[0]?.[1]).toEqual({
+        outputId: "output-shared",
+        outputName: "Alpha_out",
+      });
+    });
+
+    rerender(
+      createElement(RuntimeProbe, {
+        workspace,
+        activeGraphId: "graph-b",
+        onSnapshot,
+        deps: {
+          clipboardWriteText: clipboardWrite,
+          consoleLog: mock(() => {}),
+          localStorageSetItem: mock(() => {}),
+          now: () => 1700000001000,
+        },
+      }),
+    );
+
+    await waitFor(() => {
+      expect(clipboardWrite).toHaveBeenCalledTimes(2);
+      expect(clipboardWrite.mock.calls[1]?.[1]).toEqual({
+        outputId: "output-shared",
+        outputName: "Beta_out",
       });
     });
   });

@@ -45,6 +45,8 @@ export interface OutputRuntimeDependencies {
   now: () => number;
 }
 
+type ScopedOutputListenerStatus = Record<string, OutputListenerStatus>;
+
 const defaultRuntimeDependencies: OutputRuntimeDependencies = {
   clipboardWriteText: (sql) =>
     navigator.clipboard?.writeText?.(sql) ?? Promise.resolve(),
@@ -195,6 +197,44 @@ function normalizeListenerStatus(
       ...status.lastEnabledByListener,
     },
   };
+}
+
+function scopedOutputKey(graphId: string, outputId: string) {
+  return JSON.stringify([graphId, outputId]);
+}
+
+function selectActiveGraphListenerStatus(params: {
+  runtimeDocument: GraphDefinition;
+  scopedStatusByOutputKey: ScopedOutputListenerStatus;
+}): Record<string, OutputListenerStatus> {
+  const listenerStatusByOutputId: Record<string, OutputListenerStatus> = {};
+
+  for (const outputNode of listOutputNodes(params.runtimeDocument)) {
+    const key = scopedOutputKey(params.runtimeDocument.id, outputNode.id);
+    const status = params.scopedStatusByOutputKey[key];
+    if (status) {
+      listenerStatusByOutputId[outputNode.id] = status;
+    }
+  }
+
+  return listenerStatusByOutputId;
+}
+
+function mergeActiveGraphListenerStatus(params: {
+  runtimeDocument: GraphDefinition;
+  currentScopedStatusByOutputKey: ScopedOutputListenerStatus;
+  activeGraphStatusByOutputId: Record<string, OutputListenerStatus>;
+}): ScopedOutputListenerStatus {
+  const nextScopedStatusByOutputKey = {
+    ...params.currentScopedStatusByOutputKey,
+  };
+
+  for (const [outputId, status] of Object.entries(params.activeGraphStatusByOutputId)) {
+    nextScopedStatusByOutputKey[scopedOutputKey(params.runtimeDocument.id, outputId)] =
+      status;
+  }
+
+  return nextScopedStatusByOutputKey;
 }
 
 export async function applyOutputListeners(params: {
@@ -356,31 +396,43 @@ export function useOutputRuntime(
     () => compileWorkspaceOutputs(workspace, activeGraphId),
     [runtimeKey],
   );
-  const [listenerStatusByOutputId, setListenerStatusByOutputId] = useState<
-    Record<string, OutputListenerStatus>
-  >({});
-  const listenerStatusRef = useRef(listenerStatusByOutputId);
+  const [listenerStatusByScopedOutputKey, setListenerStatusByScopedOutputKey] =
+    useState<ScopedOutputListenerStatus>({});
+  const listenerStatusRef = useRef(listenerStatusByScopedOutputKey);
+  const activeGraphListenerStatusByOutputId = useMemo(
+    () =>
+      selectActiveGraphListenerStatus({
+        runtimeDocument: compiledSnapshot.runtimeDocument,
+        scopedStatusByOutputKey: listenerStatusByScopedOutputKey,
+      }),
+    [compiledSnapshot.runtimeDocument, listenerStatusByScopedOutputKey],
+  );
 
   useEffect(() => {
-    listenerStatusRef.current = listenerStatusByOutputId;
-  }, [listenerStatusByOutputId]);
+    listenerStatusRef.current = listenerStatusByScopedOutputKey;
+  }, [listenerStatusByScopedOutputKey]);
 
   useEffect(() => {
     let cancelled = false;
     const runListeners = async () => {
+      const previousStatusByOutputId = selectActiveGraphListenerStatus({
+        runtimeDocument: compiledSnapshot.runtimeDocument,
+        scopedStatusByOutputKey: listenerStatusRef.current,
+      });
       const activeGraphStatusByOutputId = await applyOutputListeners({
         document: compiledSnapshot.runtimeDocument,
         resultsByOutputId: compiledSnapshot.resultsByOutputId,
-        previousStatusByOutputId: listenerStatusRef.current,
+        previousStatusByOutputId,
         deps,
       });
 
       if (!cancelled) {
-        listenerStatusRef.current = {
-          ...listenerStatusRef.current,
-          ...activeGraphStatusByOutputId,
-        };
-        setListenerStatusByOutputId(listenerStatusRef.current);
+        listenerStatusRef.current = mergeActiveGraphListenerStatus({
+          runtimeDocument: compiledSnapshot.runtimeDocument,
+          currentScopedStatusByOutputKey: listenerStatusRef.current,
+          activeGraphStatusByOutputId,
+        });
+        setListenerStatusByScopedOutputKey(listenerStatusRef.current);
       }
     };
 
@@ -394,8 +446,8 @@ export function useOutputRuntime(
   return useMemo(
     () => ({
       ...compiledSnapshot,
-      listenerStatusByOutputId,
+      listenerStatusByOutputId: activeGraphListenerStatusByOutputId,
     }),
-    [compiledSnapshot, listenerStatusByOutputId],
+    [activeGraphListenerStatusByOutputId, compiledSnapshot],
   );
 }
