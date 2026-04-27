@@ -3,13 +3,22 @@ import type { ReactElement } from "react";
 import { I18nProvider } from "./I18nContext";
 import type { Locale } from "./types";
 
-export function renderWithI18n(ui: ReactElement, options?: { locale?: Locale }) {
+export function renderWithI18n(
+  ui: ReactElement,
+  options?: {
+    navigatorLanguage?: string;
+    storedLocale?: Locale | null;
+  },
+) {
+  const navigatorLanguage = options?.navigatorLanguage ?? "en-US";
+  const storedLocale = options?.storedLocale ?? null;
+
   return render(
     <I18nProvider
       deps={{
-        navigatorLanguage: options?.locale === "zh-CN" ? "zh-CN" : "en-US",
+        navigatorLanguage,
         storage: {
-          getItem: () => options?.locale ?? null,
+          getItem: () => storedLocale,
           setItem: () => {},
         },
       }}
@@ -18,4 +27,3 @@ export function renderWithI18n(ui: ReactElement, options?: { locale?: Locale }) 
     </I18nProvider>,
   );
 }
-
