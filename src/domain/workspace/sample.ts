@@ -23,5 +23,7 @@ export function createSampleWorkspace(): GraphWorkspace {
     },
     entryGraphId: graph.id,
     graphs: [graph],
+    installedPackages: [],
+    packageManifest: null,
   };
 }

@@ -6,6 +6,8 @@ import type {
   GraphNode,
   GraphWorkspace,
 } from "../../domain/document/types";
+import type { GraphPackageFile, WorkspacePackageManifest } from "../../domain/package/types";
+import { installPackageBundle } from "../../domain/package/install";
 
 export interface EditorState {
   workspace: GraphWorkspace;
@@ -22,6 +24,8 @@ export type EditorAction =
   | { type: "rename-graph"; graphId: string; name: string }
   | { type: "delete-graph"; graphId: string }
   | { type: "set-active-graph"; graphId: string }
+  | { type: "install-package"; pkg: GraphPackageFile }
+  | { type: "set-package-manifest"; manifest: WorkspacePackageManifest | null }
   | { type: "add-node"; node: GraphNode }
   | { type: "replace-node"; node: GraphNode }
   | { type: "delete-node"; nodeId: string }
@@ -71,6 +75,8 @@ function toWorkspace(document: GraphDocument): GraphWorkspace {
     },
     entryGraphId: graph.id,
     graphs: [graph],
+    installedPackages: [],
+    packageManifest: null,
   };
 }
 
@@ -88,15 +94,22 @@ function getActiveGraphById(
 }
 
 function createStateFromWorkspace(workspace: GraphWorkspace): EditorState {
+  const normalizedWorkspace: GraphWorkspace = {
+    ...workspace,
+    installedPackages: workspace.installedPackages ?? [],
+    packageManifest: workspace.packageManifest ?? null,
+  };
   const activeGraph =
-    getActiveGraphById(workspace, workspace.entryGraphId) ?? workspace.graphs[0] ?? null;
+    getActiveGraphById(normalizedWorkspace, normalizedWorkspace.entryGraphId) ??
+    normalizedWorkspace.graphs[0] ??
+    null;
 
   if (!activeGraph) {
     throw new Error("Workspace must include at least one graph");
   }
 
   return {
-    workspace,
+    workspace: normalizedWorkspace,
     activeGraphId: activeGraph.id,
     document: activeGraph,
     selectedNodeId: null,
@@ -258,6 +271,21 @@ export function documentReducer(
         editorNodeId: null,
       };
     }
+    case "install-package": {
+      const nextWorkspace = installPackageBundle(state.workspace, action.pkg);
+      return {
+        ...state,
+        workspace: nextWorkspace,
+      };
+    }
+    case "set-package-manifest":
+      return {
+        ...state,
+        workspace: {
+          ...state.workspace,
+          packageManifest: action.manifest,
+        },
+      };
     case "add-node":
       return updateActiveGraph(state, (graph) => ({
         ...graph,

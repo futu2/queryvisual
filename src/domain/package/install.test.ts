@@ -1,0 +1,102 @@
+import { describe, expect, test } from "bun:test";
+import type { GraphWorkspace } from "../document/types";
+import type { GraphPackageFile } from "./types";
+import { installPackageBundle, resolveInstalledPackageExport } from "./install";
+
+function createEmptyWorkspace(): GraphWorkspace {
+  return {
+    version: 2,
+    metadata: { name: "Workspace" },
+    entryGraphId: "graph-main",
+    graphs: [
+      {
+        id: "graph-main",
+        metadata: { name: "Main" },
+        viewport: { x: 0, y: 0, zoom: 1 },
+        nodes: [],
+        edges: [],
+      },
+    ],
+    installedPackages: [],
+    packageManifest: null,
+  };
+}
+
+function createPackageFile(
+  partial: Partial<GraphPackageFile> & Pick<GraphPackageFile, "packageId" | "version">,
+): GraphPackageFile {
+  return {
+    formatVersion: 1,
+    packageId: partial.packageId,
+    version: partial.version,
+    metadata: partial.metadata ?? { name: partial.packageId },
+    exports: partial.exports ?? [],
+    graphs: partial.graphs ?? [],
+    dependencies: partial.dependencies ?? [],
+  };
+}
+
+describe("installPackageBundle", () => {
+  test("installs bundled dependencies once and dedupes by packageId + version", () => {
+    const workspace = createEmptyWorkspace();
+
+    const sharedDep = createPackageFile({
+      packageId: "com.acme/shared",
+      version: "1.0.0",
+    });
+
+    const pkg = createPackageFile({
+      packageId: "com.acme/orders",
+      version: "2.0.0",
+      dependencies: [sharedDep, sharedDep],
+    });
+
+    const next = installPackageBundle(workspace, pkg);
+
+    expect(next.installedPackages.map((p) => `${p.packageId}@${p.version}`)).toEqual([
+      "com.acme/shared@1.0.0",
+      "com.acme/orders@2.0.0",
+    ]);
+
+    const nextAgain = installPackageBundle(next, pkg);
+    expect(nextAgain.installedPackages).toHaveLength(2);
+  });
+});
+
+describe("resolveInstalledPackageExport", () => {
+  test("resolves a package subgraph target to the exported graph", () => {
+    const pkg = createPackageFile({
+      packageId: "com.acme/orders",
+      version: "2.0.0",
+      exports: [
+        {
+          exportKey: "orders_report",
+          graphId: "graph-orders",
+          displayName: "Orders Report",
+        },
+      ],
+      graphs: [
+        {
+          id: "graph-orders",
+          metadata: { name: "Orders Graph" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [],
+          edges: [],
+        },
+      ],
+    });
+
+    const workspace = installPackageBundle(createEmptyWorkspace(), pkg);
+
+    const resolved = resolveInstalledPackageExport(workspace, {
+      kind: "package",
+      packageId: "com.acme/orders",
+      version: "2.0.0",
+      exportKey: "orders_report",
+    });
+
+    expect(resolved?.pkg.packageId).toBe("com.acme/orders");
+    expect(resolved?.graph.id).toBe("graph-orders");
+  });
+});
+

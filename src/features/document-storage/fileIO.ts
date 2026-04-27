@@ -4,10 +4,12 @@ import type {
   GraphWorkspace,
   LegacyGraphDocument,
 } from "../../domain/document/types";
+import type { SubgraphTarget } from "../../domain/document/types";
 import {
   isOutputListenerConfig,
   normalizeOutputListenerConfig,
 } from "../../domain/document/outputListeners";
+import type { GraphPackageFile, InstalledGraphPackage, WorkspacePackageManifest } from "../../domain/package/types";
 
 const columnTypes = [
   "boolean",
@@ -92,6 +94,26 @@ function isNodeKind(value: unknown): value is typeof nodeKinds[number] {
   return typeof value === "string" && nodeKinds.includes(value as typeof nodeKinds[number]);
 }
 
+function isSubgraphTarget(value: unknown): value is SubgraphTarget {
+  if (!isRecord(value) || typeof value.kind !== "string") {
+    return false;
+  }
+
+  if (value.kind === "local") {
+    return typeof value.graphId === "string";
+  }
+
+  if (value.kind === "package") {
+    return (
+      typeof value.packageId === "string" &&
+      typeof value.version === "string" &&
+      typeof value.exportKey === "string"
+    );
+  }
+
+  return false;
+}
+
 function isNodeData(kind: typeof nodeKinds[number], value: unknown) {
   if (!isRecord(value)) {
     return false;
@@ -106,7 +128,10 @@ function isNodeData(kind: typeof nodeKinds[number], value: unknown) {
     case "fromTable":
       return isTableRef(value.tableRef) && isColumnMap(value.columns);
     case "subgraph":
-      return typeof value.graphId === "string";
+      return (
+        typeof value.graphId === "string" ||
+        (value.target !== undefined && isSubgraphTarget(value.target))
+      );
     case "join":
       return (
         (value.joinType === "inner" ||
@@ -193,6 +218,53 @@ function isGraphDefinition(value: unknown): value is GraphDefinition {
   return hasGraphDocumentShape(value) && typeof value.id === "string";
 }
 
+function isGraphPackageExport(value: unknown) {
+  return (
+    isRecord(value) &&
+    typeof value.exportKey === "string" &&
+    typeof value.graphId === "string" &&
+    typeof value.displayName === "string"
+  );
+}
+
+function isGraphPackageMetadata(value: unknown) {
+  return (
+    isRecord(value) &&
+    typeof value.name === "string" &&
+    (value.description === undefined || typeof value.description === "string")
+  );
+}
+
+function isInstalledGraphPackage(value: unknown): value is InstalledGraphPackage {
+  return (
+    isRecord(value) &&
+    typeof value.packageId === "string" &&
+    typeof value.version === "string" &&
+    isGraphPackageMetadata(value.metadata) &&
+    Array.isArray(value.exports) &&
+    value.exports.every(isGraphPackageExport) &&
+    Array.isArray(value.graphs) &&
+    value.graphs.every(isGraphDefinition) &&
+    Array.isArray(value.dependencyRefs) &&
+    value.dependencyRefs.every(
+      (ref) =>
+        isRecord(ref) && typeof ref.packageId === "string" && typeof ref.version === "string",
+    )
+  );
+}
+
+function isWorkspacePackageManifest(value: unknown): value is WorkspacePackageManifest {
+  return (
+    isRecord(value) &&
+    typeof value.packageId === "string" &&
+    typeof value.version === "string" &&
+    typeof value.name === "string" &&
+    (value.description === undefined || typeof value.description === "string") &&
+    Array.isArray(value.exports) &&
+    value.exports.every(isGraphPackageExport)
+  );
+}
+
 function isGraphWorkspace(value: unknown): value is GraphWorkspace {
   if (
     !isRecord(value) ||
@@ -208,10 +280,27 @@ function isGraphWorkspace(value: unknown): value is GraphWorkspace {
 
   const graphIds = value.graphs.map((graph) => graph.id);
 
-  return (
+  const hasUniqueIds =
     new Set(graphIds).size === graphIds.length &&
-    graphIds.includes(value.entryGraphId)
-  );
+    graphIds.includes(value.entryGraphId);
+
+  if (!hasUniqueIds) {
+    return false;
+  }
+
+  if (value.installedPackages !== undefined) {
+    if (!Array.isArray(value.installedPackages) || !value.installedPackages.every(isInstalledGraphPackage)) {
+      return false;
+    }
+  }
+
+  if (value.packageManifest !== undefined && value.packageManifest !== null) {
+    if (!isWorkspacePackageManifest(value.packageManifest)) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function normalizeDocumentOutputs<TDocument extends GraphDocumentBase>(
@@ -252,9 +341,54 @@ function normalizeDocumentOutputs<TDocument extends GraphDocumentBase>(
 }
 
 function normalizeWorkspace(workspace: GraphWorkspace): GraphWorkspace {
-  return {
+  const withDefaults: GraphWorkspace = {
     ...workspace,
-    graphs: workspace.graphs.map((graph) => normalizeDocumentOutputs(graph)),
+    installedPackages: workspace.installedPackages ?? [],
+    packageManifest: workspace.packageManifest ?? null,
+  };
+
+  return {
+    ...withDefaults,
+    graphs: withDefaults.graphs.map((graph) => normalizeDocumentOutputs(graph)),
+  };
+}
+
+function normalizeSubgraphTargets<TDocument extends GraphDocumentBase>(document: TDocument): TDocument {
+  return {
+    ...document,
+    nodes: document.nodes.map((node) => {
+      if (node.kind !== "subgraph") {
+        return node;
+      }
+
+      const rawData = node.data as Record<string, unknown>;
+
+      if (isSubgraphTarget(rawData.target)) {
+        const target = rawData.target;
+        if (target.kind === "local" && typeof rawData.graphId !== "string") {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              graphId: target.graphId,
+            },
+          };
+        }
+        return node;
+      }
+
+      if (typeof rawData.graphId === "string") {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            target: { kind: "local", graphId: rawData.graphId },
+          },
+        };
+      }
+
+      return node;
+    }),
   };
 }
 
@@ -270,13 +404,13 @@ function migrateLegacyDocumentToWorkspace(
     },
     entryGraphId: graphId,
     graphs: [
-      {
+      normalizeSubgraphTargets({
         id: graphId,
         metadata: document.metadata,
         viewport: document.viewport,
         nodes: document.nodes,
         edges: document.edges,
-      },
+      }),
     ],
   });
 }
@@ -298,7 +432,7 @@ export function parseDocumentJson(raw: string): LegacyGraphDocument {
     throw new Error("Invalid QueryVisual document");
   }
 
-  return normalizeDocumentOutputs(parsed);
+  return normalizeSubgraphTargets(normalizeDocumentOutputs(parsed));
 }
 
 export function serializeWorkspaceJson(workspace: GraphWorkspace) {
@@ -322,7 +456,45 @@ export function parseWorkspaceJson(raw: string): GraphWorkspace {
     throw new Error("Invalid QueryVisual workspace");
   }
 
-  return normalizeWorkspace(parsed);
+  return normalizeWorkspace({
+    ...parsed,
+    graphs: parsed.graphs.map((graph) => normalizeSubgraphTargets(graph)),
+  });
+}
+
+function isGraphPackageFile(value: unknown): value is GraphPackageFile {
+  if (
+    !isRecord(value) ||
+    value.formatVersion !== 1 ||
+    typeof value.packageId !== "string" ||
+    typeof value.version !== "string" ||
+    !isGraphPackageMetadata(value.metadata) ||
+    !Array.isArray(value.exports) ||
+    !value.exports.every(isGraphPackageExport) ||
+    !Array.isArray(value.graphs) ||
+    !value.graphs.every(isGraphDefinition) ||
+    !Array.isArray(value.dependencies)
+  ) {
+    return false;
+  }
+
+  return value.dependencies.every(isGraphPackageFile);
+}
+
+export function parsePackageJson(raw: string): GraphPackageFile {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("Invalid QueryVisual package");
+  }
+
+  if (!isGraphPackageFile(parsed)) {
+    throw new Error("Invalid QueryVisual package");
+  }
+
+  return parsed;
 }
 
 export function downloadDocument(graphDocument: LegacyGraphDocument) {

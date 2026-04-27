@@ -3,6 +3,7 @@ import { createSampleDocument } from "../../domain/document/sample";
 import type { LegacyGraphDocument } from "../../domain/document/types";
 import {
   parseDocumentJson,
+  parsePackageJson,
   parseWorkspaceJson,
   serializeDocumentJson,
   serializeWorkspaceJson,
@@ -164,6 +165,131 @@ describe("fileIO", () => {
     expect(parentGraph?.nodes[0]?.kind).toBe("subgraph");
     expect(parentGraph?.edges[0]?.targetHandle).toBe("orders_in");
     expect(serializeWorkspaceJson(workspace)).toContain('"targetHandle": "orders_in"');
+  });
+
+  test("migrates legacy workspace subgraph payload { graphId } into { target: { kind: \"local\", graphId } }", () => {
+    const workspace = parseWorkspaceJson(
+      JSON.stringify({
+        version: 2,
+        metadata: { name: "workspace" },
+        entryGraphId: "graph-parent",
+        graphs: [
+          {
+            id: "graph-parent",
+            metadata: { name: "Parent" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [
+              {
+                id: "subgraph-1",
+                kind: "subgraph",
+                label: "Orders",
+                position: { x: 0, y: 0 },
+                data: { graphId: "graph-child" },
+              },
+            ],
+            edges: [],
+          },
+          {
+            id: "graph-child",
+            metadata: { name: "Child" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [],
+            edges: [],
+          },
+        ],
+      }),
+    );
+
+    const parent = workspace.graphs.find((graph) => graph.id === "graph-parent");
+    const subgraphNode = parent?.nodes.find((node) => node.id === "subgraph-1");
+    expect(subgraphNode).toMatchObject({
+      kind: "subgraph",
+      data: { target: { kind: "local", graphId: "graph-child" } },
+    });
+  });
+
+  test("round-trips installedPackages and packageManifest on workspaces", () => {
+    const workspace = parseWorkspaceJson(
+      JSON.stringify({
+        version: 2,
+        metadata: { name: "workspace" },
+        entryGraphId: "graph-main",
+        graphs: [
+          {
+            id: "graph-main",
+            metadata: { name: "Main" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [],
+            edges: [],
+          },
+        ],
+        installedPackages: [
+          {
+            packageId: "com.acme/orders",
+            version: "1.0.0",
+            metadata: { name: "Orders" },
+            exports: [],
+            graphs: [],
+            dependencyRefs: [],
+          },
+        ],
+        packageManifest: {
+          packageId: "com.acme/workspace",
+          version: "0.0.1",
+          name: "Workspace Package",
+          exports: [],
+        },
+      }),
+    );
+
+    const serialized = serializeWorkspaceJson(workspace);
+    expect(serialized).toContain('"installedPackages"');
+    expect(serialized).toContain('"packageManifest"');
+
+    const reparsed = parseWorkspaceJson(serialized);
+    expect(reparsed.installedPackages).toHaveLength(1);
+    expect(reparsed.packageManifest?.packageId).toBe("com.acme/workspace");
+  });
+
+  test("parsePackageJson parses package files separately from workspace JSON", () => {
+    const pkg = parsePackageJson(
+      JSON.stringify({
+        formatVersion: 1,
+        packageId: "com.acme/orders",
+        version: "1.0.0",
+        metadata: { name: "Orders", description: "Reusable graphs" },
+        exports: [
+          { exportKey: "orders_report", graphId: "graph-orders", displayName: "Orders Report" },
+        ],
+        graphs: [
+          {
+            id: "graph-orders",
+            metadata: { name: "Orders Graph" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [],
+            edges: [],
+          },
+        ],
+        dependencies: [],
+      }),
+    );
+
+    expect(pkg.packageId).toBe("com.acme/orders");
+    expect(pkg.exports).toHaveLength(1);
+
+    expect(() =>
+      parseWorkspaceJson(
+        JSON.stringify({
+          formatVersion: 1,
+          packageId: "com.acme/orders",
+          version: "1.0.0",
+          metadata: { name: "Orders" },
+          exports: [],
+          graphs: [],
+          dependencies: [],
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual workspace");
   });
 
   test("rejects workspaces with duplicate graph ids", () => {

@@ -1,4 +1,8 @@
 import type { ColumnMap, TableRef } from "../schema/types";
+import type {
+  InstalledGraphPackage,
+  WorkspacePackageManifest,
+} from "../package/types";
 
 export type NodeKind =
   | "graphInput"
@@ -44,10 +48,19 @@ export interface GraphNodeBase<TKind extends NodeKind, TData> {
   data: TData;
 }
 
+export type SubgraphTarget =
+  | { kind: "local"; graphId: string }
+  | { kind: "package"; packageId: string; version: string; exportKey: string };
+
 export type GraphNode =
   | GraphNodeBase<"graphInput", { inputName: string; columns: ColumnMap }>
   | GraphNodeBase<"fromTable", { tableRef: TableRef; columns: ColumnMap }>
-  | GraphNodeBase<"subgraph", { graphId: string }>
+  // Backward compatible widening: keep `graphId` for existing local-subgraph features,
+  // but allow persisted `target` for package-based subgraphs.
+  | GraphNodeBase<
+      "subgraph",
+      { graphId: string; target?: SubgraphTarget } | { target: SubgraphTarget; graphId?: string }
+    >
   | GraphNodeBase<"join", { joinType: "inner" | "left" | "right" | "full"; predicate: string }>
   | GraphNodeBase<"where", { predicate: string }>
   | GraphNodeBase<"select", { mappings: NamedExpression[] }>
@@ -92,6 +105,8 @@ export interface GraphWorkspace {
   };
   entryGraphId: string;
   graphs: GraphDefinition[];
+  installedPackages?: InstalledGraphPackage[];
+  packageManifest?: WorkspacePackageManifest | null;
 }
 
 export type GraphDocument = GraphDefinition | LegacyGraphDocument;

@@ -3,6 +3,7 @@ import { createSampleDocument } from "../../domain/document/sample";
 import { createDefaultOutputListenerConfig } from "../../domain/document/outputListeners";
 import type { GraphDocument } from "../../domain/document/types";
 import { createSampleWorkspace } from "../../domain/workspace/sample";
+import type { GraphPackageFile, WorkspacePackageManifest } from "../../domain/package/types";
 import {
   createInitialEditorState,
   documentReducer,
@@ -263,6 +264,57 @@ describe("documentReducer", () => {
     expect(() =>
       documentReducer(initial, { type: "unknown-action" } as never),
     ).toThrow("Unknown action");
+  });
+
+  test("install-package installs a package into the workspace with packageId+version dedupe", () => {
+    const initial = createInitialEditorState(createSampleWorkspace());
+
+    const sharedDep: GraphPackageFile = {
+      formatVersion: 1,
+      packageId: "com.acme/shared",
+      version: "1.0.0",
+      metadata: { name: "Shared" },
+      exports: [],
+      graphs: [],
+      dependencies: [],
+    };
+
+    const pkg: GraphPackageFile = {
+      formatVersion: 1,
+      packageId: "com.acme/orders",
+      version: "2.0.0",
+      metadata: { name: "Orders" },
+      exports: [],
+      graphs: [],
+      dependencies: [sharedDep],
+    };
+
+    const once = documentReducer(initial, { type: "install-package", pkg } as never);
+    expect(once.workspace.installedPackages.map((p) => p.packageId)).toEqual([
+      "com.acme/shared",
+      "com.acme/orders",
+    ]);
+
+    const twice = documentReducer(once, { type: "install-package", pkg } as never);
+    expect(twice.workspace.installedPackages).toHaveLength(2);
+  });
+
+  test("set-package-manifest updates the workspace packageManifest", () => {
+    const initial = createInitialEditorState(createSampleWorkspace());
+
+    const manifest: WorkspacePackageManifest = {
+      packageId: "com.acme/workspace",
+      version: "0.0.1",
+      name: "Workspace Package",
+      exports: [],
+    };
+
+    const next = documentReducer(initial, {
+      type: "set-package-manifest",
+      manifest,
+    } as never);
+
+    expect(next.workspace.packageManifest?.packageId).toBe("com.acme/workspace");
   });
 
   test("updates the stored viewport", () => {
