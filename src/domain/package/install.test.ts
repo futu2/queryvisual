@@ -76,10 +76,7 @@ describe("installPackageBundle", () => {
     };
     pkg.dependencies = [pkg];
 
-    const next = installPackageBundle(workspace, pkg);
-    expect(next.installedPackages.map((p) => `${p.packageId}@${p.version}`)).toEqual([
-      "com.acme/cycle@1.0.0",
-    ]);
+    expect(() => installPackageBundle(workspace, pkg)).toThrow("Cyclic package bundle");
   });
 
   test("fails clearly for excessively deep bundled dependencies", () => {

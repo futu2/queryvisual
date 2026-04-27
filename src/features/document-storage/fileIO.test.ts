@@ -659,6 +659,43 @@ describe("fileIO", () => {
     expect((node as any).data.listeners).toBeDefined();
   });
 
+  test("parsePackageJson rejects local-target mismatch for subgraph nodes", () => {
+    expect(() =>
+      parsePackageJson(
+        JSON.stringify({
+          formatVersion: 1,
+          packageId: "com.acme/pkg",
+          version: "1.0.0",
+          metadata: { name: "Pkg" },
+          exports: [
+            { exportKey: "main", graphId: "graph-main", displayName: "Main" },
+          ],
+          graphs: [
+            {
+              id: "graph-main",
+              metadata: { name: "Main" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [
+                {
+                  id: "subgraph-1",
+                  kind: "subgraph",
+                  label: "Subgraph",
+                  position: { x: 0, y: 0 },
+                  data: {
+                    graphId: "graph-child-a",
+                    target: { kind: "local", graphId: "graph-child-b" },
+                  },
+                },
+              ],
+              edges: [],
+            },
+          ],
+          dependencies: [],
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual package");
+  });
+
   test("parsePackageJson rejects excessively deep dependency chains", () => {
     let pkg: any = {
       formatVersion: 1,

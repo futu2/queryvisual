@@ -553,12 +553,18 @@ export function parsePackageJson(raw: string): GraphPackageFile {
     throw new Error("Invalid QueryVisual package");
   }
 
-  return {
+  const normalized = {
     ...parsed,
     graphs: parsed.graphs.map((graph) =>
       normalizeSubgraphTargets(normalizeDocumentOutputs(graph)),
     ),
   };
+
+  if (normalized.graphs.some((graph) => hasInvalidLocalTargetMismatch(graph))) {
+    throw new Error("Invalid QueryVisual package");
+  }
+
+  return normalized;
 }
 
 export function downloadDocument(graphDocument: LegacyGraphDocument) {

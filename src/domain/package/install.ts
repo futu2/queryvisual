@@ -92,18 +92,18 @@ function installPackageBundleInner(
 
   const visitKey = `${pkg.packageId}@${pkg.version}`;
   if (inProgress.has(visitKey)) {
-    return workspace;
+    throw new Error(`Cyclic package bundle: ${visitKey}`);
   }
 
   let next = workspace;
 
-  for (const dep of pkg.dependencies) {
-    inProgress.add(visitKey);
-    try {
+  inProgress.add(visitKey);
+  try {
+    for (const dep of pkg.dependencies) {
       next = installPackageBundleInner(next, dep, inProgress, depth + 1);
-    } finally {
-      inProgress.delete(visitKey);
     }
+  } finally {
+    inProgress.delete(visitKey);
   }
 
   const existing =
