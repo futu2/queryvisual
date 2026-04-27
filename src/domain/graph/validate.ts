@@ -237,6 +237,55 @@ function validateGraphOutput(params: {
           break;
         }
 
+        const inputNameCounts = new Map<string, number>();
+        for (const inputNode of childGraph.nodes) {
+          if (inputNode.kind !== "graphInput") continue;
+          inputNameCounts.set(
+            inputNode.data.inputName,
+            (inputNameCounts.get(inputNode.data.inputName) ?? 0) + 1,
+          );
+        }
+        for (const [name, count] of inputNameCounts.entries()) {
+          if (count <= 1) continue;
+          diagnostics.push(
+            diagnostic(
+              "subgraph.duplicate-child-input-name",
+              `Child graph has duplicate input name ${name}.`,
+              node.id,
+              "graphId",
+            ),
+          );
+        }
+
+        const outputNameCounts = new Map<string, number>();
+        for (const outputNode of childGraph.nodes) {
+          if (outputNode.kind !== "output") continue;
+          outputNameCounts.set(
+            outputNode.data.outputName,
+            (outputNameCounts.get(outputNode.data.outputName) ?? 0) + 1,
+          );
+        }
+        for (const [name, count] of outputNameCounts.entries()) {
+          if (count <= 1) continue;
+          diagnostics.push(
+            diagnostic(
+              "subgraph.duplicate-child-output-name",
+              `Child graph has duplicate output name ${name}.`,
+              node.id,
+              "graphId",
+            ),
+          );
+        }
+
+        if (
+          [...inputNameCounts.values()].some((count) => count > 1) ||
+          [...outputNameCounts.values()].some((count) => count > 1)
+        ) {
+          schemas[node.id] = {};
+          invalidStructure.add(node.id);
+          break;
+        }
+
         const outputIds = new Set<string>();
         for (const edge of outgoingEdges(document, node.id)) {
           if (!reachableNodeIds.has(edge.target)) continue;
@@ -358,13 +407,23 @@ function validateGraphOutput(params: {
           childInputSchemas,
         );
         if (childSemantic.diagnostics.some((d) => d.level === "error")) {
-          diagnostics.push(
-            diagnostic(
-              "subgraph.child-invalid",
-              "Referenced child graph output contains validation errors.",
-              node.id,
-            ),
-          );
+          for (const childDiagnostic of childSemantic.diagnostics) {
+            if (childDiagnostic.level !== "error") continue;
+            diagnostics.push({
+              level: childDiagnostic.level,
+              code: childDiagnostic.code,
+              message: childDiagnostic.message,
+              ref: { nodeId: node.id, field: "graphId" },
+              context: {
+                parent: params.graphId ? { graphId: params.graphId, nodeId: node.id } : undefined,
+                child: {
+                  graphId: childGraphId,
+                  nodeId: childDiagnostic.ref?.nodeId,
+                  field: childDiagnostic.ref?.field,
+                },
+              },
+            });
+          }
           schemas[node.id] = {};
           invalidStructure.add(node.id);
           break;
