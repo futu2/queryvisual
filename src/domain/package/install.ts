@@ -30,10 +30,7 @@ export function installPackageBundle(
   workspace: GraphWorkspace,
   pkg: GraphPackageFile,
 ): GraphWorkspace {
-  const installedPackages = (workspace as { installedPackages?: InstalledGraphPackage[] })
-    .installedPackages ?? [];
-
-  let next = { ...workspace, installedPackages };
+  let next = workspace;
 
   for (const dep of pkg.dependencies) {
     next = installPackageBundle(next, dep);
@@ -56,9 +53,7 @@ export function resolveInstalledPackageExport(
   workspace: GraphWorkspace,
   target: Extract<SubgraphTarget, { kind: "package" }>,
 ): { pkg: InstalledGraphPackage; graph: GraphDefinition } | null {
-  const pkg =
-    workspace.installedPackages.find((candidate) => samePkg(candidate, target)) ??
-    null;
+  const pkg = workspace.installedPackages.find((candidate) => samePkg(candidate, target)) ?? null;
   if (!pkg) return null;
 
   const exportEntry =
@@ -72,4 +67,3 @@ export function resolveInstalledPackageExport(
 
   return { pkg, graph };
 }
-

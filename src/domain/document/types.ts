@@ -105,8 +105,8 @@ export interface GraphWorkspace {
   };
   entryGraphId: string;
   graphs: GraphDefinition[];
-  installedPackages?: InstalledGraphPackage[];
-  packageManifest?: WorkspacePackageManifest | null;
+  installedPackages: InstalledGraphPackage[];
+  packageManifest: WorkspacePackageManifest | null;
 }
 
 export type GraphDocument = GraphDefinition | LegacyGraphDocument;
