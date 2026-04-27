@@ -11,6 +11,7 @@ import type { ColumnMap, ColumnType, TableRef } from "../../domain/schema/types"
 import { ExpressionInput } from "./ExpressionInput";
 import { RowActionBar } from "./RowActionBar";
 import { RowCard } from "./RowCard";
+import type { MessageKey, TranslationVars } from "../i18n/types";
 import {
   addDraftRow,
   duplicateDraftRow,
@@ -20,6 +21,8 @@ import {
   stripDraftRows,
 } from "./rowDrafts";
 import type { DraftRow } from "./rowDrafts";
+
+type Translator = (key: MessageKey, vars?: TranslationVars) => string;
 
 type FieldRow = {
   name: string;
@@ -68,6 +71,29 @@ type EditableNodeDraft =
   | AggregationEditorDraft
   | SortEditorDraft
   | FromTableEditorDraft;
+
+const rowActionItemMessageKeys = {
+  mapping: "rowActions.mapping",
+  field: "rowActions.field",
+  column: "rowActions.column",
+  groupKey: "rowActions.groupKey",
+  aggregate: "rowActions.aggregate",
+  sortItem: "rowActions.sortItem",
+} as const satisfies Record<
+  "mapping" | "field" | "column" | "groupKey" | "aggregate" | "sortItem",
+  MessageKey
+>;
+
+const columnTypeMessageKeys = {
+  boolean: "editor.columnType.boolean",
+  int: "editor.columnType.int",
+  float: "editor.columnType.float",
+  string: "editor.columnType.string",
+  date: "editor.columnType.date",
+  timestamp: "editor.columnType.timestamp",
+  null: "editor.columnType.null",
+  unknown: "editor.columnType.unknown",
+} as const satisfies Record<ColumnType, MessageKey>;
 
 const columnTypes: ColumnType[] = [
   "boolean",
@@ -191,12 +217,15 @@ function getDraggedRowId(
 
 function FromTableFieldRows({
   rows,
+  t,
   onChange,
 }: {
   rows: DraftRow<FieldRow>[];
+  t: Translator;
   onChange: (rows: DraftRow<FieldRow>[]) => void;
 }) {
   const [draggedRowId, setDraggedRowId] = useState<string | null>(null);
+  const fieldLabel = t(rowActionItemMessageKeys.field);
 
   return (
     <div className="editor-stack">
@@ -204,7 +233,7 @@ function FromTableFieldRows({
         <div key={row.rowId} className="mapping-row">
           <RowCard
             testId={`field-row-card-${index + 1}`}
-            dragLabel={`Drag field ${index + 1}`}
+            dragLabel={t("rowDrag.label", { item: fieldLabel, row: index + 1 })}
             draggable={rows.length > 1}
             onDragStart={(event) =>
               handleRowDragStart(event, row.rowId, setDraggedRowId)
@@ -222,7 +251,7 @@ function FromTableFieldRows({
             }}
             header={
               <InlineRowNameInput
-                label={`Field name ${index + 1}`}
+                label={t("editor.fieldName", { row: index + 1 })}
                 value={row.name}
                 onChange={(name) => {
                   const next = [...rows];
@@ -233,7 +262,7 @@ function FromTableFieldRows({
             }
             actions={
               <RowActionBar
-                itemName="field"
+                itemKey="field"
                 rowNumber={index + 1}
                 rowCount={rows.length}
                 onMoveUp={() => onChange(moveDraftRow(rows, index, index - 1))}
@@ -246,7 +275,7 @@ function FromTableFieldRows({
             }
           >
             <label>
-              {`Field type ${index + 1}`}
+              {t("editor.fieldType", { row: index + 1 })}
               <select
                 value={row.type}
                 onChange={(event) => {
@@ -257,7 +286,7 @@ function FromTableFieldRows({
               >
                 {columnTypes.map((type) => (
                   <option key={type} value={type}>
-                    {type}
+                    {t(columnTypeMessageKeys[type])}
                   </option>
                 ))}
               </select>
@@ -271,7 +300,7 @@ function FromTableFieldRows({
         className="row-add-button"
         onClick={() => onChange(addDraftRow(rows, blankFieldRow))}
       >
-        Add field
+        {t("editor.addField")}
       </button>
     </div>
   );
@@ -379,7 +408,7 @@ export function serializeNodeEditorDraft(draft: EditableNodeDraft): GraphNode {
 
 function NamedExpressionRows({
   rows,
-  itemName,
+  itemKey,
   addButtonLabel,
   nameLabel,
   expressionLabel,
@@ -387,10 +416,11 @@ function NamedExpressionRows({
   document,
   nodeId,
   schemaOverrides,
+  t,
   onChange,
 }: {
   rows: NamedExpressionDraftRow[];
-  itemName: string;
+  itemKey: "mapping" | "groupKey" | "aggregate";
   addButtonLabel: string;
   nameLabel: (rowNumber: number) => string;
   expressionLabel: (rowNumber: number) => string;
@@ -398,9 +428,11 @@ function NamedExpressionRows({
   document: GraphDocument;
   nodeId: string;
   schemaOverrides?: Record<string, ColumnMap>;
+  t: Translator;
   onChange: (rows: NamedExpressionDraftRow[]) => void;
 }) {
   const [draggedRowId, setDraggedRowId] = useState<string | null>(null);
+  const itemLabel = t(rowActionItemMessageKeys[itemKey]);
 
   return (
     <div className="editor-stack">
@@ -412,7 +444,7 @@ function NamedExpressionRows({
                 ? `${rowCardTestIdPrefix}-${index + 1}`
                 : undefined
             }
-            dragLabel={`Drag ${itemName} ${index + 1}`}
+            dragLabel={t("rowDrag.label", { item: itemLabel, row: index + 1 })}
             draggable={rows.length > 1}
             onDragStart={(event) =>
               handleRowDragStart(event, row.rowId, setDraggedRowId)
@@ -441,7 +473,7 @@ function NamedExpressionRows({
             }
             actions={
               <RowActionBar
-                itemName={itemName}
+                itemKey={itemKey}
                 rowNumber={index + 1}
                 rowCount={rows.length}
                 onMoveUp={() => onChange(moveDraftRow(rows, index, index - 1))}
@@ -487,15 +519,18 @@ function SortItemRows({
   document,
   nodeId,
   schemaOverrides,
+  t,
   onChange,
 }: {
   rows: SortItemDraftRow[];
   document: GraphDocument;
   nodeId: string;
   schemaOverrides?: Record<string, ColumnMap>;
+  t: Translator;
   onChange: (rows: SortItemDraftRow[]) => void;
 }) {
   const [draggedRowId, setDraggedRowId] = useState<string | null>(null);
+  const sortItemLabel = t(rowActionItemMessageKeys.sortItem);
 
   return (
     <div className="editor-stack">
@@ -503,7 +538,7 @@ function SortItemRows({
         <div key={row.rowId} className="mapping-row">
           <RowCard
             testId={`sort-row-card-${index + 1}`}
-            dragLabel={`Drag sort item ${index + 1}`}
+            dragLabel={t("rowDrag.label", { item: sortItemLabel, row: index + 1 })}
             draggable={rows.length > 1}
             onDragStart={(event) =>
               handleRowDragStart(event, row.rowId, setDraggedRowId)
@@ -522,7 +557,7 @@ function SortItemRows({
             header={null}
             actions={
               <RowActionBar
-                itemName="sort item"
+                itemKey="sortItem"
                 rowNumber={index + 1}
                 rowCount={rows.length}
                 onMoveUp={() => onChange(moveDraftRow(rows, index, index - 1))}
@@ -533,7 +568,7 @@ function SortItemRows({
             }
           >
             <ExpressionInput
-              label={`Sort expression ${index + 1}`}
+              label={t("editor.sortExpression", { row: index + 1 })}
               value={row.expression}
               document={document}
               nodeId={nodeId}
@@ -545,7 +580,7 @@ function SortItemRows({
               }}
             />
             <label>
-              {`Sort direction ${index + 1}`}
+              {t("editor.direction")}
               <select
                 value={row.direction}
                 onChange={(event) => {
@@ -558,8 +593,8 @@ function SortItemRows({
                   onChange(next);
                 }}
               >
-                <option value="asc">asc</option>
-                <option value="desc">desc</option>
+                <option value="asc">{t("editor.sortDirection.asc")}</option>
+                <option value="desc">{t("editor.sortDirection.desc")}</option>
               </select>
             </label>
           </RowCard>
@@ -570,7 +605,7 @@ function SortItemRows({
         className="row-add-button"
         onClick={() => onChange(addSortDraftRow(rows))}
       >
-        Add sort item
+        {t("editor.addSortItem")}
       </button>
     </div>
   );
@@ -581,25 +616,28 @@ function SelectMappingRows({
   document,
   nodeId,
   schemaOverrides,
+  t,
   onChange,
 }: {
   rows: NamedExpressionDraftRow[];
   document: GraphDocument;
   nodeId: string;
   schemaOverrides?: Record<string, ColumnMap>;
+  t: Translator;
   onChange: (rows: NamedExpressionDraftRow[]) => void;
 }) {
   return (
     <NamedExpressionRows
       rows={rows}
-      itemName="mapping"
-      addButtonLabel="Add mapping"
-      nameLabel={(rowNumber) => `Mapping name ${rowNumber}`}
-      expressionLabel={() => "Expression"}
+      itemKey="mapping"
+      addButtonLabel={t("editor.addMapping")}
+      nameLabel={(rowNumber) => t("editor.mappingName", { row: rowNumber })}
+      expressionLabel={() => t("editor.expression")}
       rowCardTestIdPrefix="mapping-row-card"
       document={document}
       nodeId={nodeId}
       schemaOverrides={schemaOverrides}
+      t={t}
       onChange={onChange}
     />
   );
@@ -619,9 +657,11 @@ function createNewColumnName(columns: ColumnMap) {
 
 function ColumnMapEditor({
   columns,
+  t,
   onChange,
 }: {
   columns: ColumnMap;
+  t: Translator;
   onChange: (columns: ColumnMap) => void;
 }) {
   const rows = Object.entries(columns);
@@ -631,7 +671,7 @@ function ColumnMapEditor({
       {rows.map(([name, type], index) => (
         <div key={index} className="mapping-row">
           <label>
-            {`Column name ${index + 1}`}
+            {t("editor.columnName", { row: index + 1 })}
             <input
               value={name}
               onChange={(event) => {
@@ -644,7 +684,7 @@ function ColumnMapEditor({
             />
           </label>
           <label>
-            Type
+            {t("editor.fieldType", { row: index + 1 })}
             <input
               value={type}
               onChange={(event) => {
@@ -668,7 +708,7 @@ function ColumnMapEditor({
           })
         }
       >
-        Add field
+        {t("editor.addField")}
       </button>
     </div>
   );
@@ -693,6 +733,7 @@ export function renderNodeEditor(
   draft: EditableNodeDraft,
   setDraft: (node: EditableNodeDraft) => void,
   document: GraphDocument,
+  t: Translator,
   schemaOverrides?: Record<string, ColumnMap>,
   options?: {
     workspace?: GraphWorkspace;
@@ -705,7 +746,7 @@ export function renderNodeEditor(
       return (
         <>
           <label>
-            Table
+            {t("editor.tableName")}
             <input
               value={
                 draft.data.tableRef.schemaName
@@ -728,6 +769,7 @@ export function renderNodeEditor(
           </label>
           <FromTableFieldRows
             rows={draft.data.fieldRows}
+            t={t}
             onChange={(fieldRows) =>
               setDraft({ ...draft, data: { ...draft.data, fieldRows } })
             }
@@ -737,7 +779,7 @@ export function renderNodeEditor(
     case "where":
       return (
         <ExpressionInput
-          label="Predicate"
+          label={t("editor.predicate")}
           value={draft.data.predicate}
           document={document}
           nodeId={draft.id}
@@ -756,6 +798,7 @@ export function renderNodeEditor(
           document={document}
           nodeId={draft.id}
           schemaOverrides={schemaOverrides}
+          t={t}
           onChange={(rows) =>
             setDraft({ ...draft, data: { mappings: rows } })
           }
@@ -765,34 +808,40 @@ export function renderNodeEditor(
       return (
         <>
           <div className="editor-section">
-            <h3>Group By</h3>
+            <h3>{t("editor.groupBy")}</h3>
             <NamedExpressionRows
               rows={draft.data.groupBy}
-              itemName="group key"
-              addButtonLabel="Add group key"
-              nameLabel={(rowNumber) => `Group key name ${rowNumber}`}
-              expressionLabel={(rowNumber) => `Group key expression ${rowNumber}`}
+              itemKey="groupKey"
+              addButtonLabel={t("editor.addGroupKey")}
+              nameLabel={(rowNumber) => t("editor.groupKeyName", { row: rowNumber })}
+              expressionLabel={(rowNumber) =>
+                t("editor.groupKeyExpression", { row: rowNumber })
+              }
               rowCardTestIdPrefix="group-key-row-card"
               document={document}
               nodeId={draft.id}
               schemaOverrides={schemaOverrides}
+              t={t}
               onChange={(rows) =>
                 setDraft({ ...draft, data: { ...draft.data, groupBy: rows } })
               }
             />
           </div>
           <div className="editor-section">
-            <h3>Aggregates</h3>
+            <h3>{t("editor.aggregates")}</h3>
             <NamedExpressionRows
               rows={draft.data.aggregates}
-              itemName="aggregate"
-              addButtonLabel="Add aggregate"
-              nameLabel={(rowNumber) => `Aggregate name ${rowNumber}`}
-              expressionLabel={(rowNumber) => `Aggregate expression ${rowNumber}`}
+              itemKey="aggregate"
+              addButtonLabel={t("editor.addAggregate")}
+              nameLabel={(rowNumber) => t("editor.aggregateName", { row: rowNumber })}
+              expressionLabel={(rowNumber) =>
+                t("editor.aggregateExpression", { row: rowNumber })
+              }
               rowCardTestIdPrefix="aggregate-row-card"
               document={document}
               nodeId={draft.id}
               schemaOverrides={schemaOverrides}
+              t={t}
               onChange={(rows) =>
                 setDraft({
                   ...draft,
@@ -810,6 +859,7 @@ export function renderNodeEditor(
           document={document}
           nodeId={draft.id}
           schemaOverrides={schemaOverrides}
+          t={t}
           onChange={(items) =>
             setDraft({ ...draft, data: { items } })
           }
@@ -819,7 +869,7 @@ export function renderNodeEditor(
       return (
         <>
           <label>
-            Limit
+            {t("editor.count")}
             <input
               type="number"
               value={draft.data.count}
@@ -835,7 +885,7 @@ export function renderNodeEditor(
             />
           </label>
           <label>
-            Offset
+            {t("editor.offset")}
             <input
               type="number"
               value={draft.data.offset === null ? "" : draft.data.offset}
@@ -859,7 +909,7 @@ export function renderNodeEditor(
       return (
         <div className="editor-stack">
           <label>
-            Output name
+            {t("editor.outputName")}
             <input
               value={draft.data.outputName}
               onChange={(event) =>
@@ -890,7 +940,7 @@ export function renderNodeEditor(
                 })
               }
             />
-            Copy to clipboard
+            {t("editor.copyToClipboard")}
           </label>
           <label className="editor-checkbox-row">
             <input
@@ -909,7 +959,7 @@ export function renderNodeEditor(
                 })
               }
             />
-            Log to console
+            {t("editor.logToConsole")}
           </label>
           <label className="editor-checkbox-row">
             <input
@@ -931,10 +981,10 @@ export function renderNodeEditor(
                 })
               }
             />
-            Save to localStorage
+            {t("editor.saveToLocalStorage")}
           </label>
           <label>
-            localStorage key
+            {t("editor.localStorageKey")}
             <input
               value={draft.data.listeners.saveToLocalStorage.key}
               onChange={(event) =>
@@ -960,7 +1010,7 @@ export function renderNodeEditor(
       return (
         <>
           <label>
-            Join type
+            {t("editor.joinType")}
             <select
               value={draft.data.joinType}
               onChange={(event) =>
@@ -973,14 +1023,14 @@ export function renderNodeEditor(
                 })
               }
             >
-              <option value="inner">inner</option>
-              <option value="left">left</option>
-              <option value="right">right</option>
-              <option value="full">full</option>
+              <option value="inner">{t("editor.joinType.inner")}</option>
+              <option value="left">{t("editor.joinType.left")}</option>
+              <option value="right">{t("editor.joinType.right")}</option>
+              <option value="full">{t("editor.joinType.full")}</option>
             </select>
           </label>
           <ExpressionInput
-            label="Predicate"
+            label={t("editor.joinPredicate")}
             value={draft.data.predicate}
             document={document}
             nodeId={draft.id}
@@ -1000,7 +1050,7 @@ export function renderNodeEditor(
       return (
         <div className="editor-stack">
           <label>
-            Input name
+            {t("editor.inputName")}
             <input
               value={draft.data.inputName}
               onChange={(event) =>
@@ -1016,6 +1066,7 @@ export function renderNodeEditor(
           </label>
           <ColumnMapEditor
             columns={draft.data.columns}
+            t={t}
             onChange={(columns) =>
               setDraft({ ...draft, data: { ...draft.data, columns } })
             }
@@ -1034,7 +1085,7 @@ export function renderNodeEditor(
       return (
         <div className="editor-stack">
           <label>
-            Child graph
+            {t("editor.childGraph")}
             <select
               value={draft.data.graphId}
               onChange={(event) =>
@@ -1047,7 +1098,7 @@ export function renderNodeEditor(
                 })
               }
             >
-              <option value="">Select a graph...</option>
+              <option value="">{t("editor.selectGraphPrompt")}</option>
               {graphs.map((graph) => (
                 <option key={graph.id} value={graph.id}>
                   {graph.metadata.name}
@@ -1057,7 +1108,7 @@ export function renderNodeEditor(
           </label>
           {draft.data.graphId.trim() !== "" && !selectedGraph ? (
             <div role="status" aria-live="polite">
-              Missing graph.
+              {t("queryNode.missingGraph")}
             </div>
           ) : null}
           <button
@@ -1069,7 +1120,7 @@ export function renderNodeEditor(
               options?.onOpenGraph?.(selectedGraph!.id);
             }}
           >
-            Open child graph
+            {t("editor.openChildGraph")}
           </button>
         </div>
       );

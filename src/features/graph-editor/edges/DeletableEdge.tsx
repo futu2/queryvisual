@@ -6,6 +6,7 @@ import {
   type EdgeProps,
 } from "@xyflow/react";
 import { useRef, useState } from "react";
+import { useI18n } from "../../i18n/I18nContext";
 
 export interface DeletableEdgeData extends Record<string, unknown> {
   onDelete: (edgeId: string) => void;
@@ -22,6 +23,7 @@ export function DeletableEdge({
   sourcePosition,
   targetPosition,
 }: EdgeProps<Edge<DeletableEdgeData, "deletableEdge">>) {
+  const { t } = useI18n();
   const [isHovered, setIsHovered] = useState(false);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const [path, labelX, labelY] = getBezierPath({
@@ -62,7 +64,7 @@ export function DeletableEdge({
               pointerEvents: "all",
               transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
             }}
-            aria-label="Delete edge"
+            aria-label={t("edge.delete")}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
             onClick={(event) => {

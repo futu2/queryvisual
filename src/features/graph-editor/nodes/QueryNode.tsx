@@ -4,6 +4,8 @@ import type { GraphNode } from "../../../domain/document/types";
 import { formatTableRef } from "../../../domain/schema/types";
 import { inferChildGraphInterface } from "../../../domain/workspace/interfaces";
 import type { FlowNodeData } from "../flowAdapter";
+import { useI18n } from "../../i18n/I18nContext";
+import type { MessageKey } from "../../i18n/types";
 import "./queryNode.css";
 
 const PRESENTATION_BY_KIND: Record<
@@ -22,39 +24,70 @@ const PRESENTATION_BY_KIND: Record<
   output: { family: "terminal", glyph: "OUT" },
 };
 
-function formatInterfaceSummary(inputCount: number, outputCount: number) {
-  return `${inputCount} inputs / ${outputCount} outputs`;
-}
+const NODE_KIND_LABEL_KEYS: Record<GraphNode["kind"], MessageKey> = {
+  graphInput: "nodeKinds.graphInput",
+  fromTable: "nodeKinds.fromTable",
+  subgraph: "nodeKinds.subgraph",
+  join: "nodeKinds.join",
+  where: "nodeKinds.where",
+  select: "nodeKinds.select",
+  aggregation: "nodeKinds.aggregation",
+  sort: "nodeKinds.sort",
+  limit: "nodeKinds.limit",
+  output: "nodeKinds.output",
+};
 
-function summaryText(node: GraphNode, workspace?: FlowNodeData["workspace"]) {
+const JOIN_TYPE_LABEL_KEYS: Record<
+  Extract<GraphNode, { kind: "join" }>["data"]["joinType"],
+  MessageKey
+> = {
+  inner: "editor.joinType.inner",
+  left: "editor.joinType.left",
+  right: "editor.joinType.right",
+  full: "editor.joinType.full",
+};
+
+function summaryText(
+  t: (key: MessageKey, vars?: Record<string, string | number>) => string,
+  node: GraphNode,
+  workspace?: FlowNodeData["workspace"],
+) {
   switch (node.kind) {
     case "fromTable":
-      return `${formatTableRef(node.data.tableRef)} · ${Object.keys(node.data.columns).length} cols`;
+      return `${formatTableRef(node.data.tableRef)} · ${t("queryNode.summary.cols", { count: Object.keys(node.data.columns).length })}`;
     case "graphInput":
-      return `${Object.keys(node.data.columns).length} cols`;
+      return t("queryNode.summary.cols", { count: Object.keys(node.data.columns).length });
     case "subgraph": {
       const { graph, iface } = inferChildGraphInterface(workspace, node.data.graphId);
-      const base = formatInterfaceSummary(iface.inputs.length, iface.outputs.length);
+      const base = t("queryNode.interfaceSummary", {
+        inputs: iface.inputs.length,
+        outputs: iface.outputs.length,
+      });
       if (!node.data.graphId.trim()) {
         return base;
       }
       if (!graph) {
-        return `Missing graph · ${base}`;
+        return `${t("queryNode.missingGraph")} · ${base}`;
       }
       return base;
     }
     case "join":
-      return `${node.data.joinType} join`;
+      return t("queryNode.summary.join", {
+        joinType: t(JOIN_TYPE_LABEL_KEYS[node.data.joinType]),
+      });
     case "where":
       return node.data.predicate;
     case "select":
-      return `${node.data.mappings.length} expressions`;
+      return t("queryNode.summary.expressions", { count: node.data.mappings.length });
     case "aggregation":
-      return `${node.data.groupBy.length} groups · ${node.data.aggregates.length} aggs`;
+      return t("queryNode.summary.groupsAndAggs", {
+        groups: node.data.groupBy.length,
+        aggs: node.data.aggregates.length,
+      });
     case "sort":
-      return `${node.data.items.length} sort keys`;
+      return t("queryNode.summary.sortKeys", { count: node.data.items.length });
     case "limit":
-      return `limit ${node.data.count}`;
+      return t("queryNode.summary.limit", { count: node.data.count });
     case "output":
       return node.data.outputName;
   }
@@ -112,6 +145,7 @@ function TargetHandles({
 }
 
 export function QueryNode({ id, data, selected }: NodeProps<FlowNodeData>) {
+  const { t } = useI18n();
   const hasErrors = data.diagnostics.some(
     (diagnostic) => diagnostic.level === "error",
   );
@@ -156,12 +190,12 @@ export function QueryNode({ id, data, selected }: NodeProps<FlowNodeData>) {
         <span className="query-node__glyph" aria-hidden="true">
           {presentation.glyph}
         </span>
-        <div className="query-node__kind">{data.node.kind}</div>
+        <div className="query-node__kind">{t(NODE_KIND_LABEL_KEYS[data.node.kind])}</div>
       </div>
       <div className="query-node__title">{data.node.label}</div>
-      <div className="query-node__summary">{summaryText(data.node, data.workspace)}</div>
+      <div className="query-node__summary">{summaryText(t, data.node, data.workspace)}</div>
       {data.node.kind === "subgraph" ? (
-        <div className="query-node__ports" aria-label="Subgraph interface">
+        <div className="query-node__ports" aria-label={t("queryNode.subgraphInterface")}>
           {subgraphInterface && subgraphInterface.graph ? (
             <div className="query-node__ports-heading">
               {subgraphInterface.graph.metadata.name}
@@ -169,13 +203,13 @@ export function QueryNode({ id, data, selected }: NodeProps<FlowNodeData>) {
           ) : null}
           {subgraphInterface && !subgraphInterface.graph && data.node.data.graphId.trim() ? (
             <div className="query-node__ports-heading is-missing">
-              Missing graph
+              {t("queryNode.missingGraph")}
             </div>
           ) : null}
           {subgraphInterface ? (
             <div className="query-node__ports-grid">
               <div className="query-node__ports-column">
-                <div className="query-node__ports-title">Inputs</div>
+                <div className="query-node__ports-title">{t("queryNode.inputs")}</div>
                 {subgraphInterface.iface.inputs.map((port) => (
                   <div
                     key={`in-${port.handleId}`}
@@ -196,7 +230,7 @@ export function QueryNode({ id, data, selected }: NodeProps<FlowNodeData>) {
                 ))}
               </div>
               <div className="query-node__ports-column">
-                <div className="query-node__ports-title">Outputs</div>
+                <div className="query-node__ports-title">{t("queryNode.outputs")}</div>
                 {subgraphInterface.iface.outputs.map((port) => (
                   <div
                     key={`out-${port.handleId}`}
@@ -220,7 +254,7 @@ export function QueryNode({ id, data, selected }: NodeProps<FlowNodeData>) {
           ) : null}
         </div>
       ) : null}
-      {hasErrors ? <span className="query-node__badge">error</span> : null}
+      {hasErrors ? <span className="query-node__badge">{t("queryNode.error")}</span> : null}
       {data.node.kind === "output" || data.node.kind === "subgraph" ? null : (
         <>
           <span hidden data-query-node-handle-marker="source-out" />

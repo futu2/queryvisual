@@ -10,6 +10,7 @@ mock.module("@xyflow/react", () => ({
 }));
 
 const { DeletableEdge } = await import("./DeletableEdge");
+const { I18nProvider } = await import("../../i18n/I18nContext");
 
 afterEach(() => {
   cleanup();
@@ -19,23 +20,25 @@ test("shows a delete button when hovered and calls onDelete with the edge id", a
   const onDelete = mock();
 
   render(
-    <DeletableEdge
-      id="edge-select-output"
-      sourceX={0}
-      sourceY={0}
-      targetX={100}
-      targetY={0}
-      sourcePosition="right"
-      targetPosition="left"
-      data={{ onDelete }}
-      selected={false}
-    />,
+    <I18nProvider deps={{ navigatorLanguage: "zh-CN" }}>
+      <DeletableEdge
+        id="edge-select-output"
+        sourceX={0}
+        sourceY={0}
+        targetX={100}
+        targetY={0}
+        sourcePosition="right"
+        targetPosition="left"
+        data={{ onDelete }}
+        selected={false}
+      />
+    </I18nProvider>,
   );
 
-  expect(screen.queryByRole("button", { name: "Delete edge" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "删除连线" })).toBeNull();
 
   fireEvent.mouseEnter(screen.getByTestId("deletable-edge-hitbox"));
-  const deleteButton = screen.getByRole("button", { name: "Delete edge" });
+  const deleteButton = screen.getByRole("button", { name: "删除连线" });
 
   expect(deleteButton.className).toContain("nopan");
   expect(deleteButton.className).toContain("nodrag");
@@ -48,20 +51,22 @@ test("shows a delete button when hovered and calls onDelete with the edge id", a
 
 test("keeps the delete button visible while the edge is selected", () => {
   render(
-    <DeletableEdge
-      id="edge-selected"
-      sourceX={0}
-      sourceY={0}
-      targetX={100}
-      targetY={0}
-      sourcePosition="right"
-      targetPosition="left"
-      data={{ onDelete: () => {} }}
-      selected
-    />,
+    <I18nProvider deps={{ navigatorLanguage: "zh-CN" }}>
+      <DeletableEdge
+        id="edge-selected"
+        sourceX={0}
+        sourceY={0}
+        targetX={100}
+        targetY={0}
+        sourcePosition="right"
+        targetPosition="left"
+        data={{ onDelete: () => {} }}
+        selected
+      />
+    </I18nProvider>,
   );
 
-  const deleteButton = screen.getByRole("button", { name: "Delete edge" });
+  const deleteButton = screen.getByRole("button", { name: "删除连线" });
 
   expect(deleteButton.className).toContain("nopan");
   expect(deleteButton.className).toContain("nodrag");

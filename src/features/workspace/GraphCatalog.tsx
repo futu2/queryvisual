@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useDocumentContext } from "../../app/state/DocumentContext";
 import { collectReferencedGraphIds } from "../../domain/workspace/dependencies";
+import { useI18n } from "../i18n/I18nContext";
 
 export function GraphCatalog({
   runGraphMutation,
@@ -8,6 +9,7 @@ export function GraphCatalog({
   runGraphMutation?: (action: () => void) => void;
 }) {
   const { state, dispatch } = useDocumentContext();
+  const { t } = useI18n();
   const { graphs } = state.workspace;
   const transition = runGraphMutation ?? ((action: () => void) => action());
   const [deleteBlockedGraphId, setDeleteBlockedGraphId] = useState<string | null>(
@@ -26,15 +28,15 @@ export function GraphCatalog({
   }, [graphs]);
 
   return (
-    <section className="graph-catalog" aria-label="Graph catalog">
+    <section className="graph-catalog" aria-label={t("graphCatalog.title")}>
       <div className="graph-catalog__header">
-        <h2>Graphs</h2>
+        <h2>{t("graphCatalog.title")}</h2>
         <button
           className="ghost-button"
           type="button"
           onClick={() => transition(() => dispatch({ type: "create-graph" }))}
         >
-          New graph
+          {t("graphCatalog.newGraph")}
         </button>
       </div>
       <div className="graph-catalog__list">
@@ -52,9 +54,11 @@ export function GraphCatalog({
               data-testid={`graph-catalog-item-${graph.id}`}
             >
               <label className="graph-catalog__name-field">
-                <span className="sr-only">Graph name</span>
+                <span className="sr-only">{t("graphCatalog.graphNameSrOnly")}</span>
                 <input
-                  aria-label={`Graph name ${graph.metadata.name}`}
+                  aria-label={t("graphCatalog.graphNameLabel", {
+                    name: graph.metadata.name,
+                  })}
                   value={graph.metadata.name}
                   onChange={(event) =>
                     dispatch({
@@ -67,25 +71,31 @@ export function GraphCatalog({
               </label>
               <div className="graph-catalog__item-actions">
                 {isActive ? (
-                  <span className="graph-catalog__active-pill">Active</span>
+                  <span className="graph-catalog__active-pill">
+                    {t("graphCatalog.active")}
+                  </span>
                 ) : (
                   <button
                     className="ghost-button"
                     type="button"
-                    aria-label={`Open ${graph.metadata.name}`}
+                    aria-label={t("graphCatalog.openNamed", {
+                      name: graph.metadata.name,
+                    })}
                     onClick={() => {
                       transition(() =>
                         dispatch({ type: "set-active-graph", graphId: graph.id }),
                       );
                     }}
                   >
-                    Open
+                    {t("graphCatalog.open")}
                   </button>
                 )}
                 <button
                   className="ghost-button graph-catalog__delete-button"
                   type="button"
-                  aria-label={`Delete ${graph.metadata.name}`}
+                  aria-label={t("graphCatalog.deleteNamed", {
+                    name: graph.metadata.name,
+                  })}
                   onClick={() => {
                     if (isReferenced) {
                       setDeleteBlockedGraphId(graph.id);
@@ -104,12 +114,12 @@ export function GraphCatalog({
                   }}
                   disabled={!canDelete}
                 >
-                  Delete
+                  {t("graphCatalog.delete")}
                 </button>
               </div>
               {showDeleteBlockedMessage ? (
                 <p className="graph-catalog__error" role="alert">
-                  Graph is still referenced.
+                  {t("graphCatalog.deleteBlocked")}
                 </p>
               ) : null}
             </div>

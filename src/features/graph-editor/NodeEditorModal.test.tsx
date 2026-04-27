@@ -6,7 +6,9 @@ import type { GraphDocument, GraphNode, GraphWorkspace } from "../../domain/docu
 import { DocumentProvider, useDocumentContext } from "../../app/state/DocumentContext";
 import type { CompileOutputResult } from "../../domain/compile/compileOutput";
 import type { OutputListenerStatus } from "../output-runtime/outputRuntime";
+import { createDefaultOutputListenerConfig } from "../../domain/document/outputListeners";
 import { NodeEditorModal, type NodeEditorModalHandle } from "./NodeEditorModal";
+import { I18nProvider } from "../i18n/I18nContext";
 
 afterEach(cleanup);
 
@@ -55,6 +57,7 @@ function renderModal({
   onClose = () => {},
   onSave = () => {},
   outputRuntime = null,
+  navigatorLanguage = "en-US",
 }: {
   node: GraphNode;
   document?: GraphDocument;
@@ -65,6 +68,7 @@ function renderModal({
     compileResult: CompileOutputResult;
     listenerStatus: OutputListenerStatus;
   } | null;
+  navigatorLanguage?: string;
 }) {
   const fallbackDocument: GraphDocument = {
     version: 1,
@@ -75,17 +79,19 @@ function renderModal({
   };
 
   return render(
-    <DocumentProvider
-      initialWorkspace={workspace}
-      initialDocument={document ?? fallbackDocument}
-    >
-      <NodeEditorModal
-        node={node}
-        onClose={onClose}
-        onSave={onSave}
-        outputRuntime={outputRuntime}
-      />
-    </DocumentProvider>,
+    <I18nProvider deps={{ navigatorLanguage }}>
+      <DocumentProvider
+        initialWorkspace={workspace}
+        initialDocument={document ?? fallbackDocument}
+      >
+        <NodeEditorModal
+          node={node}
+          onClose={onClose}
+          onSave={onSave}
+          outputRuntime={outputRuntime}
+        />
+      </DocumentProvider>
+    </I18nProvider>,
   );
 }
 
@@ -95,6 +101,114 @@ function ActiveGraphProbe() {
 }
 
 describe("NodeEditorModal", () => {
+  test("builds the modal aria label from the localized node kind label (not the raw kind)", () => {
+    const node: GraphNode = {
+      id: "output-orders",
+      kind: "output",
+      label: "Orders Report",
+      position: { x: 0, y: 0 },
+      data: {
+        outputName: "orders_report",
+        listeners: createDefaultOutputListenerConfig("orders_report"),
+      },
+    };
+
+    const { container } = renderModal({ node, navigatorLanguage: "en-US" });
+
+    expect(screen.getByRole("dialog", { name: "Edit Output node" })).toBeTruthy();
+    expect(container.querySelector(".modal-kind")?.textContent).toBe("Output");
+  });
+
+  test("localizes fixed drag-handle helper labels and fromTable column-type option labels", () => {
+    const fromTableNode: GraphNode = {
+      id: "from-orders-i18n",
+      kind: "fromTable",
+      label: "Orders",
+      position: { x: 0, y: 0 },
+      data: {
+        tableRef: { tableName: "orders" },
+        columns: {
+          order_id: "int",
+        },
+      },
+    };
+
+    const { rerender } = renderModal({ node: fromTableNode, navigatorLanguage: "zh-CN" });
+
+    // Drag helper label is fixed chrome (should be localized).
+    expect(screen.getByRole("button", { name: "拖动 字段 1" })).toBeTruthy();
+
+    // Column type option labels should be localized (values remain stable).
+    const typeSelect = screen.getByLabelText("字段类型 1") as HTMLSelectElement;
+    expect(typeSelect.querySelector('option[value="string"]')?.textContent).toBe("字符串");
+    expect(typeSelect.querySelector('option[value="int"]')?.textContent).toBe("整数");
+
+    const selectNode: GraphNode = {
+      id: "select-orders-i18n",
+      kind: "select",
+      label: "Project",
+      position: { x: 0, y: 0 },
+      data: {
+        mappings: [{ name: "gross_total", expression: "total" }],
+      },
+    };
+
+    const selectDocument: GraphDocument = {
+      version: 1,
+      metadata: { name: "Test document" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [selectNode],
+      edges: [],
+    };
+
+    rerender(
+      <I18nProvider deps={{ navigatorLanguage: "zh-CN" }}>
+        <DocumentProvider initialDocument={selectDocument}>
+          <NodeEditorModal node={selectNode} onClose={() => {}} onSave={() => {}} />
+        </DocumentProvider>
+      </I18nProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "拖动 映射 1" })).toBeTruthy();
+  });
+
+  test("localizes join-type and sort-direction option labels in zh-CN", () => {
+    const joinNode: GraphNode = {
+      id: "join-orders-i18n",
+      kind: "join",
+      label: "Join Orders",
+      position: { x: 0, y: 0 },
+      data: {
+        joinType: "inner",
+        predicate: "a.id = b.id",
+      },
+    };
+
+    renderModal({ node: joinNode, navigatorLanguage: "zh-CN" });
+
+    const joinTypeSelect = screen.getByLabelText("连接类型") as HTMLSelectElement;
+    expect(joinTypeSelect.querySelector('option[value="inner"]')?.textContent).toBe("内连接");
+    expect(joinTypeSelect.querySelector('option[value="left"]')?.textContent).toBe("左连接");
+    expect(joinTypeSelect.querySelector('option[value="right"]')?.textContent).toBe("右连接");
+    expect(joinTypeSelect.querySelector('option[value="full"]')?.textContent).toBe("全连接");
+
+    const sortNode: GraphNode = {
+      id: "sort-orders-i18n",
+      kind: "sort",
+      label: "Sort Orders",
+      position: { x: 0, y: 0 },
+      data: {
+        items: [{ expression: "total", direction: "asc" }],
+      },
+    };
+
+    renderModal({ node: sortNode, navigatorLanguage: "zh-CN" });
+
+    const directionSelect = screen.getByLabelText("方向") as HTMLSelectElement;
+    expect(directionSelect.querySelector('option[value="asc"]')?.textContent).toBe("升序");
+    expect(directionSelect.querySelector('option[value="desc"]')?.textContent).toBe("降序");
+  });
+
   test("saves updated select mappings", async () => {
     const user = userEvent.setup();
     const onSave = mock();
@@ -577,14 +691,16 @@ describe("NodeEditorModal", () => {
     };
 
     render(
-      <DocumentProvider initialDocument={fallbackDocument}>
-        <NodeEditorModal
-          ref={closeRef}
-          node={node}
-          onClose={() => {}}
-          onSave={() => {}}
-        />
-      </DocumentProvider>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialDocument={fallbackDocument}>
+          <NodeEditorModal
+            ref={closeRef}
+            node={node}
+            onClose={() => {}}
+            onSave={() => {}}
+          />
+        </DocumentProvider>
+      </I18nProvider>,
     );
 
     const nameInput = screen.getByLabelText("Node name");
@@ -945,14 +1061,16 @@ describe("NodeEditorModal", () => {
     };
 
     render(
-      <>
-        <button type="button" onClick={() => ref.current?.requestClose(customClose)}>
-          Trigger custom close
-        </button>
-        <DocumentProvider initialDocument={document}>
-          <NodeEditorModal ref={ref} node={node} onClose={onClose} onSave={() => {}} />
-        </DocumentProvider>
-      </>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <>
+          <button type="button" onClick={() => ref.current?.requestClose(customClose)}>
+            Trigger custom close
+          </button>
+          <DocumentProvider initialDocument={document}>
+            <NodeEditorModal ref={ref} node={node} onClose={onClose} onSave={() => {}} />
+          </DocumentProvider>
+        </>
+      </I18nProvider>,
     );
 
     await user.clear(screen.getByLabelText("Node name"));
@@ -1135,22 +1253,24 @@ describe("NodeEditorModal", () => {
     };
 
     renderResult.rerender(
-      <DocumentProvider
-        initialDocument={{
-          version: 1,
-          metadata: { name: "Test document" },
-          viewport: { x: 0, y: 0, zoom: 1 },
-          nodes: [node],
-          edges: [],
-        }}
-      >
-        <NodeEditorModal
-          node={node}
-          onClose={() => {}}
-          onSave={() => {}}
-          outputRuntime={nextRuntime}
-        />
-      </DocumentProvider>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider
+          initialDocument={{
+            version: 1,
+            metadata: { name: "Test document" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [node],
+            edges: [],
+          }}
+        >
+          <NodeEditorModal
+            node={node}
+            onClose={() => {}}
+            onSave={() => {}}
+            outputRuntime={nextRuntime}
+          />
+        </DocumentProvider>
+      </I18nProvider>,
     );
 
     expect(screen.getByRole("tab", { name: "SQL" }).getAttribute("aria-selected")).toBe(
@@ -1204,14 +1324,16 @@ describe("NodeEditorModal", () => {
     };
 
     const renderResult = render(
-      <DocumentProvider initialDocument={document}>
-        <NodeEditorModal
-          node={firstOutputNode}
-          onClose={() => {}}
-          onSave={() => {}}
-          outputRuntime={null}
-        />
-      </DocumentProvider>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialDocument={document}>
+          <NodeEditorModal
+            node={firstOutputNode}
+            onClose={() => {}}
+            onSave={() => {}}
+            outputRuntime={null}
+          />
+        </DocumentProvider>
+      </I18nProvider>,
     );
 
     await user.click(screen.getByRole("tab", { name: "Diagnostics" }));
@@ -1220,14 +1342,16 @@ describe("NodeEditorModal", () => {
     );
 
     renderResult.rerender(
-      <DocumentProvider initialDocument={document}>
-        <NodeEditorModal
-          node={secondOutputNode}
-          onClose={() => {}}
-          onSave={() => {}}
-          outputRuntime={null}
-        />
-      </DocumentProvider>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialDocument={document}>
+          <NodeEditorModal
+            node={secondOutputNode}
+            onClose={() => {}}
+            onSave={() => {}}
+            outputRuntime={null}
+          />
+        </DocumentProvider>
+      </I18nProvider>,
     );
 
     expect(screen.getByRole("tab", { name: "SQL" }).getAttribute("aria-selected")).toBe(
@@ -1396,14 +1520,16 @@ describe("NodeEditorModal", () => {
     };
 
     render(
-      <>
-        <button type="button" onClick={() => ref.current?.requestClose(customClose)}>
-          Trigger custom close
-        </button>
-        <DocumentProvider initialDocument={document}>
-          <NodeEditorModal ref={ref} node={node} onClose={onClose} onSave={() => {}} />
-        </DocumentProvider>
-      </>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <>
+          <button type="button" onClick={() => ref.current?.requestClose(customClose)}>
+            Trigger custom close
+          </button>
+          <DocumentProvider initialDocument={document}>
+            <NodeEditorModal ref={ref} node={node} onClose={onClose} onSave={() => {}} />
+          </DocumentProvider>
+        </>
+      </I18nProvider>,
     );
 
     await user.clear(screen.getByLabelText("Node name"));
@@ -1530,18 +1656,20 @@ describe("NodeEditorModal", () => {
     await user.type(screen.getByLabelText("Mapping name 1"), "net_total");
 
     rerender(
-      <DocumentProvider initialDocument={document}>
-        <NodeEditorModal
-          node={{
-            ...baseNode,
-            data: {
-              mappings: [{ name: "gross_total", expression: "total" }],
-            },
-          }}
-          onClose={() => {}}
-          onSave={() => {}}
-        />
-      </DocumentProvider>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialDocument={document}>
+          <NodeEditorModal
+            node={{
+              ...baseNode,
+              data: {
+                mappings: [{ name: "gross_total", expression: "total" }],
+              },
+            }}
+            onClose={() => {}}
+            onSave={() => {}}
+          />
+        </DocumentProvider>
+      </I18nProvider>,
     );
 
     expect((screen.getByLabelText("Mapping name 1") as HTMLInputElement).value).toBe(
@@ -1682,7 +1810,7 @@ describe("NodeEditorModal", () => {
 
     renderModal({ node: join, document });
 
-    await user.type(screen.getByLabelText("Predicate"), "left.");
+    await user.type(screen.getByLabelText("Join predicate"), "left.");
 
     expect(await screen.findByLabelText("Suggestions")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Insert left.order_id" })).toBeTruthy();
@@ -1822,10 +1950,12 @@ describe("NodeEditorModal", () => {
     };
 
     render(
-      <DocumentProvider initialWorkspace={workspace}>
-        <NodeEditorModal node={node} onClose={onClose} onSave={onSave} />
-        <ActiveGraphProbe />
-      </DocumentProvider>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialWorkspace={workspace}>
+          <NodeEditorModal node={node} onClose={onClose} onSave={onSave} />
+          <ActiveGraphProbe />
+        </DocumentProvider>
+      </I18nProvider>,
     );
 
     expect(screen.getByTestId("active-graph-id").textContent).toBe("graph-parent");
@@ -1839,10 +1969,12 @@ describe("NodeEditorModal", () => {
     cleanup();
 
     render(
-      <DocumentProvider initialWorkspace={workspace}>
-        <NodeEditorModal node={cleanNode} onClose={onClose} onSave={onSave} />
-        <ActiveGraphProbe />
-      </DocumentProvider>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialWorkspace={workspace}>
+          <NodeEditorModal node={cleanNode} onClose={onClose} onSave={onSave} />
+          <ActiveGraphProbe />
+        </DocumentProvider>
+      </I18nProvider>,
     );
 
     await user.click(screen.getByRole("button", { name: "Open child graph" }));
@@ -1887,10 +2019,12 @@ describe("NodeEditorModal", () => {
     };
 
     render(
-      <DocumentProvider initialWorkspace={workspace}>
-        <NodeEditorModal node={node} onClose={onClose} onSave={onSave} />
-        <ActiveGraphProbe />
-      </DocumentProvider>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialWorkspace={workspace}>
+          <NodeEditorModal node={node} onClose={onClose} onSave={onSave} />
+          <ActiveGraphProbe />
+        </DocumentProvider>
+      </I18nProvider>,
     );
 
     await user.type(screen.getByLabelText("Node name"), " (dirty)");
@@ -1955,10 +2089,12 @@ describe("NodeEditorModal", () => {
     };
 
     render(
-      <DocumentProvider initialWorkspace={workspace}>
-        <NodeEditorModal node={node} onClose={onClose} onSave={onSave} />
-        <ActiveGraphProbe />
-      </DocumentProvider>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialWorkspace={workspace}>
+          <NodeEditorModal node={node} onClose={onClose} onSave={onSave} />
+          <ActiveGraphProbe />
+        </DocumentProvider>
+      </I18nProvider>,
     );
 
     await user.selectOptions(screen.getByLabelText("Child graph"), "graph-child-b");
