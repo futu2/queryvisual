@@ -497,6 +497,29 @@ describe("NodeEditorModal", () => {
     );
   });
 
+  test("marks the modal body as the shrinkable scroll region for tall editors", () => {
+    const node: GraphNode = {
+      id: "select-orders-scroll",
+      kind: "select",
+      label: "Project",
+      position: { x: 0, y: 0 },
+      data: {
+        mappings: Array.from({ length: 16 }, (_, index) => ({
+          name: `col_${index + 1}`,
+          expression: `${index + 1}`,
+        })),
+      },
+    };
+
+    const { container } = renderModal({ node });
+    const modalBody = container.querySelector(".modal-body") as HTMLElement | null;
+
+    expect(modalBody).toBeTruthy();
+    expect(modalBody?.style.flexGrow).toBe("1");
+    expect(modalBody?.style.flexShrink).toBe("1");
+    expect(modalBody?.style.minHeight).toBe("0");
+  });
+
   test("keeps one blank select mapping row when removing the last row", async () => {
     const user = userEvent.setup();
 
@@ -1907,6 +1930,115 @@ describe("NodeEditorModal", () => {
     renderModal({ node: whereNode, document });
 
     expect(screen.queryByText("Predicate must be boolean.")).toBeNull();
+  });
+
+  test("subgraph-fed select editors reuse child output columns for suggestions", async () => {
+    const user = userEvent.setup();
+
+    const workspace: GraphWorkspace = {
+      version: 2,
+      metadata: { name: "Workspace" },
+      entryGraphId: "graph-parent",
+      graphs: [
+        {
+          id: "graph-parent",
+          metadata: { name: "Parent" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [
+            {
+              id: "parent-input",
+              kind: "graphInput",
+              label: "Parent Input",
+              position: { x: 0, y: 0 },
+              data: {
+                inputName: "orders",
+                columns: { total: "int" },
+              },
+            },
+            {
+              id: "subgraph-1",
+              kind: "subgraph",
+              label: "Orders Package",
+              position: { x: 240, y: 0 },
+              data: { graphId: "graph-child" },
+            },
+            {
+              id: "select-1",
+              kind: "select",
+              label: "Select",
+              position: { x: 480, y: 0 },
+              data: {
+                mappings: [{ name: "kept_total", expression: "" }],
+              },
+            },
+          ],
+          edges: [
+            {
+              id: "edge-parent-subgraph-input",
+              source: "parent-input",
+              sourceHandle: "out",
+              target: "subgraph-1",
+              targetHandle: "in:child-input",
+            },
+            {
+              id: "edge-subgraph-select",
+              source: "subgraph-1",
+              sourceHandle: "out:child-output",
+              target: "select-1",
+              targetHandle: "in",
+            },
+          ],
+        },
+        {
+          id: "graph-child",
+          metadata: { name: "Child" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [
+            {
+              id: "child-input",
+              kind: "graphInput",
+              label: "Child Input",
+              position: { x: 0, y: 0 },
+              data: {
+                inputName: "orders",
+                columns: { total: "int" },
+              },
+            },
+            {
+              id: "child-output",
+              kind: "output",
+              label: "Output",
+              position: { x: 240, y: 0 },
+              data: {
+                outputName: "orders_out",
+                listeners: createDefaultOutputListenerConfig("orders_out"),
+              },
+            },
+          ],
+          edges: [
+            {
+              id: "edge-child-output",
+              source: "child-input",
+              sourceHandle: "out",
+              target: "child-output",
+              targetHandle: "in",
+            },
+          ],
+        },
+      ],
+    };
+
+    const selectNode = workspace.graphs[0]!.nodes.find((node) => node.id === "select-1");
+    if (!selectNode) {
+      throw new Error("Missing select node");
+    }
+
+    renderModal({ node: selectNode, workspace });
+
+    await user.type(screen.getByLabelText("Expression"), "inp");
+
+    expect(await screen.findByLabelText("Suggestions")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Insert input.total" })).toBeTruthy();
   });
 
   test("subgraph nodes save a referenced graph id and support open-child jump", async () => {

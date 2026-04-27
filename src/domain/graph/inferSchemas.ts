@@ -464,10 +464,11 @@ function cachedSchemas(cache: Map<string, InferredNodeSchema>) {
 export function inferNodeSchemas(
   document: GraphDocument,
   nodeId: string,
+  context: WorkspaceInferenceContext = {},
 ): Record<string, ColumnMap> {
   const byId = nodesById(document);
   const cache = new Map<string, InferredNodeSchema>();
-  inferNodeSchema(document, nodeId, byId, cache, new Set(), {});
+  inferNodeSchema(document, nodeId, byId, cache, new Set(), context);
   return cachedSchemas(cache);
 }
 

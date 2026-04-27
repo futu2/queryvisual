@@ -238,8 +238,10 @@ function NodeEditorModal({
       node.kind === "aggregation" ||
       node.kind === "sort";
 
-    return needsOverrides ? inferNodeSchemas(graphDocument, node.id) : undefined;
-  }, [graphDocument, node.id, node.kind]);
+    return needsOverrides
+      ? inferNodeSchemas(graphDocument, node.id, { workspace: state.workspace })
+      : undefined;
+  }, [graphDocument, node.id, node.kind, state.workspace]);
   const serializedDraft = useMemo(() => serializeNodeEditorDraft(draft), [draft]);
   const isDirty = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(initialDraft),
@@ -367,7 +369,7 @@ function NodeEditorModal({
         }}
         onClick={(event) => event.stopPropagation()}
       >
-        <div aria-hidden={showDiscardDialog}>
+        <div className="modal-content" aria-hidden={showDiscardDialog}>
           <header className="modal-header">
             <div>
               <div className="modal-kind">{nodeKindLabel}</div>
@@ -386,7 +388,10 @@ function NodeEditorModal({
             </div>
           </header>
 
-          <section className="modal-body">
+          <section
+            className="modal-body"
+            style={{ flexGrow: 1, flexShrink: 1, minHeight: 0 }}
+          >
             {renderNodeEditor(draft, setDraft, graphDocument, t, schemaOverrides, {
               workspace: state.workspace,
               activeGraphId: state.activeGraphId,
