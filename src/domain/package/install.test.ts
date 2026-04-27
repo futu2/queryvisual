@@ -112,6 +112,42 @@ describe("installPackageBundle", () => {
 
     expect(() => installPackageBundle(workspace, pkg)).toThrow();
   });
+
+  test("throws when encountering a conflicting duplicate packageId@version", () => {
+    const workspace = createEmptyWorkspace();
+
+    const pkgA: GraphPackageFile = {
+      formatVersion: 1,
+      packageId: "com.acme/orders",
+      version: "1.0.0",
+      metadata: { name: "Orders A" },
+      exports: [],
+      graphs: [],
+      dependencies: [],
+    };
+
+    const pkgB: GraphPackageFile = {
+      formatVersion: 1,
+      packageId: "com.acme/orders",
+      version: "1.0.0",
+      metadata: { name: "Orders B" },
+      exports: [],
+      graphs: [],
+      dependencies: [],
+    };
+
+    const root: GraphPackageFile = {
+      formatVersion: 1,
+      packageId: "com.acme/root",
+      version: "1.0.0",
+      metadata: { name: "Root" },
+      exports: [],
+      graphs: [],
+      dependencies: [pkgA, pkgB],
+    };
+
+    expect(() => installPackageBundle(workspace, root)).toThrow("Conflicting package bundle");
+  });
 });
 
 describe("resolveInstalledPackageExport", () => {

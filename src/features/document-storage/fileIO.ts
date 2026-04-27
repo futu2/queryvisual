@@ -524,6 +524,11 @@ function isGraphPackageFileAtDepth(value: unknown, depth: number): value is Grap
     return false;
   }
 
+  const graphIds = new Set(value.graphs.map((graph) => graph.id));
+  if (!value.exports.every((entry) => graphIds.has(entry.graphId))) {
+    return false;
+  }
+
   return value.dependencies.every((dep) => isGraphPackageFileAtDepth(dep, depth + 1));
 }
 

@@ -186,6 +186,36 @@ describe("fileIO", () => {
     ).toThrow("Invalid QueryVisual document");
   });
 
+  test("rejects legacy documents with graphId + valid package target subgraph payloads", () => {
+    expect(() =>
+      parseDocumentJson(
+        JSON.stringify({
+          version: 1,
+          metadata: { name: "bad" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [
+            {
+              id: "subgraph-1",
+              kind: "subgraph",
+              label: "Orders",
+              position: { x: 0, y: 0 },
+              data: {
+                graphId: "graph-child",
+                target: {
+                  kind: "package",
+                  packageId: "com.acme/orders",
+                  version: "1.0.0",
+                  exportKey: "orders_report",
+                },
+              },
+            },
+          ],
+          edges: [],
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual document");
+  });
+
   test("wraps legacy single-graph JSON into a one-graph workspace", () => {
     const workspace = parseWorkspaceJson(
       JSON.stringify({
@@ -318,6 +348,52 @@ describe("fileIO", () => {
     ).toThrow("Invalid QueryVisual workspace");
   });
 
+  test("rejects workspaces with graphId + valid package target subgraph payloads", () => {
+    expect(() =>
+      parseWorkspaceJson(
+        JSON.stringify({
+          version: 2,
+          metadata: { name: "workspace" },
+          entryGraphId: "graph-main",
+          graphs: [
+            {
+              id: "graph-main",
+              metadata: { name: "Main" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [
+                {
+                  id: "subgraph-1",
+                  kind: "subgraph",
+                  label: "Orders",
+                  position: { x: 0, y: 0 },
+                  data: {
+                    graphId: "graph-child",
+                    target: {
+                      kind: "package",
+                      packageId: "com.acme/orders",
+                      version: "1.0.0",
+                      exportKey: "orders_report",
+                    },
+                  },
+                },
+              ],
+              edges: [],
+            },
+            {
+              id: "graph-child",
+              metadata: { name: "Child" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+          ],
+          installedPackages: [],
+          packageManifest: null,
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual workspace");
+  });
+
   test("migrates legacy workspace subgraph payload { graphId } into { target: { kind: \"local\", graphId } }", () => {
     const workspace = parseWorkspaceJson(
       JSON.stringify({
@@ -441,6 +517,32 @@ describe("fileIO", () => {
         }),
       ),
     ).toThrow("Invalid QueryVisual workspace");
+  });
+
+  test("parsePackageJson rejects exports that point to missing graphs", () => {
+    expect(() =>
+      parsePackageJson(
+        JSON.stringify({
+          formatVersion: 1,
+          packageId: "com.acme/orders",
+          version: "1.0.0",
+          metadata: { name: "Orders" },
+          exports: [
+            { exportKey: "orders_report", graphId: "graph-missing", displayName: "Orders Report" },
+          ],
+          graphs: [
+            {
+              id: "graph-present",
+              metadata: { name: "Present" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+          ],
+          dependencies: [],
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual package");
   });
 
   test("parsePackageJson rejects excessively deep dependency chains", () => {
