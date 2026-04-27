@@ -5,6 +5,7 @@ import { DocumentProvider, useDocumentContext } from "../../app/state/DocumentCo
 import { createSampleDocument } from "../../domain/document/sample";
 import type { GraphWorkspace } from "../../domain/document/types";
 import type { OutputRuntimeSnapshot } from "../output-runtime/outputRuntime";
+import { I18nProvider } from "../i18n/I18nContext";
 
 let reactFlowProps: Record<string, unknown> | null = null;
 
@@ -224,9 +225,11 @@ describe("GraphCanvas", () => {
     };
 
     render(
-      <DocumentProvider initialWorkspace={workspace}>
-        <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
-      </DocumentProvider>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialWorkspace={workspace}>
+          <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
+        </DocumentProvider>
+      </I18nProvider>,
     );
 
     const flowNode = getFlowNode("subgraph-1") as
@@ -239,10 +242,12 @@ describe("GraphCanvas", () => {
     const user = userEvent.setup();
 
     render(
-      <DocumentProvider initialDocument={createSampleDocument()}>
-        <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
-        <EditorStateProbe />
-      </DocumentProvider>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialDocument={createSampleDocument()}>
+          <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
+          <EditorStateProbe />
+        </DocumentProvider>
+      </I18nProvider>,
     );
 
     await invokeNodeClick("from-orders");
@@ -278,9 +283,11 @@ describe("GraphCanvas", () => {
     const user = userEvent.setup();
 
     render(
-      <DocumentProvider initialDocument={createSampleDocument()}>
-        <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
-      </DocumentProvider>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialDocument={createSampleDocument()}>
+          <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
+        </DocumentProvider>
+      </I18nProvider>,
     );
 
     await invokeNodeClick("from-orders");
@@ -306,10 +313,12 @@ describe("GraphCanvas", () => {
     const user = userEvent.setup();
 
     render(
-      <DocumentProvider initialDocument={createSampleDocument()}>
-        <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
-        <EditorStateProbe />
-      </DocumentProvider>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialDocument={createSampleDocument()}>
+          <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
+          <EditorStateProbe />
+        </DocumentProvider>
+      </I18nProvider>,
     );
 
     await invokeNodeClick("from-orders");
@@ -333,10 +342,12 @@ describe("GraphCanvas", () => {
     const user = userEvent.setup();
 
     render(
-      <DocumentProvider initialDocument={createSampleDocument()}>
-        <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
-        <EditorStateProbe />
-      </DocumentProvider>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialDocument={createSampleDocument()}>
+          <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
+          <EditorStateProbe />
+        </DocumentProvider>
+      </I18nProvider>,
     );
 
     await invokeNodeClick("from-orders");
@@ -355,10 +366,12 @@ describe("GraphCanvas", () => {
     const user = userEvent.setup();
 
     render(
-      <DocumentProvider initialDocument={createSampleDocument()}>
-        <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
-        <EditorStateProbe />
-      </DocumentProvider>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialDocument={createSampleDocument()}>
+          <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
+          <EditorStateProbe />
+        </DocumentProvider>
+      </I18nProvider>,
     );
 
     await invokeNodeClick("from-orders");
@@ -378,10 +391,12 @@ describe("GraphCanvas", () => {
     const user = userEvent.setup();
 
     render(
-      <DocumentProvider initialDocument={createSampleDocument()}>
-        <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
-        <EditorStateProbe />
-      </DocumentProvider>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialDocument={createSampleDocument()}>
+          <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
+          <EditorStateProbe />
+        </DocumentProvider>
+      </I18nProvider>,
     );
 
     await invokeNodeClick("from-orders");
@@ -408,10 +423,12 @@ describe("GraphCanvas", () => {
 
   test("updates node position from React Flow node changes during drag", () => {
     render(
-      <DocumentProvider initialDocument={createSampleDocument()}>
-        <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
-        <PositionProbe />
-      </DocumentProvider>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialDocument={createSampleDocument()}>
+          <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
+          <PositionProbe />
+        </DocumentProvider>
+      </I18nProvider>,
     );
 
     expect(screen.getByTestId("from-orders-position").textContent).toBe("120,140");
@@ -437,9 +454,11 @@ describe("GraphCanvas", () => {
 
   test("preserves measured node dimensions across drag updates", () => {
     render(
-      <DocumentProvider initialDocument={createSampleDocument()}>
-        <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
-      </DocumentProvider>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialDocument={createSampleDocument()}>
+          <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
+        </DocumentProvider>
+      </I18nProvider>,
     );
 
     const onNodesChange = reactFlowProps?.onNodesChange;
@@ -514,23 +533,27 @@ describe("GraphCanvas", () => {
     };
 
     render(
-      <DocumentProvider initialDocument={createSampleDocument()}>
-        <GraphCanvas outputRuntime={outputRuntime} />
-      </DocumentProvider>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialDocument={createSampleDocument()}>
+          <GraphCanvas outputRuntime={outputRuntime} />
+        </DocumentProvider>
+      </I18nProvider>,
     );
 
     await invokeNodeClick("output-orders");
 
-    expect(screen.getByRole("dialog", { name: "Edit output node" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Edit Output node" })).toBeTruthy();
     await userEvent.setup().click(screen.getByRole("tab", { name: "SQL" }));
     expect(screen.getByText("SELECT order_id FROM sales.orders")).toBeTruthy();
   });
 
   test("clicking the edge delete affordance removes only the targeted edge", async () => {
     render(
-      <DocumentProvider initialDocument={createSampleDocument()}>
-        <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
-      </DocumentProvider>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialDocument={createSampleDocument()}>
+          <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
+        </DocumentProvider>
+      </I18nProvider>,
     );
 
     const hitboxes = await screen.findAllByTestId("deletable-edge-hitbox");

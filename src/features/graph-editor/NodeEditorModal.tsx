@@ -19,6 +19,10 @@ import {
   useEditableNode,
 } from "./nodeEditors";
 import type { OutputListenerStatus } from "../output-runtime/outputRuntime";
+import { useI18n } from "../i18n/I18nContext";
+import type { MessageKey, TranslationVars } from "../i18n/types";
+
+type Translator = (key: MessageKey, vars?: TranslationVars) => string;
 
 export type NodeEditorModalHandle = {
   requestClose: (closeAction?: () => void) => void;
@@ -36,9 +40,22 @@ type NodeEditorModalProps = {
 
 type OutputInspectorTab = "diagnostics" | "semantic" | "ir" | "optimized-ir" | "sql";
 
-function formatRuntimeTimestamp(timestamp: number | null) {
+const nodeKindMessageKeys = {
+  graphInput: "nodeKinds.graphInput",
+  fromTable: "nodeKinds.fromTable",
+  subgraph: "nodeKinds.subgraph",
+  join: "nodeKinds.join",
+  where: "nodeKinds.where",
+  select: "nodeKinds.select",
+  aggregation: "nodeKinds.aggregation",
+  sort: "nodeKinds.sort",
+  limit: "nodeKinds.limit",
+  output: "nodeKinds.output",
+} as const satisfies Record<GraphNode["kind"], MessageKey>;
+
+function formatRuntimeTimestamp(t: Translator, timestamp: number | null) {
   if (!timestamp) {
-    return "Never";
+    return t("outputRuntime.never");
   }
 
   return new Date(timestamp).toLocaleString();
@@ -52,10 +69,12 @@ function OutputRuntimeInspector({
   outputId,
   compileResult,
   listenerStatus,
+  t,
 }: {
   outputId: string;
   compileResult: CompileOutputResult | null;
   listenerStatus: OutputListenerStatus | null;
+  t: Translator;
 }) {
   const [activeTab, setActiveTab] = useState<OutputInspectorTab>("sql");
   const tabsBaseId = useId();
@@ -67,11 +86,11 @@ function OutputRuntimeInspector({
   }, [compileResult, listenerStatus, outputId]);
 
   const tabDefinitions: Array<{ id: OutputInspectorTab; label: string }> = [
-    { id: "diagnostics", label: "Diagnostics" },
-    { id: "semantic", label: "Semantic" },
-    { id: "ir", label: "IR" },
-    { id: "optimized-ir", label: "Optimized IR" },
-    { id: "sql", label: "SQL" },
+    { id: "diagnostics", label: t("outputRuntime.tabs.diagnostics") },
+    { id: "semantic", label: t("outputRuntime.tabs.semantic") },
+    { id: "ir", label: t("outputRuntime.tabs.ir") },
+    { id: "optimized-ir", label: t("outputRuntime.tabs.optimizedIr") },
+    { id: "sql", label: t("outputRuntime.tabs.sql") },
   ];
   const diagnostics = compileResult?.semantic.diagnostics ?? [];
   const hasRuntimeData = Boolean(compileResult || listenerStatus);
@@ -79,38 +98,47 @@ function OutputRuntimeInspector({
 
   let tabContent: string;
   if (!hasRuntimeData) {
-    tabContent = "No runtime data available yet.";
+    tabContent = t("outputRuntime.noRuntimeData");
   } else if (activeTab === "diagnostics") {
     tabContent =
       diagnostics.length > 0
         ? diagnostics.map((diagnostic) => diagnostic.message).join("\n")
-        : "No diagnostics.";
+        : t("outputRuntime.noDiagnostics");
   } else if (activeTab === "semantic") {
-    tabContent = compileResult ? renderJson(compileResult.semantic) : "No semantic output.";
+    tabContent = compileResult ? renderJson(compileResult.semantic) : t("outputRuntime.noSemantic");
   } else if (activeTab === "ir") {
-    tabContent = compileResult?.ir ? renderJson(compileResult.ir) : "No IR generated.";
+    tabContent = compileResult?.ir ? renderJson(compileResult.ir) : t("outputRuntime.noIr");
   } else if (activeTab === "optimized-ir") {
     tabContent = compileResult?.optimizedIr
       ? renderJson(compileResult.optimizedIr)
-      : "No optimized IR generated.";
+      : t("outputRuntime.noOptimizedIr");
   } else {
     tabContent = compileResult?.sql.trim()
       ? compileResult.sql
-      : "No SQL generated.";
+      : t("outputRuntime.noSql");
   }
 
   return (
-    <section className="output-runtime-section" aria-label="Output runtime inspection">
-      <h3>Output Runtime</h3>
+    <section
+      className="output-runtime-section"
+      aria-label={t("outputRuntime.sectionTitle")}
+    >
+      <h3>{t("outputRuntime.sectionTitle")}</h3>
       <div className="output-runtime-status" role="status" aria-live="polite">
         <div>
-          <strong>Last run:</strong> {formatRuntimeTimestamp(listenerStatus?.lastRunAt ?? null)}
+          <strong>{t("outputRuntime.lastRun")}</strong>{" "}
+          {formatRuntimeTimestamp(t, listenerStatus?.lastRunAt ?? null)}
         </div>
         <div>
-          <strong>Last error:</strong> {listenerStatus?.lastErrorMessage ?? "None"}
+          <strong>{t("outputRuntime.lastError")}</strong>{" "}
+          {listenerStatus?.lastErrorMessage ?? t("outputRuntime.none")}
         </div>
       </div>
-      <div className="output-runtime-tabs" role="tablist" aria-label="Output runtime tabs">
+      <div
+        className="output-runtime-tabs"
+        role="tablist"
+        aria-label={t("outputRuntime.sectionTitle")}
+      >
         {tabDefinitions.map((tab, index) => {
           const isActive = tab.id === activeTab;
           const tabId = `${tabsBaseId}-${tab.id}`;
@@ -189,6 +217,7 @@ function NodeEditorModal({
   onSave,
 }, ref) {
   const { state, dispatch } = useDocumentContext();
+  const { t } = useI18n();
   const graphDocument = state.document;
   const { draft, initialDraft, setDraft } = useEditableNode(node);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
@@ -216,6 +245,8 @@ function NodeEditorModal({
     () => JSON.stringify(draft) !== JSON.stringify(initialDraft),
     [draft, initialDraft],
   );
+  const nodeKindLabel = t(nodeKindMessageKeys[node.kind]);
+  const modalAriaLabel = t("modal.editNodeAria", { kind: nodeKindLabel });
 
   function requestClose(closeAction: () => void = onClose) {
     if (!isDirty) {
@@ -326,7 +357,7 @@ function NodeEditorModal({
         className="modal-card"
         role={showDiscardDialog ? undefined : "dialog"}
         aria-modal={showDiscardDialog ? undefined : true}
-        aria-label={showDiscardDialog ? undefined : `Edit ${node.kind} node`}
+        aria-label={showDiscardDialog ? undefined : modalAriaLabel}
         onFocusCapture={(event) => {
           const target = event.target;
           if (!(target instanceof HTMLElement)) return;
@@ -339,11 +370,11 @@ function NodeEditorModal({
         <div aria-hidden={showDiscardDialog}>
           <header className="modal-header">
             <div>
-              <div className="modal-kind">{node.kind}</div>
+              <div className="modal-kind">{nodeKindLabel}</div>
               <label className="modal-title-field">
-                <span className="sr-only">Node name</span>
+                <span className="sr-only">{t("modal.nodeName")}</span>
                 <input
-                  aria-label="Node name"
+                  aria-label={t("modal.nodeName")}
                   className="modal-title-input"
                   ref={nodeNameInputRef}
                   value={draft.label}
@@ -356,7 +387,7 @@ function NodeEditorModal({
           </header>
 
           <section className="modal-body">
-            {renderNodeEditor(draft, setDraft, graphDocument, schemaOverrides, {
+            {renderNodeEditor(draft, setDraft, graphDocument, t, schemaOverrides, {
               workspace: state.workspace,
               activeGraphId: state.activeGraphId,
               onOpenGraph: (graphId) => {
@@ -371,6 +402,7 @@ function NodeEditorModal({
                 outputId={node.id}
                 compileResult={outputRuntime?.compileResult ?? null}
                 listenerStatus={outputRuntime?.listenerStatus ?? null}
+                t={t}
               />
             ) : null}
           </section>
@@ -381,14 +413,14 @@ function NodeEditorModal({
               className="ghost-button"
               onClick={() => requestClose()}
             >
-              Cancel
+              {t("modal.cancel")}
             </button>
             <button
               type="button"
               className="solid-button"
               onClick={() => onSave(serializedDraft)}
             >
-              Save
+              {t("modal.save")}
             </button>
           </footer>
         </div>
@@ -399,12 +431,12 @@ function NodeEditorModal({
               className="modal-confirmation-card"
               role="dialog"
               aria-modal="true"
-              aria-label="Discard changes?"
+              aria-label={t("modal.discard.title")}
               ref={discardDialogRef}
               onKeyDown={handleDiscardDialogKeyDown}
             >
-              <h3>Discard changes?</h3>
-              <p>Your unsaved edits will be lost.</p>
+              <h3>{t("modal.discard.title")}</h3>
+              <p>{t("modal.discard.body")}</p>
               <div className="modal-confirmation-actions">
                 <button
                   type="button"
@@ -412,14 +444,14 @@ function NodeEditorModal({
                   ref={keepEditingButtonRef}
                   onClick={handleKeepEditing}
                 >
-                  Keep editing
+                  {t("modal.discard.keepEditing")}
                 </button>
                 <button
                   type="button"
                   className="solid-button"
                   onClick={handleDiscardChanges}
                 >
-                  Discard changes
+                  {t("modal.discard.confirm")}
                 </button>
               </div>
             </div>

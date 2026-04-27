@@ -139,7 +139,7 @@ describe("App integration", () => {
       dispatch?.({ type: "open-node-editor", nodeId: "output-orders" });
     });
 
-    expect(await screen.findByRole("dialog", { name: "Edit output node" })).toBeTruthy();
+    expect(await screen.findByRole("dialog", { name: "Edit Output node" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "SQL" })).toBeTruthy();
     expect(screen.getByText(/FROM sales\.orders/i)).toBeTruthy();
   });
@@ -165,7 +165,7 @@ describe("App integration", () => {
       dispatch?.({ type: "open-node-editor", nodeId: "output-parent" });
     });
 
-    expect(await screen.findByRole("dialog", { name: "Edit output node" })).toBeTruthy();
+    expect(await screen.findByRole("dialog", { name: "Edit Output node" })).toBeTruthy();
     expect(screen.getByText(/FROM sales\.orders/i)).toBeTruthy();
 
     await act(async () => {
@@ -188,7 +188,7 @@ describe("App integration", () => {
       dispatch?.({ type: "open-node-editor", nodeId: "output-parent" });
     });
 
-    expect(await screen.findByRole("dialog", { name: "Edit output node" })).toBeTruthy();
+    expect(await screen.findByRole("dialog", { name: "Edit Output node" })).toBeTruthy();
     expect(screen.getByText(/FROM sales\.returns/i)).toBeTruthy();
   });
 });

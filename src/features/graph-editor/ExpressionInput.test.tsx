@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import type { GraphDocument } from "../../domain/document/types";
+import { I18nProvider } from "../i18n/I18nContext";
 
 // Scope suggestions have a contract: `key` is a stable identifier, while `insertText`
 // is the completion text. The real scope builder currently sets them equal, so this
@@ -87,17 +88,22 @@ describe("ExpressionInput", () => {
       );
     }
 
-    render(<Harness />);
+    render(
+      <I18nProvider deps={{ navigatorLanguage: "zh-CN" }}>
+        <Harness />
+      </I18nProvider>,
+    );
 
     await user.type(screen.getByLabelText("Predicate"), "inp");
 
-    expect(screen.getByRole("button", { name: "Insert input." })).toBeTruthy();
+    expect(screen.getByLabelText("建议")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "插入 input." })).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Insert input.total" }),
+      screen.getByRole("button", { name: "插入 input.total" }),
     ).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Insert total" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "插入 total" })).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: "Insert input.total" }));
+    await user.click(screen.getByRole("button", { name: "插入 input.total" }));
     expect((screen.getByLabelText("Predicate") as HTMLInputElement).value).toBe(
       "input.total",
     );
@@ -148,7 +154,11 @@ describe("ExpressionInput", () => {
       );
     }
 
-    render(<Harness />);
+    render(
+      <I18nProvider deps={{ navigatorLanguage: "zh-CN" }}>
+        <Harness />
+      </I18nProvider>,
+    );
 
     const input = screen.getByLabelText("Predicate") as HTMLInputElement;
     input.focus();
@@ -156,9 +166,9 @@ describe("ExpressionInput", () => {
     input.setSelectionRange("input.t".length, "input.t".length);
     fireEvent.select(input);
 
-    expect(screen.getByRole("button", { name: "Insert input.total" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "插入 input.total" })).toBeTruthy();
 
-    await user.click(screen.getByRole("button", { name: "Insert input.total" }));
+    await user.click(screen.getByRole("button", { name: "插入 input.total" }));
     expect((screen.getByLabelText("Predicate") as HTMLInputElement).value).toBe(
       "input.total",
     );
@@ -223,13 +233,17 @@ describe("ExpressionInput", () => {
       );
     }
 
-    render(<Harness />);
+    render(
+      <I18nProvider deps={{ navigatorLanguage: "zh-CN" }}>
+        <Harness />
+      </I18nProvider>,
+    );
 
     await user.type(screen.getByLabelText("Join predicate"), "le");
 
-    expect(screen.getByRole("button", { name: "Insert left." })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Insert left.id" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Insert id" })).toBeNull();
+    expect(screen.getByRole("button", { name: "插入 left." })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "插入 left.id" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "插入 id" })).toBeNull();
   });
 
   test("can require boolean expressions and surfaces non-boolean diagnostics", async () => {
@@ -264,17 +278,20 @@ describe("ExpressionInput", () => {
 
     const onChange = mock();
     render(
-      <ExpressionInput
-        label="Predicate"
-        value="1"
-        onChange={onChange}
-        document={document}
-        nodeId="where"
-        {...({ requireBoolean: true } as any)}
-      />,
+      <I18nProvider deps={{ navigatorLanguage: "zh-CN" }}>
+        <ExpressionInput
+          label="Predicate"
+          value="1"
+          onChange={onChange}
+          document={document}
+          nodeId="where"
+          {...({ requireBoolean: true } as any)}
+        />
+      </I18nProvider>,
     );
 
     expect(screen.getByText("Predicate must be boolean.")).toBeTruthy();
+    expect(screen.getByLabelText("诊断")).toBeTruthy();
   });
 
   test("shows compiler-aligned diagnostics for an empty expression", async () => {
@@ -309,16 +326,18 @@ describe("ExpressionInput", () => {
 
     const onChange = mock();
     render(
-      <ExpressionInput
-        label="Predicate"
-        value=""
-        onChange={onChange}
-        document={document}
-        nodeId="where"
-      />,
+      <I18nProvider deps={{ navigatorLanguage: "zh-CN" }}>
+        <ExpressionInput
+          label="Predicate"
+          value=""
+          onChange={onChange}
+          document={document}
+          nodeId="where"
+        />
+      </I18nProvider>,
     );
 
-    expect(screen.getByLabelText("Diagnostics")).toBeTruthy();
+    expect(screen.getByLabelText("诊断")).toBeTruthy();
     expect(screen.getByText("Expression could not be parsed.")).toBeTruthy();
   });
 
@@ -354,14 +373,16 @@ describe("ExpressionInput", () => {
 
     const onChange = mock();
     render(
-      <ExpressionInput
-        label="Predicate"
-        value="("
-        onChange={onChange}
-        document={document}
-        nodeId="where"
-        multiline
-      />,
+      <I18nProvider deps={{ navigatorLanguage: "zh-CN" }}>
+        <ExpressionInput
+          label="Predicate"
+          value="("
+          onChange={onChange}
+          document={document}
+          nodeId="where"
+          multiline
+        />
+      </I18nProvider>,
     );
 
     expect(screen.getByText("Expression could not be parsed.")).toBeTruthy();

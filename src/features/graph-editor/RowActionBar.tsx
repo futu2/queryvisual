@@ -1,5 +1,8 @@
+import { useI18n } from "../i18n/I18nContext";
+import type { MessageKey } from "../i18n/types";
+
 type RowActionBarProps = {
-  itemName: string;
+  itemKey: "mapping" | "field" | "column" | "groupKey" | "aggregate" | "sortItem";
   rowNumber: number;
   rowCount: number;
   onMoveUp: () => void;
@@ -8,8 +11,17 @@ type RowActionBarProps = {
   onRemove: () => void;
 };
 
+const rowActionItemMessageKeys = {
+  mapping: "rowActions.mapping",
+  field: "rowActions.field",
+  column: "rowActions.column",
+  groupKey: "rowActions.groupKey",
+  aggregate: "rowActions.aggregate",
+  sortItem: "rowActions.sortItem",
+} as const satisfies Record<RowActionBarProps["itemKey"], MessageKey>;
+
 export function RowActionBar({
-  itemName,
+  itemKey,
   rowNumber,
   rowCount,
   onMoveUp,
@@ -17,16 +29,24 @@ export function RowActionBar({
   onDuplicate,
   onRemove,
 }: RowActionBarProps) {
+  const { t } = useI18n();
+  const itemLabel = t(rowActionItemMessageKeys[itemKey]);
+  const groupLabel = t("rowActions.group", { item: itemLabel, row: rowNumber });
+  const moveUpLabel = t("rowActions.moveUp", { item: itemLabel, row: rowNumber });
+  const moveDownLabel = t("rowActions.moveDown", { item: itemLabel, row: rowNumber });
+  const duplicateLabel = t("rowActions.duplicate", { item: itemLabel, row: rowNumber });
+  const removeLabel = t("rowActions.remove", { item: itemLabel, row: rowNumber });
+
   return (
     <div
       className="row-action-bar"
       role="group"
-      aria-label={`${itemName} ${rowNumber} actions`}
+      aria-label={groupLabel}
     >
       <button
         className="row-icon-button"
         type="button"
-        aria-label={`Move ${itemName} ${rowNumber} up`}
+        aria-label={moveUpLabel}
         onClick={onMoveUp}
         disabled={rowNumber === 1}
       >
@@ -35,7 +55,7 @@ export function RowActionBar({
       <button
         className="row-icon-button"
         type="button"
-        aria-label={`Move ${itemName} ${rowNumber} down`}
+        aria-label={moveDownLabel}
         onClick={onMoveDown}
         disabled={rowNumber === rowCount}
       >
@@ -44,7 +64,7 @@ export function RowActionBar({
       <button
         className="row-icon-button"
         type="button"
-        aria-label={`Duplicate ${itemName} ${rowNumber}`}
+        aria-label={duplicateLabel}
         onClick={onDuplicate}
       >
         ⧉
@@ -52,7 +72,7 @@ export function RowActionBar({
       <button
         className="row-icon-button row-icon-button-danger"
         type="button"
-        aria-label={`Remove ${itemName} ${rowNumber}`}
+        aria-label={removeLabel}
         onClick={onRemove}
       >
         ✕

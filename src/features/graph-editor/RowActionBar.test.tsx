@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RowActionBar } from "./RowActionBar";
 import { RowCard } from "./RowCard";
+import { I18nProvider } from "../i18n/I18nContext";
 
 afterEach(cleanup);
 
@@ -14,21 +15,23 @@ describe("RowActionBar", () => {
     const onRemove = mock();
 
     const { container, rerender } = render(
-      <RowActionBar
-        itemName="mapping"
-        rowNumber={1}
-        rowCount={3}
-        onMoveUp={onMoveUp}
-        onMoveDown={onMoveDown}
-        onDuplicate={onDuplicate}
-        onRemove={onRemove}
-      />,
+      <I18nProvider deps={{ navigatorLanguage: "zh-CN" }}>
+        <RowActionBar
+          itemKey="mapping"
+          rowNumber={1}
+          rowCount={3}
+          onMoveUp={onMoveUp}
+          onMoveDown={onMoveDown}
+          onDuplicate={onDuplicate}
+          onRemove={onRemove}
+        />
+      </I18nProvider>,
     );
 
-    const moveUp = screen.getByRole("button", { name: "Move mapping 1 up" });
-    const moveDown = screen.getByRole("button", { name: "Move mapping 1 down" });
-    const duplicate = screen.getByRole("button", { name: "Duplicate mapping 1" });
-    const remove = screen.getByRole("button", { name: "Remove mapping 1" });
+    const moveUp = screen.getByRole("button", { name: "上移 映射 1" });
+    const moveDown = screen.getByRole("button", { name: "下移 映射 1" });
+    const duplicate = screen.getByRole("button", { name: "复制 映射 1" });
+    const remove = screen.getByRole("button", { name: "删除 映射 1" });
     const wrapper = container.querySelector("div");
 
     expect(wrapper?.classList.contains("row-action-bar")).toBeTrue();
@@ -46,20 +49,22 @@ describe("RowActionBar", () => {
     expect((remove.textContent ?? "").toLowerCase()).not.toContain("remove");
 
     rerender(
-      <RowActionBar
-        itemName="mapping"
-        rowNumber={3}
-        rowCount={3}
-        onMoveUp={onMoveUp}
-        onMoveDown={onMoveDown}
-        onDuplicate={onDuplicate}
-        onRemove={onRemove}
-      />,
+      <I18nProvider deps={{ navigatorLanguage: "zh-CN" }}>
+        <RowActionBar
+          itemKey="mapping"
+          rowNumber={3}
+          rowCount={3}
+          onMoveUp={onMoveUp}
+          onMoveDown={onMoveDown}
+          onDuplicate={onDuplicate}
+          onRemove={onRemove}
+        />
+      </I18nProvider>,
     );
 
     expect(
       (screen.getByRole("button", {
-        name: "Move mapping 3 down",
+        name: "下移 映射 3",
       }) as HTMLButtonElement).disabled,
     ).toBeTrue();
   });
@@ -72,21 +77,23 @@ describe("RowActionBar", () => {
     const onRemove = mock();
 
     render(
-      <RowActionBar
-        itemName="field"
-        rowNumber={2}
-        rowCount={4}
-        onMoveUp={onMoveUp}
-        onMoveDown={onMoveDown}
-        onDuplicate={onDuplicate}
-        onRemove={onRemove}
-      />,
+      <I18nProvider deps={{ navigatorLanguage: "zh-CN" }}>
+        <RowActionBar
+          itemKey="field"
+          rowNumber={2}
+          rowCount={4}
+          onMoveUp={onMoveUp}
+          onMoveDown={onMoveDown}
+          onDuplicate={onDuplicate}
+          onRemove={onRemove}
+        />
+      </I18nProvider>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Move field 2 up" }));
-    await user.click(screen.getByRole("button", { name: "Move field 2 down" }));
-    await user.click(screen.getByRole("button", { name: "Duplicate field 2" }));
-    await user.click(screen.getByRole("button", { name: "Remove field 2" }));
+    await user.click(screen.getByRole("button", { name: "上移 字段 2" }));
+    await user.click(screen.getByRole("button", { name: "下移 字段 2" }));
+    await user.click(screen.getByRole("button", { name: "复制 字段 2" }));
+    await user.click(screen.getByRole("button", { name: "删除 字段 2" }));
 
     expect(onMoveUp).toHaveBeenCalledTimes(1);
     expect(onMoveDown).toHaveBeenCalledTimes(1);

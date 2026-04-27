@@ -4,6 +4,7 @@ import { analyzeExpression } from "../../domain/expr/analyze";
 import type { ExpressionAnalysis } from "../../domain/expr/analyze";
 import { buildExpressionScope } from "../../domain/graph/expressionScope";
 import type { ColumnMap } from "../../domain/schema/types";
+import { useI18n } from "../i18n/I18nContext";
 
 type ExpressionInputProps = {
   label: string;
@@ -59,6 +60,7 @@ export function ExpressionInput({
   multiline = false,
   requireBoolean,
 }: ExpressionInputProps) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
   const pendingSelection = useRef<{ start: number; end: number } | null>(null);
   const [caret, setCaret] = useState<number>(value.length);
@@ -129,13 +131,13 @@ export function ExpressionInput({
       </label>
 
       {suggestions.length > 0 ? (
-        <div className="expression-suggestions" aria-label="Suggestions">
+        <div className="expression-suggestions" aria-label={t("expression.suggestions")}>
           {suggestions.map((sugg) => (
             <button
               key={sugg.key}
               type="button"
               className="expression-suggestion"
-              aria-label={`Insert ${sugg.insertText}`}
+              aria-label={t("expression.insertSuggestion", { value: sugg.insertText })}
               onClick={() => {
                 const el = inputRef.current;
                 const cursor = el?.selectionStart ?? caret;
@@ -157,7 +159,11 @@ export function ExpressionInput({
       ) : null}
 
       {analysis.diagnostics.length > 0 ? (
-        <div className="expression-diagnostics" role="status" aria-label="Diagnostics">
+        <div
+          className="expression-diagnostics"
+          role="status"
+          aria-label={t("expression.diagnostics")}
+        >
           {analysis.diagnostics.map((diag, index) => (
             <div key={`${diag.code}:${index}`} className="expression-diagnostic">
               {diag.message}
