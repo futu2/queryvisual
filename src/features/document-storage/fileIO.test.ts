@@ -587,6 +587,78 @@ describe("fileIO", () => {
     ).toThrow("Invalid QueryVisual package");
   });
 
+  test("parsePackageJson normalizes graphInput nodes without inputName", () => {
+    const pkg = parsePackageJson(
+      JSON.stringify({
+        formatVersion: 1,
+        packageId: "com.acme/pkg",
+        version: "1.0.0",
+        metadata: { name: "Pkg" },
+        exports: [
+          { exportKey: "main", graphId: "graph-main", displayName: "Main" },
+        ],
+        graphs: [
+          {
+            id: "graph-main",
+            metadata: { name: "Main" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [
+              {
+                id: "in-1",
+                kind: "graphInput",
+                label: "Orders Input",
+                position: { x: 0, y: 0 },
+                data: { columns: { order_id: "int" } },
+              },
+            ],
+            edges: [],
+          },
+        ],
+        dependencies: [],
+      }),
+    );
+
+    const node = pkg.graphs[0]?.nodes.find((n) => n.id === "in-1");
+    expect(node?.kind).toBe("graphInput");
+    expect((node as any).data.inputName).toBe("Orders Input");
+  });
+
+  test("parsePackageJson normalizes output nodes without listeners", () => {
+    const pkg = parsePackageJson(
+      JSON.stringify({
+        formatVersion: 1,
+        packageId: "com.acme/pkg",
+        version: "1.0.0",
+        metadata: { name: "Pkg" },
+        exports: [
+          { exportKey: "main", graphId: "graph-main", displayName: "Main" },
+        ],
+        graphs: [
+          {
+            id: "graph-main",
+            metadata: { name: "Main" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [
+              {
+                id: "out-1",
+                kind: "output",
+                label: "Out",
+                position: { x: 0, y: 0 },
+                data: { outputName: "orders_report" },
+              },
+            ],
+            edges: [],
+          },
+        ],
+        dependencies: [],
+      }),
+    );
+
+    const node = pkg.graphs[0]?.nodes.find((n) => n.id === "out-1");
+    expect(node?.kind).toBe("output");
+    expect((node as any).data.listeners).toBeDefined();
+  });
+
   test("parsePackageJson rejects excessively deep dependency chains", () => {
     let pkg: any = {
       formatVersion: 1,

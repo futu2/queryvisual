@@ -12,8 +12,28 @@ function samePkg(
 }
 
 function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  // Deterministic, JSON-like stringify:
+  // - object keys with `undefined` are omitted
+  // - array elements of `undefined` become `null`
+  // - always returns a string (even for top-level `undefined`)
+  if (value === undefined) return "null";
+  if (value === null) return "null";
+
+  const primitiveType = typeof value;
+  if (primitiveType === "string" || primitiveType === "number" || primitiveType === "boolean") {
+    return JSON.stringify(value);
+  }
+  if (primitiveType === "bigint") {
+    // JSON doesn't support bigint; treat as a string for stable comparison.
+    return JSON.stringify(value.toString());
+  }
+  if (primitiveType === "function" || primitiveType === "symbol") {
+    return "null";
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => (entry === undefined ? "null" : stableStringify(entry))).join(",")}]`;
+  }
 
   const record = value as Record<string, unknown>;
   const keys = Object.keys(record)
