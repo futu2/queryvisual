@@ -633,6 +633,14 @@ describe("useOutputRuntime and applyOutputListeners", () => {
     await waitFor(() => {
       expect(clipboardWrite).toHaveBeenCalledTimes(1);
     });
+    await waitFor(() => {
+      const latestSnapshot = onSnapshot.mock.calls.at(-1)?.[0] as
+        | OutputRuntimeSnapshot
+        | undefined;
+      expect(
+        latestSnapshot?.listenerStatusByOutputId["output-orders"]?.lastRunAt,
+      ).toBe(1700000000000);
+    });
     const settledSnapshot = onRender.mock.calls.at(-1)?.[0] as OutputRuntimeSnapshot;
     onRender.mockClear();
     onSnapshot.mockClear();
