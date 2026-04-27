@@ -71,6 +71,65 @@ describe("App", () => {
     expect(screen.getByLabelText("Graph name Beta Graph")).toBeTruthy();
   });
 
+  test("graph names stay as user content while surrounding shell labels localize (zh-CN)", async () => {
+    const hadOwnLanguage = Object.prototype.hasOwnProperty.call(
+      navigator,
+      "language",
+    );
+    const originalLanguageDescriptor = Object.getOwnPropertyDescriptor(
+      navigator,
+      "language",
+    );
+
+    Object.defineProperty(navigator, "language", {
+      value: "zh-CN",
+      configurable: true,
+    });
+
+    try {
+      const workspace: GraphWorkspace = {
+        version: 2,
+        metadata: { name: "Workspace" },
+        entryGraphId: "graph-b",
+        graphs: [
+          {
+            id: "graph-a",
+            metadata: { name: "Alpha Graph" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [],
+            edges: [],
+          },
+          {
+            id: "graph-b",
+            metadata: { name: "Beta Graph" },
+            viewport: { x: 10, y: 20, zoom: 0.8 },
+            nodes: [],
+            edges: [],
+          },
+        ],
+      };
+
+      await act(async () => {
+        render(<App initialWorkspace={workspace} />);
+      });
+
+      expect(screen.getByText("画布")).toBeTruthy();
+      expect(screen.getByText("查询图")).toBeTruthy();
+
+      // Localized labels should wrap the user-provided graph names without translating them.
+      expect(screen.getByRole("button", { name: "打开 Alpha Graph" })).toBeTruthy();
+      expect(screen.getByText("当前")).toBeTruthy();
+      expect(screen.getByLabelText("图名称 Beta Graph")).toBeTruthy();
+    } finally {
+      if (originalLanguageDescriptor) {
+        Object.defineProperty(navigator, "language", originalLanguageDescriptor);
+      } else if (!hadOwnLanguage) {
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+        delete (navigator as unknown as Record<string, unknown>).language;
+      }
+    }
+  });
+
   test("graph catalog new graph still uses discard confirmation after dirty editor opens", async () => {
     await act(async () => {
       render(

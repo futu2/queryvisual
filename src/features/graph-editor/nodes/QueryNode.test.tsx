@@ -24,8 +24,24 @@ mock.module("@xyflow/react", () => {
 
 const { ReactFlowProvider } = await import("@xyflow/react");
 const { QueryNode } = await import("./QueryNode");
+const { I18nProvider } = await import("../../i18n/I18nContext");
 
 afterEach(cleanup);
+
+function renderWithI18n(
+  ui: React.ReactNode,
+  navigatorLanguage: string = "en-US",
+) {
+  function Wrapper({ children }: { children: React.ReactNode }) {
+    return (
+      <I18nProvider deps={{ navigatorLanguage }}>
+        {children}
+      </I18nProvider>
+    );
+  }
+
+  return render(ui, { wrapper: Wrapper });
+}
 
 function createWorkspaceWithChildInterface(): GraphWorkspace {
   return {
@@ -74,7 +90,7 @@ function createWorkspaceWithChildInterface(): GraphWorkspace {
 
 describe("QueryNode", () => {
   test("shows a compact summary for fromTable nodes", () => {
-    render(
+    renderWithI18n(
       <ReactFlowProvider>
         <QueryNode
           id="from-orders"
@@ -102,8 +118,8 @@ describe("QueryNode", () => {
     expect(screen.getByText(/2 cols/)).toBeTruthy();
   });
 
-  test("shows an error badge when node diagnostics include errors", () => {
-    render(
+  test("localizes kind labels and the error badge while keeping user content raw", () => {
+    renderWithI18n(
       <ReactFlowProvider>
         <QueryNode
           id="where-1"
@@ -111,7 +127,7 @@ describe("QueryNode", () => {
             node: {
               id: "where-1",
               kind: "where",
-              label: "Where",
+              label: "Custom Where Label",
               position: { x: 0, y: 0 },
               data: {
                 predicate: "id > 0",
@@ -130,15 +146,17 @@ describe("QueryNode", () => {
           dragging={false}
         />
       </ReactFlowProvider>,
+      "zh-CN",
     );
 
-    expect(screen.getByText("error")).toBeTruthy();
-    expect(screen.getByText("Where")).toBeTruthy();
+    expect(screen.getByText("错误")).toBeTruthy();
+    expect(screen.getByText("筛选")).toBeTruthy();
+    expect(screen.getByText("Custom Where Label")).toBeTruthy();
     expect(screen.getByText("id > 0")).toBeTruthy();
   });
 
   test("source transform and terminal nodes expose family and kind hooks", () => {
-    const { container } = render(
+    const { container } = renderWithI18n(
       <ReactFlowProvider>
         <div>
           <QueryNode
@@ -216,7 +234,7 @@ describe("QueryNode", () => {
   });
 
   test("selected and error state classes layer alongside type presentation hooks", () => {
-    const { container } = render(
+    const { container } = renderWithI18n(
       <ReactFlowProvider>
         <QueryNode
           id="join-1"
@@ -256,7 +274,7 @@ describe("QueryNode", () => {
   });
 
   test("join keeps a dedicated accent hook even when selected or errored", () => {
-    const { container } = render(
+    const { container } = renderWithI18n(
       <ReactFlowProvider>
         <QueryNode
           id="join-1"
@@ -295,7 +313,7 @@ describe("QueryNode", () => {
   });
 
   test("join still renders left and right target handles", () => {
-    const { container } = render(
+    const { container } = renderWithI18n(
       <ReactFlowProvider>
         <QueryNode
           id="join-1"
@@ -327,7 +345,7 @@ describe("QueryNode", () => {
   });
 
   test("source nodes still suppress target handles", () => {
-    const { container } = render(
+    const { container } = renderWithI18n(
       <ReactFlowProvider>
         <div>
           <QueryNode
@@ -385,7 +403,7 @@ describe("QueryNode", () => {
   });
 
   test("output still suppresses the source handle", () => {
-    const { container } = render(
+    const { container } = renderWithI18n(
       <ReactFlowProvider>
         <QueryNode
           id="output-1"
@@ -414,8 +432,8 @@ describe("QueryNode", () => {
     expect(node?.querySelector('[data-query-node-handle-marker="target-in"]')).toBeTruthy();
   });
 
-  test("subgraph nodes render one handle per child input and output", () => {
-    const { container } = render(
+  test("subgraph interface chrome localizes while graph names and port names stay raw", () => {
+    const { container } = renderWithI18n(
       <ReactFlowProvider>
         <QueryNode
           id="subgraph-1"
@@ -434,11 +452,16 @@ describe("QueryNode", () => {
           dragging={false}
         />
       </ReactFlowProvider>,
+      "zh-CN",
     );
 
+    expect(screen.getByLabelText("子图接口")).toBeTruthy();
+    expect(screen.getByText("输入")).toBeTruthy();
+    expect(screen.getByText("输出")).toBeTruthy();
     expect(screen.getByText("orders_in")).toBeTruthy();
     expect(screen.getByText("orders_report")).toBeTruthy();
-    expect(screen.getByText("1 inputs / 1 outputs")).toBeTruthy();
+    expect(screen.getByText("Orders Child")).toBeTruthy();
+    expect(screen.getByText("1 个输入 / 1 个输出")).toBeTruthy();
     expect(
       container.querySelector(
         '[data-query-node-handle-marker="target-in:child-input-orders"]',
@@ -449,6 +472,40 @@ describe("QueryNode", () => {
         '[data-query-node-handle-marker="source-out:child-output-orders"]',
       ),
     ).toBeTruthy();
+  });
+
+  test("missing subgraph chrome is localized while the graph id stays raw", () => {
+    const workspace = createWorkspaceWithChildInterface();
+    const workspaceWithoutChild: GraphWorkspace = {
+      ...workspace,
+      graphs: workspace.graphs.filter((graph) => graph.id !== "graph-child"),
+    };
+
+    renderWithI18n(
+      <ReactFlowProvider>
+        <QueryNode
+          id="subgraph-missing"
+          data={{
+            node: {
+              id: "subgraph-missing",
+              kind: "subgraph",
+              label: "Missing Subgraph",
+              position: { x: 0, y: 0 },
+              data: { graphId: "graph-child" },
+            },
+            diagnostics: [],
+            workspace: workspaceWithoutChild,
+          }}
+          selected={false}
+          dragging={false}
+        />
+      </ReactFlowProvider>,
+      "zh-CN",
+    );
+
+    expect(screen.getByText("缺失的图")).toBeTruthy();
+    expect(screen.getByText(/0 个输入\s*\/\s*0 个输出/)).toBeTruthy();
+    expect(screen.getByText("Missing Subgraph")).toBeTruthy();
   });
 
   test("child interfaces expose input column maps and stable unique handle ids", () => {
@@ -531,7 +588,7 @@ describe("QueryNode", () => {
     expect(new Set(inputHandleIds).size).toBe(inputHandleIds.length);
     expect(new Set(outputHandleIds).size).toBe(outputHandleIds.length);
 
-    const { container } = render(
+    const { container } = renderWithI18n(
       <ReactFlowProvider>
         <QueryNode
           id="subgraph-1"
@@ -613,7 +670,7 @@ describe("QueryNode", () => {
       ],
     };
 
-    const { container } = render(
+    const { container } = renderWithI18n(
       <ReactFlowProvider>
         <QueryNode
           id="subgraph-1"
@@ -700,7 +757,7 @@ describe("QueryNode", () => {
       ],
     };
 
-    const { rerender } = render(
+    const { rerender } = renderWithI18n(
       <ReactFlowProvider>
         <QueryNode
           id="subgraph-1"
