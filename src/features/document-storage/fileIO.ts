@@ -532,6 +532,10 @@ function isGraphPackageFileAtDepth(value: unknown, depth: number): value is Grap
   return value.dependencies.every((dep) => isGraphPackageFileAtDepth(dep, depth + 1));
 }
 
+function hasPackageTargetSubgraphInGraphs(graphs: GraphDefinition[]): boolean {
+  return graphs.some((graph) => hasPackageTargetSubgraph(graph));
+}
+
 export function parsePackageJson(raw: string): GraphPackageFile {
   let parsed: unknown;
 
@@ -542,6 +546,10 @@ export function parsePackageJson(raw: string): GraphPackageFile {
   }
 
   if (!isGraphPackageFile(parsed)) {
+    throw new Error("Invalid QueryVisual package");
+  }
+
+  if (hasPackageTargetSubgraphInGraphs(parsed.graphs)) {
     throw new Error("Invalid QueryVisual package");
   }
 

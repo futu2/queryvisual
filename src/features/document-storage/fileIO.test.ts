@@ -545,6 +545,48 @@ describe("fileIO", () => {
     ).toThrow("Invalid QueryVisual package");
   });
 
+  test("parsePackageJson rejects package graphs that include package-target subgraph nodes", () => {
+    expect(() =>
+      parsePackageJson(
+        JSON.stringify({
+          formatVersion: 1,
+          packageId: "com.acme/orders",
+          version: "1.0.0",
+          metadata: { name: "Orders" },
+          exports: [
+            { exportKey: "orders_report", graphId: "graph-main", displayName: "Orders Report" },
+          ],
+          graphs: [
+            {
+              id: "graph-main",
+              metadata: { name: "Main" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [
+                {
+                  id: "subgraph-1",
+                  kind: "subgraph",
+                  label: "Pkg Target",
+                  position: { x: 0, y: 0 },
+                  data: {
+                    graphId: "graph-child",
+                    target: {
+                      kind: "package",
+                      packageId: "com.acme/other",
+                      version: "1.0.0",
+                      exportKey: "x",
+                    },
+                  },
+                },
+              ],
+              edges: [],
+            },
+          ],
+          dependencies: [],
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual package");
+  });
+
   test("parsePackageJson rejects excessively deep dependency chains", () => {
     let pkg: any = {
       formatVersion: 1,

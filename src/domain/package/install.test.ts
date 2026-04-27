@@ -148,6 +148,43 @@ describe("installPackageBundle", () => {
 
     expect(() => installPackageBundle(workspace, root)).toThrow("Conflicting package bundle");
   });
+
+  test("does not treat omitted vs undefined optional fields as conflicting", () => {
+    const workspace = createEmptyWorkspace();
+
+    const pkgWithOmitted: GraphPackageFile = {
+      formatVersion: 1,
+      packageId: "com.acme/orders",
+      version: "1.0.0",
+      metadata: { name: "Orders" },
+      exports: [],
+      graphs: [],
+      dependencies: [],
+    };
+
+    const pkgWithUndefined: GraphPackageFile = {
+      formatVersion: 1,
+      packageId: "com.acme/orders",
+      version: "1.0.0",
+      metadata: { name: "Orders", description: undefined },
+      exports: [],
+      graphs: [],
+      dependencies: [],
+    };
+
+    const root: GraphPackageFile = {
+      formatVersion: 1,
+      packageId: "com.acme/root",
+      version: "1.0.0",
+      metadata: { name: "Root" },
+      exports: [],
+      graphs: [],
+      dependencies: [pkgWithOmitted, pkgWithUndefined],
+    };
+
+    const next = installPackageBundle(workspace, root);
+    expect(next.installedPackages.filter((p) => p.packageId === "com.acme/orders")).toHaveLength(1);
+  });
 });
 
 describe("resolveInstalledPackageExport", () => {
