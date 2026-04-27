@@ -3,6 +3,7 @@ import { cleanup, render, waitFor } from "@testing-library/react";
 import { createElement, useEffect } from "react";
 import { createSampleDocument } from "../../domain/document/sample";
 import { createDefaultOutputListenerConfig } from "../../domain/document/outputListeners";
+import type { GraphWorkspace } from "../../domain/document/types";
 import {
   applyOutputListeners,
   compileDocumentOutputs,
@@ -91,18 +92,136 @@ function createDocumentWithListenerOutputs() {
   };
 }
 
+function createWorkspaceWithParentChildGraphs(options?: {
+  childTableName?: string;
+  childOutputListeners?: {
+    copyToClipboard: boolean;
+    logToConsole: boolean;
+    saveToLocalStorage: { enabled: boolean; key: string };
+  };
+  parentOutputListeners?: {
+    copyToClipboard: boolean;
+    logToConsole: boolean;
+    saveToLocalStorage: { enabled: boolean; key: string };
+  };
+}): GraphWorkspace {
+  const childOutputListeners =
+    options?.childOutputListeners ??
+    createDefaultOutputListenerConfig("orders_base");
+  const parentOutputListeners =
+    options?.parentOutputListeners ??
+    createDefaultOutputListenerConfig("parent_out");
+
+  const childGraph = {
+    id: "graph-child",
+    metadata: { name: "Orders Child" },
+    viewport: { x: 0, y: 0, zoom: 1 },
+    nodes: [
+      {
+        id: "from-child",
+        kind: "fromTable" as const,
+        label: "Child source",
+        position: { x: 0, y: 0 },
+        data: {
+          tableRef: {
+            schemaName: "sales",
+            tableName: options?.childTableName ?? "orders",
+          },
+          columns: { total: "float" },
+        },
+      },
+      {
+        id: "output-child",
+        kind: "output" as const,
+        label: "Child output",
+        position: { x: 260, y: 0 },
+        data: {
+          outputName: "orders_base",
+          listeners: childOutputListeners,
+        },
+      },
+    ],
+    edges: [
+      {
+        id: "edge-child-output",
+        source: "from-child",
+        sourceHandle: "out",
+        target: "output-child",
+        targetHandle: "in",
+      },
+    ],
+  };
+
+  const parentGraph = {
+    id: "graph-parent",
+    metadata: { name: "Parent graph" },
+    viewport: { x: 0, y: 0, zoom: 1 },
+    nodes: [
+      {
+        id: "subgraph-child",
+        kind: "subgraph" as const,
+        label: "Orders child",
+        position: { x: 0, y: 0 },
+        data: { graphId: "graph-child" },
+      },
+      {
+        id: "select-parent",
+        kind: "select" as const,
+        label: "Select",
+        position: { x: 260, y: 0 },
+        data: { mappings: [{ name: "gross_total", expression: "total" }] },
+      },
+      {
+        id: "output-parent",
+        kind: "output" as const,
+        label: "Parent output",
+        position: { x: 520, y: 0 },
+        data: {
+          outputName: "parent_out",
+          listeners: parentOutputListeners,
+        },
+      },
+    ],
+    edges: [
+      {
+        id: "edge-parent-select",
+        source: "subgraph-child",
+        sourceHandle: "out:output-child",
+        target: "select-parent",
+        targetHandle: "in",
+      },
+      {
+        id: "edge-select-output",
+        source: "select-parent",
+        sourceHandle: "out",
+        target: "output-parent",
+        targetHandle: "in",
+      },
+    ],
+  };
+
+  return {
+    version: 2,
+    metadata: { name: "Workspace" },
+    entryGraphId: "graph-parent",
+    graphs: [parentGraph, childGraph],
+  };
+}
+
 function RuntimeProbe({
-  document,
+  workspace,
+  activeGraphId,
   onSnapshot,
   onRender,
   deps,
 }: {
-  document: ReturnType<typeof createSampleDocument>;
+  workspace: GraphWorkspace;
+  activeGraphId: string;
   onSnapshot: (snapshot: OutputRuntimeSnapshot) => void;
   onRender?: (snapshot: OutputRuntimeSnapshot) => void;
   deps: Parameters<typeof useOutputRuntime>[1];
 }) {
-  const snapshot = useOutputRuntime(document, deps);
+  const snapshot = useOutputRuntime(workspace, activeGraphId, deps);
   onRender?.(snapshot);
 
   useEffect(() => {
@@ -127,6 +246,105 @@ describe("compileDocumentOutputs", () => {
 });
 
 describe("useOutputRuntime and applyOutputListeners", () => {
+  test("recomputes parent SQL when a referenced child graph changes elsewhere in the workspace", async () => {
+    const onRender = mock(() => {});
+    const onSnapshot = mock(() => {});
+    const originalWorkspace = createWorkspaceWithParentChildGraphs({
+      childTableName: "orders",
+    });
+    const updatedWorkspace = createWorkspaceWithParentChildGraphs({
+      childTableName: "returns",
+    });
+
+    const { rerender } = render(
+      createElement(RuntimeProbe, {
+        workspace: originalWorkspace,
+        activeGraphId: "graph-parent",
+        onSnapshot,
+        onRender,
+        deps: {
+          clipboardWriteText: mock(() => {}),
+          consoleLog: mock(() => {}),
+          localStorageSetItem: mock(() => {}),
+          now: () => 1700000000000,
+        },
+      }),
+    );
+
+    await waitFor(() => {
+      const latestSnapshot = onRender.mock.calls.at(-1)?.[0] as OutputRuntimeSnapshot;
+      expect(
+        latestSnapshot.resultsByOutputId["output-parent"]?.sql,
+      ).toContain("FROM sales.orders");
+    });
+
+    rerender(
+      createElement(RuntimeProbe, {
+        workspace: updatedWorkspace,
+        activeGraphId: "graph-parent",
+        onSnapshot,
+        onRender,
+        deps: {
+          clipboardWriteText: mock(() => {}),
+          consoleLog: mock(() => {}),
+          localStorageSetItem: mock(() => {}),
+          now: () => 1700000001000,
+        },
+      }),
+    );
+
+    await waitFor(() => {
+      const latestSnapshot = onRender.mock.calls.at(-1)?.[0] as OutputRuntimeSnapshot;
+      expect(
+        latestSnapshot.resultsByOutputId["output-parent"]?.sql,
+      ).toContain("FROM sales.returns");
+    });
+  });
+
+  test("runs listeners only for the active graph outputs under workspace-aware compilation", async () => {
+    const clipboardWrite = mock(() => {});
+    const onSnapshot = mock(() => {});
+
+    render(
+      createElement(RuntimeProbe, {
+        workspace: createWorkspaceWithParentChildGraphs({
+          childOutputListeners: {
+            copyToClipboard: true,
+            logToConsole: false,
+            saveToLocalStorage: {
+              enabled: false,
+              key: "queryvisual.output.orders_base",
+            },
+          },
+          parentOutputListeners: {
+            copyToClipboard: true,
+            logToConsole: false,
+            saveToLocalStorage: {
+              enabled: false,
+              key: "queryvisual.output.parent_out",
+            },
+          },
+        }),
+        activeGraphId: "graph-child",
+        onSnapshot,
+        deps: {
+          clipboardWriteText: clipboardWrite,
+          consoleLog: mock(() => {}),
+          localStorageSetItem: mock(() => {}),
+          now: () => 1700000000000,
+        },
+      }),
+    );
+
+    await waitFor(() => {
+      expect(clipboardWrite).toHaveBeenCalledTimes(1);
+      expect(clipboardWrite.mock.calls[0]?.[1]).toEqual({
+        outputId: "output-child",
+        outputName: "orders_base",
+      });
+    });
+  });
+
   test("fires enabled listeners for successful SQL output", async () => {
     const clipboardWrite = mock(() => {});
     const log = mock(() => {});
@@ -135,7 +353,13 @@ describe("useOutputRuntime and applyOutputListeners", () => {
 
     render(
       createElement(RuntimeProbe, {
-        document: createDocumentWithListenerOutputs(),
+        workspace: {
+          version: 2,
+          metadata: { name: "Workspace" },
+          entryGraphId: "graph-main",
+          graphs: [{ ...createDocumentWithListenerOutputs(), id: "graph-main" }],
+        },
+        activeGraphId: "graph-main",
         onSnapshot,
         deps: {
           clipboardWriteText: clipboardWrite,
@@ -393,7 +617,13 @@ describe("useOutputRuntime and applyOutputListeners", () => {
     };
     const { rerender } = render(
       createElement(RuntimeProbe, {
-        document,
+        workspace: {
+          version: 2,
+          metadata: { name: "Workspace" },
+          entryGraphId: "graph-main",
+          graphs: [{ ...document, id: "graph-main" }],
+        },
+        activeGraphId: "graph-main",
         onSnapshot,
         onRender,
         deps,
@@ -409,14 +639,23 @@ describe("useOutputRuntime and applyOutputListeners", () => {
 
     rerender(
       createElement(RuntimeProbe, {
-        document: {
-          ...document,
-          viewport: {
-            x: 120,
-            y: 80,
-            zoom: 1.25,
-          },
+        workspace: {
+          version: 2,
+          metadata: { name: "Workspace" },
+          entryGraphId: "graph-main",
+          graphs: [
+            {
+              ...document,
+              id: "graph-main",
+              viewport: {
+                x: 120,
+                y: 80,
+                zoom: 1.25,
+              },
+            },
+          ],
         },
+        activeGraphId: "graph-main",
         onSnapshot,
         onRender,
         deps,

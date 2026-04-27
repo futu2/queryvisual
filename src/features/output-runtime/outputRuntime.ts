@@ -4,7 +4,12 @@ import {
   type CompileOutputResult,
 } from "../../domain/compile/compileOutput";
 import type { Diagnostic } from "../../domain/diagnostics/types";
-import type { GraphDocument, GraphNode } from "../../domain/document/types";
+import type {
+  GraphDefinition,
+  GraphDocument,
+  GraphNode,
+  GraphWorkspace,
+} from "../../domain/document/types";
 
 type Awaitable<T> = T | Promise<T>;
 type OutputListenerName = "copyToClipboard" | "logToConsole" | "saveToLocalStorage";
@@ -77,6 +82,34 @@ function listOutputNodes(document: GraphDocument) {
   );
 }
 
+function createEmptyGraph(graphId: string): GraphDefinition {
+  return {
+    id: graphId,
+    metadata: { name: graphId },
+    viewport: { x: 0, y: 0, zoom: 1 },
+    nodes: [],
+    edges: [],
+  };
+}
+
+function findGraphById(
+  workspace: GraphWorkspace,
+  graphId: string,
+): GraphDefinition | null {
+  return workspace.graphs.find((graph) => graph.id === graphId) ?? null;
+}
+
+function resolveActiveGraph(
+  workspace: GraphWorkspace,
+  activeGraphId: string,
+): GraphDefinition {
+  return (
+    findGraphById(workspace, activeGraphId) ??
+    workspace.graphs[0] ??
+    createEmptyGraph(activeGraphId)
+  );
+}
+
 function stableStringify(value: unknown): string {
   if (Array.isArray(value)) {
     return `[${value.map((item) => stableStringify(item)).join(",")}]`;
@@ -111,6 +144,32 @@ export function compileDocumentOutputs(document: GraphDocument): Pick<
   }
 
   return {
+    resultsByOutputId,
+    diagnostics: [...diagnosticsByKey.values()],
+  };
+}
+
+function compileWorkspaceOutputs(
+  workspace: GraphWorkspace,
+  activeGraphId: string,
+): Pick<OutputRuntimeSnapshot, "resultsByOutputId" | "diagnostics"> & {
+  runtimeDocument: GraphDefinition;
+} {
+  const runtimeDocument = resolveActiveGraph(workspace, activeGraphId);
+  const diagnosticsByKey = new Map<string, Diagnostic>();
+  const resultsByOutputId: Record<string, CompileOutputResult> = {};
+
+  for (const outputNode of listOutputNodes(runtimeDocument)) {
+    const result = compileOutput(workspace, runtimeDocument.id, outputNode.id);
+    resultsByOutputId[outputNode.id] = result;
+
+    for (const diagnostic of result.semantic.diagnostics) {
+      diagnosticsByKey.set(stableStringify(diagnostic), diagnostic);
+    }
+  }
+
+  return {
+    runtimeDocument,
     resultsByOutputId,
     diagnostics: [...diagnosticsByKey.values()],
   };
@@ -256,21 +315,46 @@ export async function applyOutputListeners(params: {
   return nextStatusByOutputId;
 }
 
+const objectIdentityByRef = new WeakMap<object, number>();
+let nextObjectIdentity = 1;
+
+function getObjectIdentity(value: object) {
+  const existing = objectIdentityByRef.get(value);
+  if (existing) {
+    return existing;
+  }
+
+  const identity = nextObjectIdentity;
+  nextObjectIdentity += 1;
+  objectIdentityByRef.set(value, identity);
+  return identity;
+}
+
+function createWorkspaceRuntimeKey(
+  workspace: GraphWorkspace,
+  activeGraphId: string,
+): string {
+  return [
+    activeGraphId,
+    ...workspace.graphs.map((graph) =>
+      [
+        graph.id,
+        getObjectIdentity(graph.nodes),
+        getObjectIdentity(graph.edges),
+      ].join(":"),
+    ),
+  ].join("|");
+}
+
 export function useOutputRuntime(
-  document: GraphDocument,
+  workspace: GraphWorkspace,
+  activeGraphId: string,
   deps?: Partial<OutputRuntimeDependencies>,
 ): OutputRuntimeSnapshot {
-  const runtimeDocument = useMemo(
-    () => ({
-      ...document,
-      nodes: document.nodes,
-      edges: document.edges,
-    }),
-    [document.edges, document.nodes],
-  );
+  const runtimeKey = createWorkspaceRuntimeKey(workspace, activeGraphId);
   const compiledSnapshot = useMemo(
-    () => compileDocumentOutputs(runtimeDocument),
-    [runtimeDocument],
+    () => compileWorkspaceOutputs(workspace, activeGraphId),
+    [runtimeKey],
   );
   const [listenerStatusByOutputId, setListenerStatusByOutputId] = useState<
     Record<string, OutputListenerStatus>
@@ -284,16 +368,19 @@ export function useOutputRuntime(
   useEffect(() => {
     let cancelled = false;
     const runListeners = async () => {
-      const nextStatusByOutputId = await applyOutputListeners({
-        document: runtimeDocument,
+      const activeGraphStatusByOutputId = await applyOutputListeners({
+        document: compiledSnapshot.runtimeDocument,
         resultsByOutputId: compiledSnapshot.resultsByOutputId,
         previousStatusByOutputId: listenerStatusRef.current,
         deps,
       });
 
       if (!cancelled) {
-        listenerStatusRef.current = nextStatusByOutputId;
-        setListenerStatusByOutputId(nextStatusByOutputId);
+        listenerStatusRef.current = {
+          ...listenerStatusRef.current,
+          ...activeGraphStatusByOutputId,
+        };
+        setListenerStatusByOutputId(listenerStatusRef.current);
       }
     };
 
@@ -302,7 +389,7 @@ export function useOutputRuntime(
     return () => {
       cancelled = true;
     };
-  }, [compiledSnapshot.resultsByOutputId, deps, runtimeDocument]);
+  }, [compiledSnapshot.resultsByOutputId, compiledSnapshot.runtimeDocument, deps]);
 
   return useMemo(
     () => ({

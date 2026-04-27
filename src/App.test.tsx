@@ -1,28 +1,10 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { flushSync } from "react-dom";
 import { DocumentProvider, useDocumentContext } from "./app/state/DocumentContext";
 import type { GraphWorkspace } from "./domain/document/types";
 import { createSampleWorkspace } from "./domain/workspace/sample";
-
-const observedRuntimeGraphIds: string[] = [];
-
-mock.module("./features/output-runtime/outputRuntime", () => ({
-  useOutputRuntime: (document: { id?: string; metadata: { name: string } }) => {
-    if (typeof document.id === "string") {
-      observedRuntimeGraphIds.push(document.id);
-    }
-
-    return {
-      resultsByOutputId: {},
-      diagnostics: [],
-      listenerStatusByOutputId: {},
-      activeGraphName: document.metadata.name,
-    };
-  },
-}));
-
-const { App, AppLayout } = await import("./App");
+import { App, AppLayout } from "./App";
 
 afterEach(cleanup);
 
@@ -54,8 +36,6 @@ describe("App", () => {
   });
 
   test("renders from the active graph in the initial workspace", async () => {
-    observedRuntimeGraphIds.length = 0;
-
     const workspace: GraphWorkspace = {
       version: 2,
       metadata: { name: "Workspace" },
@@ -82,7 +62,9 @@ describe("App", () => {
       render(<App initialWorkspace={workspace} />);
     });
 
-    expect(observedRuntimeGraphIds.at(-1)).toBe("graph-b");
+    expect(screen.getByRole("button", { name: "Open Alpha Graph" })).toBeTruthy();
+    expect(screen.getByText("Active")).toBeTruthy();
+    expect(screen.getByLabelText("Graph name Beta Graph")).toBeTruthy();
   });
 
   test("graph catalog new graph still uses discard confirmation after dirty editor opens", async () => {

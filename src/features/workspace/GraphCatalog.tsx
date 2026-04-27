@@ -1,4 +1,6 @@
+import { useMemo, useState } from "react";
 import { useDocumentContext } from "../../app/state/DocumentContext";
+import { collectReferencedGraphIds } from "../../domain/workspace/dependencies";
 
 export function GraphCatalog({
   runGraphMutation,
@@ -8,6 +10,20 @@ export function GraphCatalog({
   const { state, dispatch } = useDocumentContext();
   const { graphs } = state.workspace;
   const transition = runGraphMutation ?? ((action: () => void) => action());
+  const [deleteBlockedGraphId, setDeleteBlockedGraphId] = useState<string | null>(
+    null,
+  );
+  const referencedGraphIds = useMemo(() => {
+    const ids = new Set<string>();
+
+    for (const graph of graphs) {
+      for (const referencedGraphId of collectReferencedGraphIds(graph)) {
+        ids.add(referencedGraphId);
+      }
+    }
+
+    return ids;
+  }, [graphs]);
 
   return (
     <section className="graph-catalog" aria-label="Graph catalog">
@@ -25,6 +41,9 @@ export function GraphCatalog({
         {graphs.map((graph) => {
           const isActive = graph.id === state.activeGraphId;
           const canDelete = graphs.length > 1;
+          const isReferenced = referencedGraphIds.has(graph.id);
+          const showDeleteBlockedMessage =
+            deleteBlockedGraphId === graph.id && isReferenced;
 
           return (
             <div
@@ -68,6 +87,12 @@ export function GraphCatalog({
                   type="button"
                   aria-label={`Delete ${graph.metadata.name}`}
                   onClick={() => {
+                    if (isReferenced) {
+                      setDeleteBlockedGraphId(graph.id);
+                      return;
+                    }
+
+                    setDeleteBlockedGraphId(null);
                     if (isActive) {
                       transition(() =>
                         dispatch({ type: "delete-graph", graphId: graph.id }),
@@ -82,6 +107,11 @@ export function GraphCatalog({
                   Delete
                 </button>
               </div>
+              {showDeleteBlockedMessage ? (
+                <p className="graph-catalog__error" role="alert">
+                  Graph is still referenced.
+                </p>
+              ) : null}
             </div>
           );
         })}

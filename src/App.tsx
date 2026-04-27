@@ -3,7 +3,6 @@ import {
   useDocumentContext,
 } from "./app/state/DocumentContext";
 import { useRef } from "react";
-import { getActiveGraph } from "./app/state/documentReducer";
 import { useOutputRuntime } from "./features/output-runtime/outputRuntime";
 import type { GraphDocument, GraphWorkspace } from "./domain/document/types";
 import { DocumentToolbar } from "./features/document-storage/DocumentToolbar";
@@ -13,8 +12,7 @@ import { GraphCatalog } from "./features/workspace/GraphCatalog";
 
 export function AppLayout() {
   const { state } = useDocumentContext();
-  const activeGraph = getActiveGraph(state) ?? state.document;
-  const outputRuntime = useOutputRuntime(activeGraph);
+  const outputRuntime = useOutputRuntime(state.workspace, state.activeGraphId);
   const editorTransitionRef = useRef<(action: () => void) => void>((action) =>
     action(),
   );

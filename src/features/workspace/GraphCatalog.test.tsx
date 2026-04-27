@@ -84,6 +84,36 @@ function createWorkspaceWithSecondaryGraph() {
   };
 }
 
+function createWorkspaceWithReferencedChildGraph() {
+  const workspace = createSampleWorkspace();
+
+  return {
+    ...workspace,
+    graphs: [
+      {
+        ...workspace.graphs[0]!,
+        nodes: [
+          ...workspace.graphs[0]!.nodes,
+          {
+            id: "subgraph-child",
+            kind: "subgraph" as const,
+            label: "Orders child",
+            position: { x: 700, y: 80 },
+            data: { graphId: "graph-child" },
+          },
+        ],
+      },
+      {
+        id: "graph-child",
+        metadata: { name: "Orders Child" },
+        viewport: { x: 0, y: 0, zoom: 1 },
+        nodes: [],
+        edges: [],
+      },
+    ],
+  };
+}
+
 describe("GraphCatalog", () => {
   test("creates, renames, and switches graphs through the catalog", async () => {
     const user = userEvent.setup();
@@ -161,5 +191,20 @@ describe("GraphCatalog", () => {
     expect((screen.getByLabelText("Node name") as HTMLInputElement).value).toBe(
       "Dirty orders",
     );
+  });
+
+  test("blocks deleting a graph that is still referenced by a subgraph node", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <DocumentProvider initialWorkspace={createWorkspaceWithReferencedChildGraph()}>
+        <GraphCatalog />
+      </DocumentProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Delete Orders Child" }));
+
+    expect(screen.getByText("Graph is still referenced.")).toBeTruthy();
+    expect(screen.getByLabelText("Graph name Orders Child")).toBeTruthy();
   });
 });
