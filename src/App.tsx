@@ -9,6 +9,7 @@ import { DocumentToolbar } from "./features/document-storage/DocumentToolbar";
 import { GraphCanvas } from "./features/graph-editor/GraphCanvas";
 import { NodePalette } from "./features/graph-editor/NodePalette";
 import { GraphCatalog } from "./features/workspace/GraphCatalog";
+import { I18nProvider, useI18n } from "./features/i18n/I18nContext";
 
 export function AppLayout() {
   const { state } = useDocumentContext();
@@ -16,12 +17,13 @@ export function AppLayout() {
   const editorTransitionRef = useRef<(action: () => void) => void>((action) =>
     action(),
   );
+  const { t } = useI18n();
 
   return (
     <div className="app-shell">
       <aside className="pane sidebar">
-        <h1>QueryVisual</h1>
-        <p className="muted">Structured graph editor for DQL compilation.</p>
+        <h1>{t("app.title")}</h1>
+        <p className="muted">{t("app.subtitle")}</p>
         <DocumentToolbar />
         <GraphCatalog
           runGraphMutation={(action) => editorTransitionRef.current(action)}
@@ -33,7 +35,7 @@ export function AppLayout() {
         className="pane canvas-pane"
         style={{ display: "flex", flexDirection: "column", gap: 12 }}
       >
-        <h2>Canvas</h2>
+        <h2>{t("app.canvasTitle")}</h2>
         <GraphCanvas
           outputRuntime={outputRuntime}
           registerEditorTransition={(runner) => {
@@ -53,11 +55,13 @@ export function App({
   initialDocument?: GraphDocument;
 }) {
   return (
-    <DocumentProvider
-      initialWorkspace={initialWorkspace}
-      initialDocument={initialDocument}
-    >
-      <AppLayout />
-    </DocumentProvider>
+    <I18nProvider>
+      <DocumentProvider
+        initialWorkspace={initialWorkspace}
+        initialDocument={initialDocument}
+      >
+        <AppLayout />
+      </DocumentProvider>
+    </I18nProvider>
   );
 }

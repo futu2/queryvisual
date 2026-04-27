@@ -1,29 +1,33 @@
 import { useRef, useState } from "react";
 import { useDocumentContext } from "../../app/state/DocumentContext";
+import { LanguageSwitcher } from "../i18n/LanguageSwitcher";
+import { useI18n } from "../i18n/I18nContext";
 import { downloadWorkspace, parseWorkspaceJson } from "./fileIO";
 
 export function DocumentToolbar() {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [hasLoadError, setHasLoadError] = useState(false);
   const { state, dispatch } = useDocumentContext();
+  const { t } = useI18n();
 
   return (
     <div className="toolbar-row">
-      {loadError ? <p role="alert">{loadError}</p> : null}
+      {hasLoadError ? <p role="alert">{t("toolbar.loadError")}</p> : null}
       <button
         type="button"
         className="ghost-button"
         onClick={() => downloadWorkspace(state.workspace)}
       >
-        Save JSON
+        {t("toolbar.saveJson")}
       </button>
       <button
         type="button"
         className="ghost-button"
         onClick={() => fileInputRef.current?.click()}
       >
-        Load JSON
+        {t("toolbar.loadJson")}
       </button>
+      <LanguageSwitcher />
       <input
         ref={fileInputRef}
         type="file"
@@ -39,9 +43,9 @@ export function DocumentToolbar() {
               type: "replace-workspace",
               workspace: parseWorkspaceJson(raw),
             });
-            setLoadError(null);
+            setHasLoadError(false);
           } catch {
-            setLoadError("Could not load QueryVisual document.");
+            setHasLoadError(true);
           } finally {
             event.target.value = "";
           }

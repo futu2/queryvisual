@@ -4,9 +4,13 @@ import { flushSync } from "react-dom";
 import { DocumentProvider, useDocumentContext } from "./app/state/DocumentContext";
 import type { GraphWorkspace } from "./domain/document/types";
 import { createSampleWorkspace } from "./domain/workspace/sample";
+import { I18nProvider } from "./features/i18n/I18nContext";
 import { App, AppLayout } from "./App";
 
-afterEach(cleanup);
+afterEach(() => {
+  localStorage.clear();
+  cleanup();
+});
 
 describe("App", () => {
   function EditorOpenProbe() {
@@ -70,10 +74,12 @@ describe("App", () => {
   test("graph catalog new graph still uses discard confirmation after dirty editor opens", async () => {
     await act(async () => {
       render(
-        <DocumentProvider initialWorkspace={createSampleWorkspace()}>
-          <AppLayout />
-          <EditorOpenProbe />
-        </DocumentProvider>,
+        <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+          <DocumentProvider initialWorkspace={createSampleWorkspace()}>
+            <AppLayout />
+            <EditorOpenProbe />
+          </DocumentProvider>
+        </I18nProvider>,
       );
     });
 
@@ -100,5 +106,34 @@ describe("App", () => {
       await screen.findByRole("dialog", { name: "Discard changes?" }),
     ).toBeTruthy();
     expect(screen.queryByLabelText("Graph name Graph 2")).toBeNull();
+  });
+
+  test("auto-detects zh-CN, allows switching back to English, and persists the override", async () => {
+    Object.defineProperty(navigator, "language", {
+      value: "zh-CN",
+      configurable: true,
+    });
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    expect(screen.getByText("画布")).toBeTruthy();
+    expect(screen.getByText("保存 JSON")).toBeTruthy();
+
+    const languageSelect = screen.getByRole("combobox", { name: "语言" });
+    fireEvent.change(languageSelect, { target: { value: "en" } });
+
+    expect(screen.getByText("Canvas")).toBeTruthy();
+    expect(localStorage.getItem("queryvisual.locale")).toBe("en");
+
+    cleanup();
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    expect(screen.getByText("Canvas")).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Language" })).toBeTruthy();
   });
 });
