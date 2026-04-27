@@ -588,6 +588,161 @@ function createWorkspaceWithChildDiagnosticContext(): GraphWorkspace {
   };
 }
 
+function createWorkspaceWithNestedChildDiagnosticContext(): GraphWorkspace {
+  const grandchildGraph = {
+    id: "graph-grandchild",
+    metadata: { name: "Grandchild" },
+    viewport: { x: 0, y: 0, zoom: 1 },
+    nodes: [
+      {
+        id: "grandchild-input",
+        kind: "graphInput" as const,
+        label: "Input",
+        position: { x: 0, y: 0 },
+        data: {
+          inputName: "orders_in",
+          columns: { total: "float" },
+        },
+      },
+      {
+        id: "grandchild-select",
+        kind: "select" as const,
+        label: "Select",
+        position: { x: 260, y: 0 },
+        data: {
+          mappings: [{ name: "broken", expression: "(" }],
+        },
+      },
+      {
+        id: "grandchild-output",
+        kind: "output" as const,
+        label: "Output",
+        position: { x: 520, y: 0 },
+        data: outputData("grandchild_out"),
+      },
+    ],
+    edges: [
+      {
+        id: "edge-in-select",
+        source: "grandchild-input",
+        sourceHandle: "out",
+        target: "grandchild-select",
+        targetHandle: "in",
+      },
+      {
+        id: "edge-select-out",
+        source: "grandchild-select",
+        sourceHandle: "out",
+        target: "grandchild-output",
+        targetHandle: "in",
+      },
+    ],
+  };
+
+  const childGraph = {
+    id: "graph-child",
+    metadata: { name: "Child" },
+    viewport: { x: 0, y: 0, zoom: 1 },
+    nodes: [
+      {
+        id: "child-input",
+        kind: "graphInput" as const,
+        label: "Input",
+        position: { x: 0, y: 0 },
+        data: {
+          inputName: "child_in",
+          columns: { total: "float" },
+        },
+      },
+      {
+        id: "child-subgraph",
+        kind: "subgraph" as const,
+        label: "Grandchild graph",
+        position: { x: 260, y: 0 },
+        data: { graphId: "graph-grandchild" },
+      },
+      {
+        id: "child-output",
+        kind: "output" as const,
+        label: "Output",
+        position: { x: 520, y: 0 },
+        data: outputData("child_out"),
+      },
+    ],
+    edges: [
+      {
+        id: "edge-child-input-subgraph",
+        source: "child-input",
+        sourceHandle: "out",
+        target: "child-subgraph",
+        targetHandle: "in:grandchild-input",
+      },
+      {
+        id: "edge-child-subgraph-output",
+        source: "child-subgraph",
+        sourceHandle: "out:grandchild-output",
+        target: "child-output",
+        targetHandle: "in",
+      },
+    ],
+  };
+
+  const parentGraph = {
+    id: "graph-parent",
+    metadata: { name: "Parent" },
+    viewport: { x: 0, y: 0, zoom: 1 },
+    nodes: [
+      {
+        id: "from-parent",
+        kind: "fromTable" as const,
+        label: "T",
+        position: { x: -260, y: 0 },
+        data: {
+          tableRef: { tableName: "t" },
+          columns: { total: "float" },
+        },
+      },
+      {
+        id: "parent-subgraph",
+        kind: "subgraph" as const,
+        label: "Child graph",
+        position: { x: 0, y: 0 },
+        data: { graphId: "graph-child" },
+      },
+      {
+        id: "output-parent",
+        kind: "output" as const,
+        label: "Output",
+        position: { x: 260, y: 0 },
+        data: outputData("parent_out"),
+      },
+    ],
+    edges: [
+      {
+        id: "edge-parent-subgraph-input",
+        source: "from-parent",
+        sourceHandle: "out",
+        target: "parent-subgraph",
+        targetHandle: "in:child-input",
+      },
+      {
+        id: "edge-parent-subgraph-output",
+        source: "parent-subgraph",
+        sourceHandle: "out:child-output",
+        target: "output-parent",
+        targetHandle: "in",
+      },
+    ],
+  };
+
+  return {
+    version: 2,
+    metadata: { name: "Nested Child Diagnostics Workspace" },
+    entryGraphId: "graph-parent",
+    graphs: [parentGraph, childGraph, grandchildGraph],
+  };
+}
+
 describe("validateOutput", () => {
   test("validates the sample output without errors", () => {
     const document = createSampleDocument();
@@ -870,6 +1025,29 @@ describe("validateOutput", () => {
     expect(propagated?.context?.child?.graphId).toBe("graph-child");
     expect(propagated?.context?.child?.nodeId).toBe("child-select");
     expect(propagated?.context?.child?.field).toBe("mappings.0.expression");
+  });
+
+  test("preserves nested child diagnostic provenance beyond one hop", () => {
+    const workspace = createWorkspaceWithNestedChildDiagnosticContext();
+
+    const result = validateOutput(workspace, "graph-parent", "output-parent");
+
+    const propagated = result.diagnostics.find(
+      (diagnostic) =>
+        diagnostic.level === "error" &&
+        diagnostic.code === "select.invalid-expression" &&
+        diagnostic.ref?.nodeId === "parent-subgraph",
+    );
+    expect(propagated).toBeDefined();
+    expect(propagated?.context?.child?.graphId).toBe("graph-grandchild");
+    expect(propagated?.context?.child?.nodeId).toBe("grandchild-select");
+    expect(propagated?.context?.child?.field).toBe("mappings.0.expression");
+
+    // Optional chain should include the intermediate child hop.
+    expect(propagated?.context?.chain?.map((entry) => entry.graphId)).toEqual([
+      "graph-child",
+      "graph-grandchild",
+    ]);
   });
 
   test("reports a missing join input", () => {

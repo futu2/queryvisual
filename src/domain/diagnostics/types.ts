@@ -15,6 +15,9 @@ export interface DiagnosticContextRef {
 export interface DiagnosticContext {
   parent?: DiagnosticContextRef;
   child?: DiagnosticContextRef;
+  // Ordered from the nearest child graph hop to the deepest failing graph location.
+  // The final entry should match `child` when present.
+  chain?: DiagnosticContextRef[];
 }
 
 export interface Diagnostic {

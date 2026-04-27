@@ -409,6 +409,16 @@ function validateGraphOutput(params: {
         if (childSemantic.diagnostics.some((d) => d.level === "error")) {
           for (const childDiagnostic of childSemantic.diagnostics) {
             if (childDiagnostic.level !== "error") continue;
+            const immediate = {
+              graphId: childGraphId,
+              nodeId: childDiagnostic.ref?.nodeId,
+              field: childDiagnostic.ref?.field,
+            };
+            const inheritedChain =
+              childDiagnostic.context?.chain ??
+              (childDiagnostic.context?.child ? [childDiagnostic.context.child] : []);
+            const chain = [immediate, ...inheritedChain];
+            const deepest = chain[chain.length - 1];
             diagnostics.push({
               level: childDiagnostic.level,
               code: childDiagnostic.code,
@@ -416,11 +426,8 @@ function validateGraphOutput(params: {
               ref: { nodeId: node.id, field: "graphId" },
               context: {
                 parent: params.graphId ? { graphId: params.graphId, nodeId: node.id } : undefined,
-                child: {
-                  graphId: childGraphId,
-                  nodeId: childDiagnostic.ref?.nodeId,
-                  field: childDiagnostic.ref?.field,
-                },
+                child: deepest,
+                chain,
               },
             });
           }
