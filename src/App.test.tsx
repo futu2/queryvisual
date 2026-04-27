@@ -109,31 +109,49 @@ describe("App", () => {
   });
 
   test("auto-detects zh-CN, allows switching back to English, and persists the override", async () => {
+    const hadOwnLanguage = Object.prototype.hasOwnProperty.call(
+      navigator,
+      "language",
+    );
+    const originalLanguageDescriptor = Object.getOwnPropertyDescriptor(
+      navigator,
+      "language",
+    );
+
     Object.defineProperty(navigator, "language", {
       value: "zh-CN",
       configurable: true,
     });
 
-    await act(async () => {
-      render(<App />);
-    });
+    try {
+      await act(async () => {
+        render(<App />);
+      });
 
-    expect(screen.getByText("画布")).toBeTruthy();
-    expect(screen.getByText("保存 JSON")).toBeTruthy();
+      expect(screen.getByText("画布")).toBeTruthy();
+      expect(screen.getByText("保存 JSON")).toBeTruthy();
 
-    const languageSelect = screen.getByRole("combobox", { name: "语言" });
-    fireEvent.change(languageSelect, { target: { value: "en" } });
+      const languageSelect = screen.getByRole("combobox", { name: "语言" });
+      fireEvent.change(languageSelect, { target: { value: "en" } });
 
-    expect(screen.getByText("Canvas")).toBeTruthy();
-    expect(localStorage.getItem("queryvisual.locale")).toBe("en");
+      expect(screen.getByText("Canvas")).toBeTruthy();
+      expect(localStorage.getItem("queryvisual.locale")).toBe("en");
 
-    cleanup();
+      cleanup();
 
-    await act(async () => {
-      render(<App />);
-    });
+      await act(async () => {
+        render(<App />);
+      });
 
-    expect(screen.getByText("Canvas")).toBeTruthy();
-    expect(screen.getByRole("combobox", { name: "Language" })).toBeTruthy();
+      expect(screen.getByText("Canvas")).toBeTruthy();
+      expect(screen.getByRole("combobox", { name: "Language" })).toBeTruthy();
+    } finally {
+      if (originalLanguageDescriptor) {
+        Object.defineProperty(navigator, "language", originalLanguageDescriptor);
+      } else if (!hadOwnLanguage) {
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+        delete (navigator as unknown as Record<string, unknown>).language;
+      }
+    }
   });
 });

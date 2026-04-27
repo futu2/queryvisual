@@ -8,6 +8,7 @@ import {
   DocumentProvider,
   useDocumentContext,
 } from "../../app/state/DocumentContext";
+import { I18nProvider } from "../i18n/I18nContext";
 import { createDefaultOutputListenerConfig } from "../../domain/document/outputListeners";
 import type { GraphWorkspace } from "../../domain/document/types";
 import type { EditorAction } from "../../app/state/documentReducer";
@@ -119,10 +120,12 @@ afterEach(cleanup);
 describe("App integration", () => {
   test("shows generated SQL for the sample output in the output node modal", async () => {
     render(
-      <DocumentProvider>
-        <DispatchProbe />
-        <AppLayout />
-      </DocumentProvider>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider>
+          <DispatchProbe />
+          <AppLayout />
+        </DocumentProvider>
+      </I18nProvider>,
     );
 
     expect(screen.queryByRole("tab", { name: "SQL" })).toBeNull();
@@ -143,10 +146,14 @@ describe("App integration", () => {
 
   test("shows updated parent SQL after editing the referenced child graph", async () => {
     render(
-      <DocumentProvider initialWorkspace={createWorkspaceWithChildBackedParentOutput()}>
-        <DispatchProbe />
-        <AppLayout />
-      </DocumentProvider>,
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider
+          initialWorkspace={createWorkspaceWithChildBackedParentOutput()}
+        >
+          <DispatchProbe />
+          <AppLayout />
+        </DocumentProvider>
+      </I18nProvider>,
     );
 
     if (!dispatch) {

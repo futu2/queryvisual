@@ -39,6 +39,38 @@ describe("I18nProvider", () => {
     expect(screen.getByText("画布")).toBeTruthy();
   });
 
+  test("fails safe when default localStorage accessor throws", () => {
+    const originalDescriptor = Object.getOwnPropertyDescriptor(
+      globalThis,
+      "localStorage",
+    );
+
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      get() {
+        throw new Error("blocked");
+      },
+    });
+
+    try {
+      render(
+        <I18nProvider deps={{ navigatorLanguage: "zh-HK" }}>
+          <Probe />
+        </I18nProvider>,
+      );
+
+      expect(screen.getByTestId("locale").textContent).toBe("zh-CN");
+      expect(screen.getByText("画布")).toBeTruthy();
+    } finally {
+      if (originalDescriptor) {
+        Object.defineProperty(globalThis, "localStorage", originalDescriptor);
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+        delete (globalThis as unknown as Record<string, unknown>).localStorage;
+      }
+    }
+  });
+
   test("persists manual locale override", async () => {
     const user = userEvent.setup();
 

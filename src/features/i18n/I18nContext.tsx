@@ -50,6 +50,29 @@ function safeStorageSetItem(
   }
 }
 
+function resolveDefaultStorage(): Pick<Storage, "getItem" | "setItem"> {
+  try {
+    return localStorage;
+  } catch {
+    // Fail safe: environments with blocked storage access should still render.
+    return {
+      getItem: () => null,
+      setItem: () => {},
+    };
+  }
+}
+
+function resolveDefaultNavigatorLanguage(): string | null {
+  try {
+    if (typeof navigator === "undefined") {
+      return null;
+    }
+    return navigator.language;
+  } catch {
+    return null;
+  }
+}
+
 export function I18nProvider({
   children,
   deps,
@@ -57,10 +80,10 @@ export function I18nProvider({
   children: ReactNode;
   deps?: I18nDeps;
 }) {
-  const storage = deps?.storage ?? localStorage;
+  const storage = deps?.storage ?? resolveDefaultStorage();
   const navigatorLanguage =
     deps?.navigatorLanguage ??
-    (typeof navigator !== "undefined" ? navigator.language : null);
+    resolveDefaultNavigatorLanguage();
   const [locale, setLocaleState] = useState<Locale>(() =>
     resolveInitialLocale({
       storedLocale: safeStorageGetItem(storage, I18N_STORAGE_KEY),
