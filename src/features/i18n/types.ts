@@ -126,6 +126,12 @@ export type MessageKey =
   | "queryNode.error"
   | "queryNode.missingGraph"
   | "queryNode.interfaceSummary"
+  | "queryNode.summary.cols"
+  | "queryNode.summary.join"
+  | "queryNode.summary.expressions"
+  | "queryNode.summary.groupsAndAggs"
+  | "queryNode.summary.sortKeys"
+  | "queryNode.summary.limit"
   | "edge.delete";
 
 export type Messages = Record<MessageKey, string>;

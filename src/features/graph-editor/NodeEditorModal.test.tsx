@@ -172,6 +172,43 @@ describe("NodeEditorModal", () => {
     expect(screen.getByRole("button", { name: "拖动 映射 1" })).toBeTruthy();
   });
 
+  test("localizes join-type and sort-direction option labels in zh-CN", () => {
+    const joinNode: GraphNode = {
+      id: "join-orders-i18n",
+      kind: "join",
+      label: "Join Orders",
+      position: { x: 0, y: 0 },
+      data: {
+        joinType: "inner",
+        predicate: "a.id = b.id",
+      },
+    };
+
+    renderModal({ node: joinNode, navigatorLanguage: "zh-CN" });
+
+    const joinTypeSelect = screen.getByLabelText("连接类型") as HTMLSelectElement;
+    expect(joinTypeSelect.querySelector('option[value="inner"]')?.textContent).toBe("内连接");
+    expect(joinTypeSelect.querySelector('option[value="left"]')?.textContent).toBe("左连接");
+    expect(joinTypeSelect.querySelector('option[value="right"]')?.textContent).toBe("右连接");
+    expect(joinTypeSelect.querySelector('option[value="full"]')?.textContent).toBe("全连接");
+
+    const sortNode: GraphNode = {
+      id: "sort-orders-i18n",
+      kind: "sort",
+      label: "Sort Orders",
+      position: { x: 0, y: 0 },
+      data: {
+        items: [{ expression: "total", direction: "asc" }],
+      },
+    };
+
+    renderModal({ node: sortNode, navigatorLanguage: "zh-CN" });
+
+    const directionSelect = screen.getByLabelText("方向") as HTMLSelectElement;
+    expect(directionSelect.querySelector('option[value="asc"]')?.textContent).toBe("升序");
+    expect(directionSelect.querySelector('option[value="desc"]')?.textContent).toBe("降序");
+  });
+
   test("saves updated select mappings", async () => {
     const user = userEvent.setup();
     const onSave = mock();

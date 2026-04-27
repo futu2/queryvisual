@@ -37,6 +37,16 @@ const NODE_KIND_LABEL_KEYS: Record<GraphNode["kind"], MessageKey> = {
   output: "nodeKinds.output",
 };
 
+const JOIN_TYPE_LABEL_KEYS: Record<
+  Extract<GraphNode, { kind: "join" }>["data"]["joinType"],
+  MessageKey
+> = {
+  inner: "editor.joinType.inner",
+  left: "editor.joinType.left",
+  right: "editor.joinType.right",
+  full: "editor.joinType.full",
+};
+
 function summaryText(
   t: (key: MessageKey, vars?: Record<string, string | number>) => string,
   node: GraphNode,
@@ -44,9 +54,9 @@ function summaryText(
 ) {
   switch (node.kind) {
     case "fromTable":
-      return `${formatTableRef(node.data.tableRef)} · ${Object.keys(node.data.columns).length} cols`;
+      return `${formatTableRef(node.data.tableRef)} · ${t("queryNode.summary.cols", { count: Object.keys(node.data.columns).length })}`;
     case "graphInput":
-      return `${Object.keys(node.data.columns).length} cols`;
+      return t("queryNode.summary.cols", { count: Object.keys(node.data.columns).length });
     case "subgraph": {
       const { graph, iface } = inferChildGraphInterface(workspace, node.data.graphId);
       const base = t("queryNode.interfaceSummary", {
@@ -62,17 +72,22 @@ function summaryText(
       return base;
     }
     case "join":
-      return `${node.data.joinType} join`;
+      return t("queryNode.summary.join", {
+        joinType: t(JOIN_TYPE_LABEL_KEYS[node.data.joinType]),
+      });
     case "where":
       return node.data.predicate;
     case "select":
-      return `${node.data.mappings.length} expressions`;
+      return t("queryNode.summary.expressions", { count: node.data.mappings.length });
     case "aggregation":
-      return `${node.data.groupBy.length} groups · ${node.data.aggregates.length} aggs`;
+      return t("queryNode.summary.groupsAndAggs", {
+        groups: node.data.groupBy.length,
+        aggs: node.data.aggregates.length,
+      });
     case "sort":
-      return `${node.data.items.length} sort keys`;
+      return t("queryNode.summary.sortKeys", { count: node.data.items.length });
     case "limit":
-      return `limit ${node.data.count}`;
+      return t("queryNode.summary.limit", { count: node.data.count });
     case "output":
       return node.data.outputName;
   }

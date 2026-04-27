@@ -118,6 +118,170 @@ describe("QueryNode", () => {
     expect(screen.getByText(/2 cols/)).toBeTruthy();
   });
 
+  test("localizes query summary chrome fragments in zh-CN while keeping user content raw", () => {
+    const { container } = renderWithI18n(
+      <ReactFlowProvider>
+        <div>
+          <QueryNode
+            id="from-orders-zh"
+            data={{
+              node: {
+                id: "from-orders-zh",
+                kind: "fromTable",
+                label: "Orders",
+                position: { x: 0, y: 0 },
+                data: {
+                  tableRef: { schemaName: "sales", tableName: "orders" },
+                  columns: { order_id: "int", total: "float" },
+                },
+              },
+              diagnostics: [],
+            }}
+            selected={false}
+            dragging={false}
+          />
+          <QueryNode
+            id="input-orders-zh"
+            data={{
+              node: {
+                id: "input-orders-zh",
+                kind: "graphInput",
+                label: "Input",
+                position: { x: 0, y: 0 },
+                data: {
+                  inputName: "orders_in",
+                  columns: { order_id: "int", total: "float" },
+                },
+              },
+              diagnostics: [],
+            }}
+            selected={false}
+            dragging={false}
+          />
+          <QueryNode
+            id="join-orders-zh"
+            data={{
+              node: {
+                id: "join-orders-zh",
+                kind: "join",
+                label: "Join Orders",
+                position: { x: 0, y: 0 },
+                data: {
+                  joinType: "inner",
+                  predicate: "a.id = b.id",
+                },
+              },
+              diagnostics: [],
+            }}
+            selected={false}
+            dragging={false}
+          />
+          <QueryNode
+            id="select-orders-zh"
+            data={{
+              node: {
+                id: "select-orders-zh",
+                kind: "select",
+                label: "Project",
+                position: { x: 0, y: 0 },
+                data: {
+                  mappings: [
+                    { name: "order_id", expression: "order_id" },
+                    { name: "total", expression: "total" },
+                  ],
+                },
+              },
+              diagnostics: [],
+            }}
+            selected={false}
+            dragging={false}
+          />
+          <QueryNode
+            id="agg-orders-zh"
+            data={{
+              node: {
+                id: "agg-orders-zh",
+                kind: "aggregation",
+                label: "Agg",
+                position: { x: 0, y: 0 },
+                data: {
+                  groupBy: [{ name: "customer_id", expression: "customer_id" }],
+                  aggregates: [
+                    { name: "count", expression: "count(*)" },
+                    { name: "sum_total", expression: "sum(total)" },
+                  ],
+                },
+              },
+              diagnostics: [],
+            }}
+            selected={false}
+            dragging={false}
+          />
+          <QueryNode
+            id="sort-orders-zh"
+            data={{
+              node: {
+                id: "sort-orders-zh",
+                kind: "sort",
+                label: "Sort",
+                position: { x: 0, y: 0 },
+                data: {
+                  items: [
+                    { expression: "total", direction: "asc" },
+                    { expression: "order_id", direction: "desc" },
+                    { expression: "customer_id", direction: "asc" },
+                  ],
+                },
+              },
+              diagnostics: [],
+            }}
+            selected={false}
+            dragging={false}
+          />
+          <QueryNode
+            id="limit-orders-zh"
+            data={{
+              node: {
+                id: "limit-orders-zh",
+                kind: "limit",
+                label: "Limit",
+                position: { x: 0, y: 0 },
+                data: {
+                  count: 10,
+                  offset: null,
+                },
+              },
+              diagnostics: [],
+            }}
+            selected={false}
+            dragging={false}
+          />
+        </div>
+      </ReactFlowProvider>,
+      "zh-CN",
+    );
+
+    // Raw workspace/user content stays stable.
+    expect(screen.getByText(/sales\.orders/)).toBeTruthy();
+
+    // Fixed chrome fragments should be localized.
+    expect(screen.getAllByText(/2\s*列/).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("内连接")).toBeTruthy();
+    expect(screen.getByText(/2\s*个表达式/)).toBeTruthy();
+    expect(screen.getByText(/1\s*个分组键/)).toBeTruthy();
+    expect(screen.getByText(/2\s*个聚合/)).toBeTruthy();
+    expect(screen.getByText(/3\s*个排序键/)).toBeTruthy();
+    expect(screen.getByText(/限制\s*10/)).toBeTruthy();
+
+    const summaries = Array.from(container.querySelectorAll(".query-node__summary"));
+    expect(summaries.length).toBeGreaterThan(0);
+    for (const summary of summaries) {
+      expect(summary.textContent ?? "").not.toMatch(
+        /\b(cols|join|expressions|groups|aggs|sort keys|limit)\b/i,
+      );
+    }
+  });
+
   test("localizes kind labels and the error badge while keeping user content raw", () => {
     renderWithI18n(
       <ReactFlowProvider>
