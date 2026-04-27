@@ -2,6 +2,8 @@ import type { GraphWorkspace, SubgraphTarget } from "../document/types";
 import type { GraphDefinition } from "../document/types";
 import type { GraphPackageFile, InstalledGraphPackage } from "./types";
 
+const MAX_BUNDLED_DEPENDENCY_DEPTH = 50;
+
 function samePkg(
   a: { packageId: string; version: string },
   b: { packageId: string; version: string },
@@ -31,14 +33,19 @@ export function installPackageBundle(
   pkg: GraphPackageFile,
 ): GraphWorkspace {
   const visited = new Set<string>();
-  return installPackageBundleInner(workspace, pkg, visited);
+  return installPackageBundleInner(workspace, pkg, visited, 0);
 }
 
 function installPackageBundleInner(
   workspace: GraphWorkspace,
   pkg: GraphPackageFile,
   visited: Set<string>,
+  depth: number,
 ): GraphWorkspace {
+  if (depth > MAX_BUNDLED_DEPENDENCY_DEPTH) {
+    throw new Error("Package bundle dependency depth exceeded");
+  }
+
   const visitKey = `${pkg.packageId}@${pkg.version}`;
   if (visited.has(visitKey)) {
     return workspace;
@@ -48,7 +55,7 @@ function installPackageBundleInner(
   let next = workspace;
 
   for (const dep of pkg.dependencies) {
-    next = installPackageBundleInner(next, dep, visited);
+    next = installPackageBundleInner(next, dep, visited, depth + 1);
   }
 
   const alreadyInstalled = next.installedPackages.some((installed) =>

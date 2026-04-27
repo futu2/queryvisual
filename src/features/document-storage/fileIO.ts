@@ -11,6 +11,8 @@ import {
 } from "../../domain/document/outputListeners";
 import type { GraphPackageFile, InstalledGraphPackage, WorkspacePackageManifest } from "../../domain/package/types";
 
+const MAX_PACKAGE_DEPENDENCY_DEPTH = 50;
+
 const columnTypes = [
   "boolean",
   "int",
@@ -491,6 +493,14 @@ export function parseWorkspaceJson(raw: string): GraphWorkspace {
 }
 
 function isGraphPackageFile(value: unknown): value is GraphPackageFile {
+  return isGraphPackageFileAtDepth(value, 0);
+}
+
+function isGraphPackageFileAtDepth(value: unknown, depth: number): value is GraphPackageFile {
+  if (depth > MAX_PACKAGE_DEPENDENCY_DEPTH) {
+    return false;
+  }
+
   if (
     !isRecord(value) ||
     value.formatVersion !== 1 ||
@@ -506,7 +516,7 @@ function isGraphPackageFile(value: unknown): value is GraphPackageFile {
     return false;
   }
 
-  return value.dependencies.every(isGraphPackageFile);
+  return value.dependencies.every((dep) => isGraphPackageFileAtDepth(dep, depth + 1));
 }
 
 export function parsePackageJson(raw: string): GraphPackageFile {

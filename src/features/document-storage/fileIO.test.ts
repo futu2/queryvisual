@@ -357,6 +357,36 @@ describe("fileIO", () => {
     ).toThrow("Invalid QueryVisual workspace");
   });
 
+  test("parsePackageJson rejects excessively deep dependency chains", () => {
+    let pkg: any = {
+      formatVersion: 1,
+      packageId: "com.acme/root",
+      version: "1.0.0",
+      metadata: { name: "Root" },
+      exports: [],
+      graphs: [],
+      dependencies: [],
+    };
+
+    // Construct a deep chain (well beyond any reasonable max).
+    let cursor = pkg;
+    for (let i = 0; i < 200; i++) {
+      const next = {
+        formatVersion: 1,
+        packageId: `com.acme/dep-${i}`,
+        version: "1.0.0",
+        metadata: { name: `Dep ${i}` },
+        exports: [],
+        graphs: [],
+        dependencies: [],
+      };
+      cursor.dependencies = [next];
+      cursor = next;
+    }
+
+    expect(() => parsePackageJson(JSON.stringify(pkg))).toThrow("Invalid QueryVisual package");
+  });
+
   test("rejects workspaces with duplicate graph ids", () => {
     expect(() =>
       parseWorkspaceJson(

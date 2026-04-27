@@ -81,6 +81,37 @@ describe("installPackageBundle", () => {
       "com.acme/cycle@1.0.0",
     ]);
   });
+
+  test("fails clearly for excessively deep bundled dependencies", () => {
+    const workspace = createEmptyWorkspace();
+
+    let pkg: GraphPackageFile = {
+      formatVersion: 1,
+      packageId: "com.acme/root",
+      version: "1.0.0",
+      metadata: { name: "Root" },
+      exports: [],
+      graphs: [],
+      dependencies: [],
+    };
+
+    let cursor = pkg;
+    for (let i = 0; i < 200; i++) {
+      const next: GraphPackageFile = {
+        formatVersion: 1,
+        packageId: `com.acme/dep-${i}`,
+        version: "1.0.0",
+        metadata: { name: `Dep ${i}` },
+        exports: [],
+        graphs: [],
+        dependencies: [],
+      };
+      cursor.dependencies = [next];
+      cursor = next;
+    }
+
+    expect(() => installPackageBundle(workspace, pkg)).toThrow();
+  });
 });
 
 describe("resolveInstalledPackageExport", () => {
