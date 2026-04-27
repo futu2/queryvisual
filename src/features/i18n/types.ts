@@ -100,6 +100,7 @@ export type MessageKey =
   | "expression.suggestions"
   | "expression.diagnostics"
   | "expression.insertSuggestion"
+  | "rowDrag.label"
   | "rowActions.mapping"
   | "rowActions.field"
   | "rowActions.column"
@@ -111,6 +112,14 @@ export type MessageKey =
   | "rowActions.moveDown"
   | "rowActions.duplicate"
   | "rowActions.remove"
+  | "editor.columnType.boolean"
+  | "editor.columnType.int"
+  | "editor.columnType.float"
+  | "editor.columnType.string"
+  | "editor.columnType.date"
+  | "editor.columnType.timestamp"
+  | "editor.columnType.null"
+  | "editor.columnType.unknown"
   | "queryNode.subgraphInterface"
   | "queryNode.inputs"
   | "queryNode.outputs"
@@ -120,4 +129,3 @@ export type MessageKey =
   | "edge.delete";
 
 export type Messages = Record<MessageKey, string>;
-

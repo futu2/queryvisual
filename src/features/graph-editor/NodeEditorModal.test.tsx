@@ -119,6 +119,59 @@ describe("NodeEditorModal", () => {
     expect(container.querySelector(".modal-kind")?.textContent).toBe("Output");
   });
 
+  test("localizes fixed drag-handle helper labels and fromTable column-type option labels", () => {
+    const fromTableNode: GraphNode = {
+      id: "from-orders-i18n",
+      kind: "fromTable",
+      label: "Orders",
+      position: { x: 0, y: 0 },
+      data: {
+        tableRef: { tableName: "orders" },
+        columns: {
+          order_id: "int",
+        },
+      },
+    };
+
+    const { rerender } = renderModal({ node: fromTableNode, navigatorLanguage: "zh-CN" });
+
+    // Drag helper label is fixed chrome (should be localized).
+    expect(screen.getByRole("button", { name: "拖动 字段 1" })).toBeTruthy();
+
+    // Column type option labels should be localized (values remain stable).
+    const typeSelect = screen.getByLabelText("字段类型 1") as HTMLSelectElement;
+    expect(typeSelect.querySelector('option[value="string"]')?.textContent).toBe("字符串");
+    expect(typeSelect.querySelector('option[value="int"]')?.textContent).toBe("整数");
+
+    const selectNode: GraphNode = {
+      id: "select-orders-i18n",
+      kind: "select",
+      label: "Project",
+      position: { x: 0, y: 0 },
+      data: {
+        mappings: [{ name: "gross_total", expression: "total" }],
+      },
+    };
+
+    const selectDocument: GraphDocument = {
+      version: 1,
+      metadata: { name: "Test document" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [selectNode],
+      edges: [],
+    };
+
+    rerender(
+      <I18nProvider deps={{ navigatorLanguage: "zh-CN" }}>
+        <DocumentProvider initialDocument={selectDocument}>
+          <NodeEditorModal node={selectNode} onClose={() => {}} onSave={() => {}} />
+        </DocumentProvider>
+      </I18nProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "拖动 映射 1" })).toBeTruthy();
+  });
+
   test("saves updated select mappings", async () => {
     const user = userEvent.setup();
     const onSave = mock();

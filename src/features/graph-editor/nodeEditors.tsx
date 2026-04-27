@@ -72,6 +72,29 @@ type EditableNodeDraft =
   | SortEditorDraft
   | FromTableEditorDraft;
 
+const rowActionItemMessageKeys = {
+  mapping: "rowActions.mapping",
+  field: "rowActions.field",
+  column: "rowActions.column",
+  groupKey: "rowActions.groupKey",
+  aggregate: "rowActions.aggregate",
+  sortItem: "rowActions.sortItem",
+} as const satisfies Record<
+  "mapping" | "field" | "column" | "groupKey" | "aggregate" | "sortItem",
+  MessageKey
+>;
+
+const columnTypeMessageKeys = {
+  boolean: "editor.columnType.boolean",
+  int: "editor.columnType.int",
+  float: "editor.columnType.float",
+  string: "editor.columnType.string",
+  date: "editor.columnType.date",
+  timestamp: "editor.columnType.timestamp",
+  null: "editor.columnType.null",
+  unknown: "editor.columnType.unknown",
+} as const satisfies Record<ColumnType, MessageKey>;
+
 const columnTypes: ColumnType[] = [
   "boolean",
   "int",
@@ -202,6 +225,7 @@ function FromTableFieldRows({
   onChange: (rows: DraftRow<FieldRow>[]) => void;
 }) {
   const [draggedRowId, setDraggedRowId] = useState<string | null>(null);
+  const fieldLabel = t(rowActionItemMessageKeys.field);
 
   return (
     <div className="editor-stack">
@@ -209,7 +233,7 @@ function FromTableFieldRows({
         <div key={row.rowId} className="mapping-row">
           <RowCard
             testId={`field-row-card-${index + 1}`}
-            dragLabel={`Drag field ${index + 1}`}
+            dragLabel={t("rowDrag.label", { item: fieldLabel, row: index + 1 })}
             draggable={rows.length > 1}
             onDragStart={(event) =>
               handleRowDragStart(event, row.rowId, setDraggedRowId)
@@ -262,7 +286,7 @@ function FromTableFieldRows({
               >
                 {columnTypes.map((type) => (
                   <option key={type} value={type}>
-                    {type}
+                    {t(columnTypeMessageKeys[type])}
                   </option>
                 ))}
               </select>
@@ -385,7 +409,6 @@ export function serializeNodeEditorDraft(draft: EditableNodeDraft): GraphNode {
 function NamedExpressionRows({
   rows,
   itemKey,
-  dragItemName,
   addButtonLabel,
   nameLabel,
   expressionLabel,
@@ -393,11 +416,11 @@ function NamedExpressionRows({
   document,
   nodeId,
   schemaOverrides,
+  t,
   onChange,
 }: {
   rows: NamedExpressionDraftRow[];
   itemKey: "mapping" | "groupKey" | "aggregate";
-  dragItemName: string;
   addButtonLabel: string;
   nameLabel: (rowNumber: number) => string;
   expressionLabel: (rowNumber: number) => string;
@@ -405,9 +428,11 @@ function NamedExpressionRows({
   document: GraphDocument;
   nodeId: string;
   schemaOverrides?: Record<string, ColumnMap>;
+  t: Translator;
   onChange: (rows: NamedExpressionDraftRow[]) => void;
 }) {
   const [draggedRowId, setDraggedRowId] = useState<string | null>(null);
+  const itemLabel = t(rowActionItemMessageKeys[itemKey]);
 
   return (
     <div className="editor-stack">
@@ -419,7 +444,7 @@ function NamedExpressionRows({
                 ? `${rowCardTestIdPrefix}-${index + 1}`
                 : undefined
             }
-            dragLabel={`Drag ${dragItemName} ${index + 1}`}
+            dragLabel={t("rowDrag.label", { item: itemLabel, row: index + 1 })}
             draggable={rows.length > 1}
             onDragStart={(event) =>
               handleRowDragStart(event, row.rowId, setDraggedRowId)
@@ -505,6 +530,7 @@ function SortItemRows({
   onChange: (rows: SortItemDraftRow[]) => void;
 }) {
   const [draggedRowId, setDraggedRowId] = useState<string | null>(null);
+  const sortItemLabel = t(rowActionItemMessageKeys.sortItem);
 
   return (
     <div className="editor-stack">
@@ -512,7 +538,7 @@ function SortItemRows({
         <div key={row.rowId} className="mapping-row">
           <RowCard
             testId={`sort-row-card-${index + 1}`}
-            dragLabel={`Drag sort item ${index + 1}`}
+            dragLabel={t("rowDrag.label", { item: sortItemLabel, row: index + 1 })}
             draggable={rows.length > 1}
             onDragStart={(event) =>
               handleRowDragStart(event, row.rowId, setDraggedRowId)
@@ -604,7 +630,6 @@ function SelectMappingRows({
     <NamedExpressionRows
       rows={rows}
       itemKey="mapping"
-      dragItemName="mapping"
       addButtonLabel={t("editor.addMapping")}
       nameLabel={(rowNumber) => t("editor.mappingName", { row: rowNumber })}
       expressionLabel={() => t("editor.expression")}
@@ -612,6 +637,7 @@ function SelectMappingRows({
       document={document}
       nodeId={nodeId}
       schemaOverrides={schemaOverrides}
+      t={t}
       onChange={onChange}
     />
   );
@@ -786,7 +812,6 @@ export function renderNodeEditor(
             <NamedExpressionRows
               rows={draft.data.groupBy}
               itemKey="groupKey"
-              dragItemName="group key"
               addButtonLabel={t("editor.addGroupKey")}
               nameLabel={(rowNumber) => t("editor.groupKeyName", { row: rowNumber })}
               expressionLabel={(rowNumber) =>
@@ -796,6 +821,7 @@ export function renderNodeEditor(
               document={document}
               nodeId={draft.id}
               schemaOverrides={schemaOverrides}
+              t={t}
               onChange={(rows) =>
                 setDraft({ ...draft, data: { ...draft.data, groupBy: rows } })
               }
@@ -806,7 +832,6 @@ export function renderNodeEditor(
             <NamedExpressionRows
               rows={draft.data.aggregates}
               itemKey="aggregate"
-              dragItemName="aggregate"
               addButtonLabel={t("editor.addAggregate")}
               nameLabel={(rowNumber) => t("editor.aggregateName", { row: rowNumber })}
               expressionLabel={(rowNumber) =>
@@ -816,6 +841,7 @@ export function renderNodeEditor(
               document={document}
               nodeId={draft.id}
               schemaOverrides={schemaOverrides}
+              t={t}
               onChange={(rows) =>
                 setDraft({
                   ...draft,
