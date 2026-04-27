@@ -109,6 +109,54 @@ describe("fileIO", () => {
     ).toThrow("Invalid QueryVisual workspace");
   });
 
+  test("rejects subgraph nodes where local target graphId mismatches graphId", () => {
+    expect(() =>
+      parseWorkspaceJson(
+        JSON.stringify({
+          version: 2,
+          metadata: { name: "workspace" },
+          entryGraphId: "graph-main",
+          graphs: [
+            {
+              id: "graph-main",
+              metadata: { name: "Main" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [
+                {
+                  id: "subgraph-1",
+                  kind: "subgraph",
+                  label: "Orders",
+                  position: { x: 0, y: 0 },
+                  data: {
+                    graphId: "graph-child-a",
+                    target: { kind: "local", graphId: "graph-child-b" },
+                  },
+                },
+              ],
+              edges: [],
+            },
+            {
+              id: "graph-child-a",
+              metadata: { name: "Child A" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+            {
+              id: "graph-child-b",
+              metadata: { name: "Child B" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+          ],
+          installedPackages: [],
+          packageManifest: null,
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual workspace");
+  });
+
   test("rejects legacy documents that include a package-target subgraph node", () => {
     expect(() =>
       parseDocumentJson(

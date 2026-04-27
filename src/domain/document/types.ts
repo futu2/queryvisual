@@ -55,12 +55,7 @@ export type SubgraphTarget =
 export type GraphNode =
   | GraphNodeBase<"graphInput", { inputName: string; columns: ColumnMap }>
   | GraphNodeBase<"fromTable", { tableRef: TableRef; columns: ColumnMap }>
-  // Backward compatible widening: keep `graphId` for existing local-subgraph features,
-  // but allow persisted `target` for package-based subgraphs.
-  | GraphNodeBase<
-      "subgraph",
-      { graphId: string; target?: SubgraphTarget } | { target: SubgraphTarget; graphId?: string }
-    >
+  | GraphNodeBase<"subgraph", { graphId: string; target?: SubgraphTarget }>
   | GraphNodeBase<"join", { joinType: "inner" | "left" | "right" | "full"; predicate: string }>
   | GraphNodeBase<"where", { predicate: string }>
   | GraphNodeBase<"select", { mappings: NamedExpression[] }>
