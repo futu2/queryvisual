@@ -61,6 +61,26 @@ describe("installPackageBundle", () => {
     const nextAgain = installPackageBundle(next, pkg);
     expect(nextAgain.installedPackages).toHaveLength(2);
   });
+
+  test("guards against cyclic bundled dependencies", () => {
+    const workspace = createEmptyWorkspace();
+
+    const pkg: GraphPackageFile = {
+      formatVersion: 1,
+      packageId: "com.acme/cycle",
+      version: "1.0.0",
+      metadata: { name: "Cycle" },
+      exports: [],
+      graphs: [],
+      dependencies: [],
+    };
+    pkg.dependencies = [pkg];
+
+    const next = installPackageBundle(workspace, pkg);
+    expect(next.installedPackages.map((p) => `${p.packageId}@${p.version}`)).toEqual([
+      "com.acme/cycle@1.0.0",
+    ]);
+  });
 });
 
 describe("resolveInstalledPackageExport", () => {
@@ -99,4 +119,3 @@ describe("resolveInstalledPackageExport", () => {
     expect(resolved?.graph.id).toBe("graph-orders");
   });
 });
-

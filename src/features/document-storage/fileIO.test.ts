@@ -71,6 +71,35 @@ describe("fileIO", () => {
     expect(serializeDocumentJson(parsed)).toContain('"sourceHandle": "orders_report"');
   });
 
+  test("rejects legacy documents that include a package-target subgraph node", () => {
+    expect(() =>
+      parseDocumentJson(
+        JSON.stringify({
+          version: 1,
+          metadata: { name: "bad" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [
+            {
+              id: "subgraph-1",
+              kind: "subgraph",
+              label: "Orders",
+              position: { x: 0, y: 0 },
+              data: {
+                target: {
+                  kind: "package",
+                  packageId: "com.acme/orders",
+                  version: "1.0.0",
+                  exportKey: "orders_report",
+                },
+              },
+            },
+          ],
+          edges: [],
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual document");
+  });
+
   test("wraps legacy single-graph JSON into a one-graph workspace", () => {
     const workspace = parseWorkspaceJson(
       JSON.stringify({
@@ -165,6 +194,42 @@ describe("fileIO", () => {
     expect(parentGraph?.nodes[0]?.kind).toBe("subgraph");
     expect(parentGraph?.edges[0]?.targetHandle).toBe("orders_in");
     expect(serializeWorkspaceJson(workspace)).toContain('"targetHandle": "orders_in"');
+  });
+
+  test("rejects workspaces that include a package-target subgraph node", () => {
+    expect(() =>
+      parseWorkspaceJson(
+        JSON.stringify({
+          version: 2,
+          metadata: { name: "workspace" },
+          entryGraphId: "graph-main",
+          graphs: [
+            {
+              id: "graph-main",
+              metadata: { name: "Main" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [
+                {
+                  id: "subgraph-1",
+                  kind: "subgraph",
+                  label: "Orders",
+                  position: { x: 0, y: 0 },
+                  data: {
+                    target: {
+                      kind: "package",
+                      packageId: "com.acme/orders",
+                      version: "1.0.0",
+                      exportKey: "orders_report",
+                    },
+                  },
+                },
+              ],
+              edges: [],
+            },
+          ],
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual workspace");
   });
 
   test("migrates legacy workspace subgraph payload { graphId } into { target: { kind: \"local\", graphId } }", () => {

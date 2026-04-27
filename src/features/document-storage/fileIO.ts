@@ -265,7 +265,12 @@ function isWorkspacePackageManifest(value: unknown): value is WorkspacePackageMa
   );
 }
 
-function isGraphWorkspace(value: unknown): value is GraphWorkspace {
+type GraphWorkspaceFile = Omit<GraphWorkspace, "installedPackages" | "packageManifest"> & {
+  installedPackages?: InstalledGraphPackage[];
+  packageManifest?: WorkspacePackageManifest | null;
+};
+
+function isGraphWorkspaceFile(value: unknown): value is GraphWorkspaceFile {
   if (
     !isRecord(value) ||
     value.version !== 2 ||
@@ -340,7 +345,7 @@ function normalizeDocumentOutputs<TDocument extends GraphDocumentBase>(
   };
 }
 
-function normalizeWorkspace(workspace: GraphWorkspace): GraphWorkspace {
+function normalizeWorkspace(workspace: GraphWorkspaceFile): GraphWorkspace {
   const withDefaults: GraphWorkspace = {
     ...workspace,
     installedPackages: workspace.installedPackages ?? [],
@@ -392,6 +397,15 @@ function normalizeSubgraphTargets<TDocument extends GraphDocumentBase>(document:
   };
 }
 
+function hasPackageTargetSubgraph(document: GraphDocumentBase): boolean {
+  return document.nodes.some((node) => {
+    if (node.kind !== "subgraph") return false;
+    const data = node.data as Record<string, unknown>;
+    const target = data.target as Record<string, unknown> | undefined;
+    return isRecord(target) && target.kind === "package";
+  });
+}
+
 function migrateLegacyDocumentToWorkspace(
   document: LegacyGraphDocument,
 ): GraphWorkspace {
@@ -412,6 +426,8 @@ function migrateLegacyDocumentToWorkspace(
         edges: document.edges,
       }),
     ],
+    installedPackages: [],
+    packageManifest: null,
   });
 }
 
@@ -432,7 +448,11 @@ export function parseDocumentJson(raw: string): LegacyGraphDocument {
     throw new Error("Invalid QueryVisual document");
   }
 
-  return normalizeSubgraphTargets(normalizeDocumentOutputs(parsed));
+  const normalized = normalizeSubgraphTargets(normalizeDocumentOutputs(parsed));
+  if (hasPackageTargetSubgraph(normalized)) {
+    throw new Error("Invalid QueryVisual document");
+  }
+  return normalized;
 }
 
 export function serializeWorkspaceJson(workspace: GraphWorkspace) {
@@ -449,17 +469,25 @@ export function parseWorkspaceJson(raw: string): GraphWorkspace {
   }
 
   if (isLegacyGraphDocument(parsed)) {
-    return migrateLegacyDocumentToWorkspace(parsed);
+    const workspace = migrateLegacyDocumentToWorkspace(parsed);
+    if (workspace.graphs.some((graph) => hasPackageTargetSubgraph(graph))) {
+      throw new Error("Invalid QueryVisual workspace");
+    }
+    return workspace;
   }
 
-  if (!isGraphWorkspace(parsed)) {
+  if (!isGraphWorkspaceFile(parsed)) {
     throw new Error("Invalid QueryVisual workspace");
   }
 
-  return normalizeWorkspace({
+  const normalized = normalizeWorkspace({
     ...parsed,
     graphs: parsed.graphs.map((graph) => normalizeSubgraphTargets(graph)),
   });
+  if (normalized.graphs.some((graph) => hasPackageTargetSubgraph(graph))) {
+    throw new Error("Invalid QueryVisual workspace");
+  }
+  return normalized;
 }
 
 function isGraphPackageFile(value: unknown): value is GraphPackageFile {

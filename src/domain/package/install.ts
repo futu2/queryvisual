@@ -30,10 +30,25 @@ export function installPackageBundle(
   workspace: GraphWorkspace,
   pkg: GraphPackageFile,
 ): GraphWorkspace {
+  const visited = new Set<string>();
+  return installPackageBundleInner(workspace, pkg, visited);
+}
+
+function installPackageBundleInner(
+  workspace: GraphWorkspace,
+  pkg: GraphPackageFile,
+  visited: Set<string>,
+): GraphWorkspace {
+  const visitKey = `${pkg.packageId}@${pkg.version}`;
+  if (visited.has(visitKey)) {
+    return workspace;
+  }
+  visited.add(visitKey);
+
   let next = workspace;
 
   for (const dep of pkg.dependencies) {
-    next = installPackageBundle(next, dep);
+    next = installPackageBundleInner(next, dep, visited);
   }
 
   const alreadyInstalled = next.installedPackages.some((installed) =>
