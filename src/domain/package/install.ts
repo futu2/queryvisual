@@ -1,8 +1,9 @@
 import type { GraphWorkspace, SubgraphTarget } from "../document/types";
 import type { GraphDefinition } from "../document/types";
 import type { GraphPackageFile, InstalledGraphPackage } from "./types";
+import { PACKAGE_BUNDLE_MAX_DEPTH } from "./types";
 
-const MAX_BUNDLED_DEPENDENCY_DEPTH = 50;
+const MAX_BUNDLED_DEPENDENCY_DEPTH = PACKAGE_BUNDLE_MAX_DEPTH;
 
 function samePkg(
   a: { packageId: string; version: string },

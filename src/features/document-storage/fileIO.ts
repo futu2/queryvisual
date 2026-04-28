@@ -10,8 +10,9 @@ import {
   normalizeOutputListenerConfig,
 } from "../../domain/document/outputListeners";
 import type { GraphPackageFile, InstalledGraphPackage, WorkspacePackageManifest } from "../../domain/package/types";
+import { isWorkspacePackageManifestValid, PACKAGE_BUNDLE_MAX_DEPTH } from "../../domain/package/types";
 
-const MAX_PACKAGE_DEPENDENCY_DEPTH = 50;
+const MAX_PACKAGE_DEPENDENCY_DEPTH = PACKAGE_BUNDLE_MAX_DEPTH;
 
 const columnTypes = [
   "boolean",
@@ -265,22 +266,6 @@ function isWorkspacePackageManifest(value: unknown): value is WorkspacePackageMa
     Array.isArray(value.exports) &&
     value.exports.every(isGraphPackageExport)
   );
-}
-
-function isManifestSemanticallyValid(params: {
-  manifest: WorkspacePackageManifest;
-  workspaceGraphIds: Set<string>;
-}): boolean {
-  const exportKeys = new Set(params.manifest.exports.map((entry) => entry.exportKey));
-  if (exportKeys.size !== params.manifest.exports.length) {
-    return false;
-  }
-
-  if (!params.manifest.exports.every((entry) => params.workspaceGraphIds.has(entry.graphId))) {
-    return false;
-  }
-
-  return true;
 }
 
 type GraphWorkspaceFile = Omit<GraphWorkspace, "installedPackages" | "packageManifest"> & {
@@ -550,8 +535,7 @@ export function parseWorkspaceJson(raw: string): GraphWorkspace {
       throw new Error("Invalid QueryVisual workspace");
     }
     if (workspace.packageManifest) {
-      const graphIds = new Set(workspace.graphs.map((graph) => graph.id));
-      if (!isManifestSemanticallyValid({ manifest: workspace.packageManifest, workspaceGraphIds: graphIds })) {
+      if (!isWorkspacePackageManifestValid(workspace.packageManifest, workspace.graphs)) {
         throw new Error("Invalid QueryVisual workspace");
       }
     }
@@ -583,8 +567,7 @@ export function parseWorkspaceJson(raw: string): GraphWorkspace {
     throw new Error("Invalid QueryVisual workspace");
   }
   if (normalized.packageManifest) {
-    const graphIds = new Set(normalized.graphs.map((graph) => graph.id));
-    if (!isManifestSemanticallyValid({ manifest: normalized.packageManifest, workspaceGraphIds: graphIds })) {
+    if (!isWorkspacePackageManifestValid(normalized.packageManifest, normalized.graphs)) {
       throw new Error("Invalid QueryVisual workspace");
     }
   }

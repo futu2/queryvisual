@@ -105,3 +105,24 @@ export interface GraphWorkspace {
 }
 
 export type GraphDocument = GraphDefinition | LegacyGraphDocument;
+
+export function isGraphWorkspaceRuntime(value: unknown): value is GraphWorkspace {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    (value as { version?: unknown }).version !== 2
+  ) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (!("graphs" in record) || !Array.isArray(record.graphs)) return false;
+  if (!("installedPackages" in record) || !Array.isArray(record.installedPackages)) return false;
+  if (!("packageManifest" in record)) return false;
+
+  // `packageManifest` can be null, but must be present.
+  const manifest = record.packageManifest;
+  if (manifest !== null && typeof manifest !== "object") return false;
+
+  return true;
+}

@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import type { GraphDocument, GraphWorkspace } from "../../domain/document/types";
+import { isGraphWorkspaceRuntime } from "../../domain/document/types";
 import {
   createInitialEditorState,
   documentReducer,
@@ -45,7 +46,7 @@ export function DocumentProvider({
       return;
     }
 
-    if ("graphs" in initialState && initialState.version === 2) {
+    if (isGraphWorkspaceRuntime(initialState)) {
       dispatch({ type: "replace-workspace", workspace: initialState });
     } else {
       dispatch({ type: "replace-document", document: initialState });

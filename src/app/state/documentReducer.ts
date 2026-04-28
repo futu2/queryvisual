@@ -6,7 +6,9 @@ import type {
   GraphNode,
   GraphWorkspace,
 } from "../../domain/document/types";
+import { isGraphWorkspaceRuntime } from "../../domain/document/types";
 import type { GraphPackageFile, WorkspacePackageManifest } from "../../domain/package/types";
+import { isWorkspacePackageManifestValid } from "../../domain/package/types";
 import { installPackageBundle } from "../../domain/package/install";
 
 export interface EditorState {
@@ -83,7 +85,7 @@ function toWorkspace(document: GraphDocument): GraphWorkspace {
 function isWorkspaceInput(
   value: GraphWorkspace | GraphDocument,
 ): value is GraphWorkspace {
-  return "graphs" in value && value.version === 2;
+  return isGraphWorkspaceRuntime(value);
 }
 
 function getActiveGraphById(
@@ -142,19 +144,6 @@ function createEmptyGraph(index: number): GraphDefinition {
     nodes: [],
     edges: [],
   };
-}
-
-function isManifestValidForWorkspaceGraphs(
-  manifest: WorkspacePackageManifest,
-  graphs: GraphDefinition[],
-) {
-  const exportKeys = new Set(manifest.exports.map((entry) => entry.exportKey));
-  if (exportKeys.size !== manifest.exports.length) {
-    return false;
-  }
-
-  const graphIds = new Set(graphs.map((graph) => graph.id));
-  return manifest.exports.every((entry) => graphIds.has(entry.graphId));
 }
 
 export function createInitialEditorState(
@@ -287,8 +276,8 @@ export function documentReducer(
       };
     }
     case "set-package-manifest":
-      if (action.manifest && !isManifestValidForWorkspaceGraphs(action.manifest, state.workspace.graphs)) {
-        throw new Error("Invalid workspace packageManifest");
+      if (action.manifest && !isWorkspacePackageManifestValid(action.manifest, state.workspace.graphs)) {
+        return state;
       }
       return {
         ...state,

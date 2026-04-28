@@ -93,6 +93,8 @@ describe("documentReducer", () => {
             edges: [],
           },
         ],
+        installedPackages: [],
+        packageManifest: null,
       },
     });
 
@@ -135,6 +137,8 @@ describe("documentReducer", () => {
           edges: [],
         },
       ],
+      installedPackages: [],
+      packageManifest: null,
     });
 
     const next = documentReducer(initial, {
@@ -320,38 +324,38 @@ describe("documentReducer", () => {
   test("set-package-manifest rejects duplicate export keys", () => {
     const initial = createInitialEditorState(createSampleWorkspace());
 
-    expect(() =>
-      documentReducer(initial, {
-        type: "set-package-manifest",
-        manifest: {
-          packageId: "com.acme/workspace",
-          version: "0.0.1",
-          name: "Workspace Package",
-          exports: [
-            { exportKey: "main", graphId: initial.workspace.entryGraphId, displayName: "Main" },
-            { exportKey: "main", graphId: initial.workspace.entryGraphId, displayName: "Main Again" },
-          ],
-        },
-      }),
-    ).toThrow("Invalid workspace packageManifest");
+    const next = documentReducer(initial, {
+      type: "set-package-manifest",
+      manifest: {
+        packageId: "com.acme/workspace",
+        version: "0.0.1",
+        name: "Workspace Package",
+        exports: [
+          { exportKey: "main", graphId: initial.workspace.entryGraphId, displayName: "Main" },
+          { exportKey: "main", graphId: initial.workspace.entryGraphId, displayName: "Main Again" },
+        ],
+      },
+    });
+
+    expect(next).toBe(initial);
   });
 
   test("set-package-manifest rejects exports pointing to missing graphs", () => {
     const initial = createInitialEditorState(createSampleWorkspace());
 
-    expect(() =>
-      documentReducer(initial, {
-        type: "set-package-manifest",
-        manifest: {
-          packageId: "com.acme/workspace",
-          version: "0.0.1",
-          name: "Workspace Package",
-          exports: [
-            { exportKey: "missing", graphId: "graph-missing", displayName: "Missing" },
-          ],
-        },
-      }),
-    ).toThrow("Invalid workspace packageManifest");
+    const next = documentReducer(initial, {
+      type: "set-package-manifest",
+      manifest: {
+        packageId: "com.acme/workspace",
+        version: "0.0.1",
+        name: "Workspace Package",
+        exports: [
+          { exportKey: "missing", graphId: "graph-missing", displayName: "Missing" },
+        ],
+      },
+    });
+
+    expect(next).toBe(initial);
   });
 
   test("updates the stored viewport", () => {

@@ -5,6 +5,7 @@ import { optimizeOutput } from "../ir/optimize";
 import type { IRRelNode } from "../ir/types";
 import { renderSql } from "../sql/renderer";
 import type { GraphDocument, GraphNode, GraphWorkspace } from "../document/types";
+import { isGraphWorkspaceRuntime } from "../document/types";
 import type { ColumnMap } from "../schema/types";
 import { formatTableRef } from "../schema/types";
 import { parseExpression } from "../expr/parser";
@@ -18,12 +19,7 @@ export interface CompileOutputResult {
 }
 
 function isWorkspace(value: unknown): value is GraphWorkspace {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as { version?: unknown }).version === 2 &&
-    Array.isArray((value as { graphs?: unknown }).graphs)
-  );
+  return isGraphWorkspaceRuntime(value);
 }
 
 function parseOutputHandle(handle: string): string | null {

@@ -1,5 +1,7 @@
 import type { GraphDefinition } from "../document/types";
 
+export const PACKAGE_BUNDLE_MAX_DEPTH = 50;
+
 export interface GraphPackageExport {
   exportKey: string;
   graphId: string;
@@ -44,3 +46,15 @@ export interface InstalledGraphPackage {
   dependencyRefs: GraphPackageDependencyRef[];
 }
 
+export function isWorkspacePackageManifestValid(
+  manifest: WorkspacePackageManifest,
+  graphs: GraphDefinition[],
+): boolean {
+  const exportKeys = new Set(manifest.exports.map((entry) => entry.exportKey));
+  if (exportKeys.size !== manifest.exports.length) {
+    return false;
+  }
+
+  const graphIds = new Set(graphs.map((graph) => graph.id));
+  return manifest.exports.every((entry) => graphIds.has(entry.graphId));
+}
