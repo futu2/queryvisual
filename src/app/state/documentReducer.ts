@@ -144,6 +144,19 @@ function createEmptyGraph(index: number): GraphDefinition {
   };
 }
 
+function isManifestValidForWorkspaceGraphs(
+  manifest: WorkspacePackageManifest,
+  graphs: GraphDefinition[],
+) {
+  const exportKeys = new Set(manifest.exports.map((entry) => entry.exportKey));
+  if (exportKeys.size !== manifest.exports.length) {
+    return false;
+  }
+
+  const graphIds = new Set(graphs.map((graph) => graph.id));
+  return manifest.exports.every((entry) => graphIds.has(entry.graphId));
+}
+
 export function createInitialEditorState(
   documentOrWorkspace: GraphWorkspace | GraphDocument = createSampleWorkspace(),
 ): EditorState {
@@ -274,6 +287,9 @@ export function documentReducer(
       };
     }
     case "set-package-manifest":
+      if (action.manifest && !isManifestValidForWorkspaceGraphs(action.manifest, state.workspace.graphs)) {
+        throw new Error("Invalid workspace packageManifest");
+      }
       return {
         ...state,
         workspace: {

@@ -267,6 +267,22 @@ function isWorkspacePackageManifest(value: unknown): value is WorkspacePackageMa
   );
 }
 
+function isManifestSemanticallyValid(params: {
+  manifest: WorkspacePackageManifest;
+  workspaceGraphIds: Set<string>;
+}): boolean {
+  const exportKeys = new Set(params.manifest.exports.map((entry) => entry.exportKey));
+  if (exportKeys.size !== params.manifest.exports.length) {
+    return false;
+  }
+
+  if (!params.manifest.exports.every((entry) => params.workspaceGraphIds.has(entry.graphId))) {
+    return false;
+  }
+
+  return true;
+}
+
 type GraphWorkspaceFile = Omit<GraphWorkspace, "installedPackages" | "packageManifest"> & {
   installedPackages?: InstalledGraphPackage[];
   packageManifest?: WorkspacePackageManifest | null;
@@ -533,6 +549,12 @@ export function parseWorkspaceJson(raw: string): GraphWorkspace {
     if (hasDuplicateInstalledPackageIdentities(workspace)) {
       throw new Error("Invalid QueryVisual workspace");
     }
+    if (workspace.packageManifest) {
+      const graphIds = new Set(workspace.graphs.map((graph) => graph.id));
+      if (!isManifestSemanticallyValid({ manifest: workspace.packageManifest, workspaceGraphIds: graphIds })) {
+        throw new Error("Invalid QueryVisual workspace");
+      }
+    }
     return workspace;
   }
 
@@ -559,6 +581,12 @@ export function parseWorkspaceJson(raw: string): GraphWorkspace {
   }
   if (hasDuplicateInstalledPackageIdentities(normalized)) {
     throw new Error("Invalid QueryVisual workspace");
+  }
+  if (normalized.packageManifest) {
+    const graphIds = new Set(normalized.graphs.map((graph) => graph.id));
+    if (!isManifestSemanticallyValid({ manifest: normalized.packageManifest, workspaceGraphIds: graphIds })) {
+      throw new Error("Invalid QueryVisual workspace");
+    }
   }
   return normalized;
 }

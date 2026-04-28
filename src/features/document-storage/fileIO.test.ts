@@ -859,6 +859,67 @@ describe("fileIO", () => {
     ).toThrow("Invalid QueryVisual workspace");
   });
 
+  test("rejects workspaces with packageManifest duplicate export keys", () => {
+    expect(() =>
+      parseWorkspaceJson(
+        JSON.stringify({
+          version: 2,
+          metadata: { name: "workspace" },
+          entryGraphId: "graph-main",
+          graphs: [
+            {
+              id: "graph-main",
+              metadata: { name: "Main" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+          ],
+          installedPackages: [],
+          packageManifest: {
+            packageId: "com.acme/workspace",
+            version: "0.0.1",
+            name: "Workspace Package",
+            exports: [
+              { exportKey: "main", graphId: "graph-main", displayName: "Main" },
+              { exportKey: "main", graphId: "graph-main", displayName: "Main Again" },
+            ],
+          },
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual workspace");
+  });
+
+  test("rejects workspaces with packageManifest exports pointing to missing workspace graphs", () => {
+    expect(() =>
+      parseWorkspaceJson(
+        JSON.stringify({
+          version: 2,
+          metadata: { name: "workspace" },
+          entryGraphId: "graph-main",
+          graphs: [
+            {
+              id: "graph-main",
+              metadata: { name: "Main" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+          ],
+          installedPackages: [],
+          packageManifest: {
+            packageId: "com.acme/workspace",
+            version: "0.0.1",
+            name: "Workspace Package",
+            exports: [
+              { exportKey: "missing", graphId: "graph-missing", displayName: "Missing" },
+            ],
+          },
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual workspace");
+  });
+
   test("parsePackageJson parses package files separately from workspace JSON", () => {
     const pkg = parsePackageJson(
       JSON.stringify({

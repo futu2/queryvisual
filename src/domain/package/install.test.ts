@@ -292,4 +292,64 @@ describe("resolveInstalledPackageExport", () => {
     expect(resolved?.pkg.packageId).toBe("com.acme/orders");
     expect(resolved?.graph.id).toBe("graph-orders");
   });
+
+  test("returns null when the package is not installed", () => {
+    const workspace = createEmptyWorkspace();
+    const resolved = resolveInstalledPackageExport(workspace, {
+      kind: "package",
+      packageId: "com.acme/missing",
+      version: "1.0.0",
+      exportKey: "x",
+    });
+
+    expect(resolved).toBeNull();
+  });
+
+  test("returns null when the exportKey is missing", () => {
+    const pkg = createPackageFile({
+      packageId: "com.acme/orders",
+      version: "2.0.0",
+      exports: [],
+      graphs: [
+        {
+          id: "graph-orders",
+          metadata: { name: "Orders Graph" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [],
+          edges: [],
+        },
+      ],
+    });
+
+    const workspace = installPackageBundle(createEmptyWorkspace(), pkg);
+    const resolved = resolveInstalledPackageExport(workspace, {
+      kind: "package",
+      packageId: "com.acme/orders",
+      version: "2.0.0",
+      exportKey: "missing_export",
+    });
+
+    expect(resolved).toBeNull();
+  });
+
+  test("returns null when the export references a missing graph id", () => {
+    const pkg = createPackageFile({
+      packageId: "com.acme/orders",
+      version: "2.0.0",
+      exports: [
+        { exportKey: "orders_report", graphId: "graph-missing", displayName: "Orders Report" },
+      ],
+      graphs: [],
+    });
+
+    const workspace = installPackageBundle(createEmptyWorkspace(), pkg);
+    const resolved = resolveInstalledPackageExport(workspace, {
+      kind: "package",
+      packageId: "com.acme/orders",
+      version: "2.0.0",
+      exportKey: "orders_report",
+    });
+
+    expect(resolved).toBeNull();
+  });
 });
