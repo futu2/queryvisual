@@ -94,14 +94,9 @@ function getActiveGraphById(
 }
 
 function createStateFromWorkspace(workspace: GraphWorkspace): EditorState {
-  const normalizedWorkspace: GraphWorkspace = {
-    ...workspace,
-    installedPackages: workspace.installedPackages ?? [],
-    packageManifest: workspace.packageManifest ?? null,
-  };
   const activeGraph =
-    getActiveGraphById(normalizedWorkspace, normalizedWorkspace.entryGraphId) ??
-    normalizedWorkspace.graphs[0] ??
+    getActiveGraphById(workspace, workspace.entryGraphId) ??
+    workspace.graphs[0] ??
     null;
 
   if (!activeGraph) {
@@ -109,7 +104,7 @@ function createStateFromWorkspace(workspace: GraphWorkspace): EditorState {
   }
 
   return {
-    workspace: normalizedWorkspace,
+    workspace,
     activeGraphId: activeGraph.id,
     document: activeGraph,
     selectedNodeId: null,

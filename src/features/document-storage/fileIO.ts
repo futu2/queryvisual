@@ -380,6 +380,11 @@ function hasInvalidInstalledPackageGraphs(workspace: GraphWorkspace): boolean {
   );
 }
 
+function hasDuplicateInstalledPackageIdentities(workspace: GraphWorkspace): boolean {
+  const keys = workspace.installedPackages.map((pkg) => `${pkg.packageId}@${pkg.version}`);
+  return new Set(keys).size !== keys.length;
+}
+
 function normalizeSubgraphTargets<TDocument extends GraphDocumentBase>(document: TDocument): TDocument {
   return {
     ...document,
@@ -504,6 +509,9 @@ export function parseWorkspaceJson(raw: string): GraphWorkspace {
     if (hasInvalidInstalledPackageGraphs(workspace)) {
       throw new Error("Invalid QueryVisual workspace");
     }
+    if (hasDuplicateInstalledPackageIdentities(workspace)) {
+      throw new Error("Invalid QueryVisual workspace");
+    }
     return workspace;
   }
 
@@ -523,6 +531,9 @@ export function parseWorkspaceJson(raw: string): GraphWorkspace {
     throw new Error("Invalid QueryVisual workspace");
   }
   if (hasInvalidInstalledPackageGraphs(normalized)) {
+    throw new Error("Invalid QueryVisual workspace");
+  }
+  if (hasDuplicateInstalledPackageIdentities(normalized)) {
     throw new Error("Invalid QueryVisual workspace");
   }
   return normalized;
@@ -577,22 +588,39 @@ export function parsePackageJson(raw: string): GraphPackageFile {
     throw new Error("Invalid QueryVisual package");
   }
 
-  if (hasPackageTargetSubgraphInGraphs(parsed.graphs)) {
+  return normalizeAndValidatePackageBundle(parsed, 0);
+}
+
+function normalizeAndValidatePackageBundle(pkg: GraphPackageFile, depth: number): GraphPackageFile {
+  if (depth > MAX_PACKAGE_DEPENDENCY_DEPTH) {
     throw new Error("Invalid QueryVisual package");
   }
 
-  const normalized = {
-    ...parsed,
-    graphs: parsed.graphs.map((graph) =>
-      normalizeSubgraphTargets(normalizeDocumentOutputs(graph)),
+  const normalizedGraphs = pkg.graphs.map((graph) =>
+    normalizeSubgraphTargets(normalizeDocumentOutputs(graph)),
+  );
+
+  if (hasPackageTargetSubgraphInGraphs(normalizedGraphs)) {
+    throw new Error("Invalid QueryVisual package");
+  }
+
+  if (normalizedGraphs.some((graph) => hasInvalidLocalTargetMismatch(graph))) {
+    throw new Error("Invalid QueryVisual package");
+  }
+
+  // Re-check export->graph consistency after normalization (defensive).
+  const graphIds = new Set(normalizedGraphs.map((graph) => graph.id));
+  if (!pkg.exports.every((entry) => graphIds.has(entry.graphId))) {
+    throw new Error("Invalid QueryVisual package");
+  }
+
+  return {
+    ...pkg,
+    graphs: normalizedGraphs,
+    dependencies: pkg.dependencies.map((dep) =>
+      normalizeAndValidatePackageBundle(dep, depth + 1),
     ),
   };
-
-  if (normalized.graphs.some((graph) => hasInvalidLocalTargetMismatch(graph))) {
-    throw new Error("Invalid QueryVisual package");
-  }
-
-  return normalized;
 }
 
 export function downloadDocument(graphDocument: LegacyGraphDocument) {

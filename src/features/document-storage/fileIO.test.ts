@@ -687,6 +687,46 @@ describe("fileIO", () => {
     ).toThrow("Invalid QueryVisual workspace");
   });
 
+  test("rejects workspaces with duplicate installedPackages packageId@version entries", () => {
+    expect(() =>
+      parseWorkspaceJson(
+        JSON.stringify({
+          version: 2,
+          metadata: { name: "workspace" },
+          entryGraphId: "graph-main",
+          graphs: [
+            {
+              id: "graph-main",
+              metadata: { name: "Main" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+          ],
+          installedPackages: [
+            {
+              packageId: "com.acme/orders",
+              version: "1.0.0",
+              metadata: { name: "Orders" },
+              exports: [],
+              graphs: [],
+              dependencyRefs: [],
+            },
+            {
+              packageId: "com.acme/orders",
+              version: "1.0.0",
+              metadata: { name: "Orders Duplicate" },
+              exports: [],
+              graphs: [],
+              dependencyRefs: [],
+            },
+          ],
+          packageManifest: null,
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual workspace");
+  });
+
   test("parsePackageJson parses package files separately from workspace JSON", () => {
     const pkg = parsePackageJson(
       JSON.stringify({
@@ -794,6 +834,178 @@ describe("fileIO", () => {
         }),
       ),
     ).toThrow("Invalid QueryVisual package");
+  });
+
+  test("parsePackageJson rejects dependency packages that include package-target subgraph nodes", () => {
+    expect(() =>
+      parsePackageJson(
+        JSON.stringify({
+          formatVersion: 1,
+          packageId: "com.acme/root",
+          version: "1.0.0",
+          metadata: { name: "Root" },
+          exports: [{ exportKey: "main", graphId: "graph-main", displayName: "Main" }],
+          graphs: [
+            {
+              id: "graph-main",
+              metadata: { name: "Main" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+          ],
+          dependencies: [
+            {
+              formatVersion: 1,
+              packageId: "com.acme/dep",
+              version: "1.0.0",
+              metadata: { name: "Dep" },
+              exports: [{ exportKey: "dep", graphId: "graph-dep", displayName: "Dep" }],
+              graphs: [
+                {
+                  id: "graph-dep",
+                  metadata: { name: "Dep Graph" },
+                  viewport: { x: 0, y: 0, zoom: 1 },
+                  nodes: [
+                    {
+                      id: "subgraph-1",
+                      kind: "subgraph",
+                      label: "Pkg Target",
+                      position: { x: 0, y: 0 },
+                      data: {
+                        graphId: "graph-child",
+                        target: {
+                          kind: "package",
+                          packageId: "com.acme/other",
+                          version: "1.0.0",
+                          exportKey: "x",
+                        },
+                      },
+                    },
+                  ],
+                  edges: [],
+                },
+              ],
+              dependencies: [],
+            },
+          ],
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual package");
+  });
+
+  test("parsePackageJson rejects dependency packages with local-target mismatches", () => {
+    expect(() =>
+      parsePackageJson(
+        JSON.stringify({
+          formatVersion: 1,
+          packageId: "com.acme/root",
+          version: "1.0.0",
+          metadata: { name: "Root" },
+          exports: [{ exportKey: "main", graphId: "graph-main", displayName: "Main" }],
+          graphs: [
+            {
+              id: "graph-main",
+              metadata: { name: "Main" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+          ],
+          dependencies: [
+            {
+              formatVersion: 1,
+              packageId: "com.acme/dep",
+              version: "1.0.0",
+              metadata: { name: "Dep" },
+              exports: [{ exportKey: "dep", graphId: "graph-dep", displayName: "Dep" }],
+              graphs: [
+                {
+                  id: "graph-dep",
+                  metadata: { name: "Dep Graph" },
+                  viewport: { x: 0, y: 0, zoom: 1 },
+                  nodes: [
+                    {
+                      id: "subgraph-1",
+                      kind: "subgraph",
+                      label: "Mismatch",
+                      position: { x: 0, y: 0 },
+                      data: {
+                        graphId: "graph-a",
+                        target: { kind: "local", graphId: "graph-b" },
+                      },
+                    },
+                  ],
+                  edges: [],
+                },
+              ],
+              dependencies: [],
+            },
+          ],
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual package");
+  });
+
+  test("parsePackageJson normalizes graphs inside dependency packages", () => {
+    const pkg = parsePackageJson(
+      JSON.stringify({
+        formatVersion: 1,
+        packageId: "com.acme/root",
+        version: "1.0.0",
+        metadata: { name: "Root" },
+        exports: [{ exportKey: "main", graphId: "graph-main", displayName: "Main" }],
+        graphs: [
+          {
+            id: "graph-main",
+            metadata: { name: "Main" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [],
+            edges: [],
+          },
+        ],
+        dependencies: [
+          {
+            formatVersion: 1,
+            packageId: "com.acme/dep",
+            version: "1.0.0",
+            metadata: { name: "Dep" },
+            exports: [{ exportKey: "dep", graphId: "graph-dep", displayName: "Dep" }],
+            graphs: [
+              {
+                id: "graph-dep",
+                metadata: { name: "Dep Graph" },
+                viewport: { x: 0, y: 0, zoom: 1 },
+                nodes: [
+                  {
+                    id: "in-1",
+                    kind: "graphInput",
+                    label: "Input",
+                    position: { x: 0, y: 0 },
+                    data: { columns: { id: "int" } },
+                  },
+                  {
+                    id: "out-1",
+                    kind: "output",
+                    label: "Out",
+                    position: { x: 10, y: 0 },
+                    data: { outputName: "dep_out" },
+                  },
+                ],
+                edges: [],
+              },
+            ],
+            dependencies: [],
+          },
+        ],
+      }),
+    );
+
+    const depGraph = pkg.dependencies[0]?.graphs[0];
+    const input = depGraph?.nodes.find((n) => n.id === "in-1");
+    const output = depGraph?.nodes.find((n) => n.id === "out-1");
+    expect((input as any)?.data.inputName).toBe("Input");
+    expect((output as any)?.data.listeners).toBeDefined();
   });
 
   test("parsePackageJson normalizes graphInput nodes without inputName", () => {
