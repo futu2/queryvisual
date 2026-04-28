@@ -269,11 +269,15 @@ export function documentReducer(
       };
     }
     case "install-package": {
-      const nextWorkspace = installPackageBundle(state.workspace, action.pkg);
-      return {
-        ...state,
-        workspace: nextWorkspace,
-      };
+      try {
+        const nextWorkspace = installPackageBundle(state.workspace, action.pkg);
+        return {
+          ...state,
+          workspace: nextWorkspace,
+        };
+      } catch {
+        return state;
+      }
     }
     case "set-package-manifest":
       if (action.manifest && !isWorkspacePackageManifestValid(action.manifest, state.workspace.graphs)) {

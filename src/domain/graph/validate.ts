@@ -6,6 +6,7 @@ import type {
   GraphWorkspace,
   NamedExpression,
 } from "../document/types";
+import { isGraphWorkspaceRuntime } from "../document/types";
 import type { ExpressionAnalysisDiagnosticCode } from "../expr/analyze";
 import { analyzeExpression } from "../expr/analyze";
 import type { ColumnMap, ColumnType } from "../schema/types";
@@ -35,12 +36,7 @@ function parseInputHandle(handle: string): string | null {
 }
 
 function isWorkspace(value: unknown): value is GraphWorkspace {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as { version?: unknown }).version === 2 &&
-    Array.isArray((value as { graphs?: unknown }).graphs)
-  );
+  return isGraphWorkspaceRuntime(value);
 }
 
 function isTypeCompatible(provided: ColumnType | undefined, required: ColumnType) {
@@ -214,6 +210,20 @@ function validateGraphOutput(params: {
               "Subgraph nodes require a workspace context.",
               node.id,
               "graphId",
+            ),
+          );
+          schemas[node.id] = {};
+          invalidStructure.add(node.id);
+          break;
+        }
+
+        if (node.data.target?.kind === "package") {
+          diagnostics.push(
+            diagnostic(
+              "subgraph.unsupported-package-target",
+              "Package subgraph targets are not supported yet.",
+              node.id,
+              "target",
             ),
           );
           schemas[node.id] = {};

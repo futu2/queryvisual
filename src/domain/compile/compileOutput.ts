@@ -85,6 +85,11 @@ function lowerWorkspaceOutputToIr(params: {
       return lowerNode(sourceNode);
     }
 
+    if (sourceNode.data.target?.kind === "package") {
+      // Defensive: package subgraph targets are not supported in lowering yet.
+      return null;
+    }
+
     const childOutputId = parseOutputHandle(edge.sourceHandle);
     if (!childOutputId) return null;
     const childGraphId = sourceNode.data.graphId;

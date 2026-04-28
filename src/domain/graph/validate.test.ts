@@ -100,6 +100,8 @@ function createWorkspaceWithIncompatibleSubgraphInput(): GraphWorkspace {
     metadata: { name: "Incompatible Input Workspace" },
     entryGraphId: "graph-parent",
     graphs: [parentGraph, childGraph],
+    installedPackages: [],
+    packageManifest: null,
   };
 }
 
@@ -171,6 +173,8 @@ function createWorkspaceWithCycle(): GraphWorkspace {
     metadata: { name: "Cyclic Workspace" },
     entryGraphId: "graph-a",
     graphs: [graphA, graphB],
+    installedPackages: [],
+    packageManifest: null,
   };
 }
 
@@ -272,6 +276,8 @@ function createWorkspaceWithUnusedChildInput(): GraphWorkspace {
     metadata: { name: "Unused Child Input Workspace" },
     entryGraphId: "graph-parent",
     graphs: [parentGraph, childGraph],
+    installedPackages: [],
+    packageManifest: null,
   };
 }
 
@@ -373,6 +379,8 @@ function createWorkspaceWithDuplicateChildInputNames(): GraphWorkspace {
     metadata: { name: "Duplicate Child Input Workspace" },
     entryGraphId: "graph-parent",
     graphs: [parentGraph, childGraph],
+    installedPackages: [],
+    packageManifest: null,
   };
 }
 
@@ -478,6 +486,8 @@ function createWorkspaceWithDuplicateChildOutputNames(): GraphWorkspace {
     metadata: { name: "Duplicate Child Output Workspace" },
     entryGraphId: "graph-parent",
     graphs: [parentGraph, childGraph],
+    installedPackages: [],
+    packageManifest: null,
   };
 }
 
@@ -585,6 +595,8 @@ function createWorkspaceWithChildDiagnosticContext(): GraphWorkspace {
     metadata: { name: "Child Diagnostics Workspace" },
     entryGraphId: "graph-parent",
     graphs: [parentGraph, childGraph],
+    installedPackages: [],
+    packageManifest: null,
   };
 }
 
@@ -740,6 +752,8 @@ function createWorkspaceWithNestedChildDiagnosticContext(): GraphWorkspace {
     metadata: { name: "Nested Child Diagnostics Workspace" },
     entryGraphId: "graph-parent",
     graphs: [parentGraph, childGraph, grandchildGraph],
+    installedPackages: [],
+    packageManifest: null,
   };
 }
 
@@ -807,6 +821,74 @@ describe("validateOutput", () => {
     expect(unknown).toBeDefined();
     expect(unknown?.ref?.nodeId).toBe("select-1");
     expect(unknown?.ref?.field).toBe("mappings.0.expression");
+  });
+
+  test("rejects package-target subgraphs as unsupported", () => {
+    const workspace: GraphWorkspace = {
+      version: 2,
+      metadata: { name: "Package Targets Unsupported" },
+      entryGraphId: "graph-parent",
+      graphs: [
+        {
+          id: "graph-parent",
+          metadata: { name: "Parent" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [
+            {
+              id: "subgraph-1",
+              kind: "subgraph" as const,
+              label: "Pkg Target",
+              position: { x: 0, y: 0 },
+              data: {
+                graphId: "graph-child",
+                target: {
+                  kind: "package",
+                  packageId: "com.acme/orders",
+                  version: "1.0.0",
+                  exportKey: "orders_report",
+                },
+              },
+            },
+            {
+              id: "output-parent",
+              kind: "output" as const,
+              label: "Output",
+              position: { x: 260, y: 0 },
+              data: outputData("parent_out"),
+            },
+          ],
+          edges: [
+            {
+              id: "edge-subgraph-output",
+              source: "subgraph-1",
+              sourceHandle: "out:child-output",
+              target: "output-parent",
+              targetHandle: "in",
+            },
+          ],
+        },
+        {
+          id: "graph-child",
+          metadata: { name: "Child" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [
+            {
+              id: "child-output",
+              kind: "output" as const,
+              label: "Output",
+              position: { x: 0, y: 0 },
+              data: outputData("child_out"),
+            },
+          ],
+          edges: [],
+        },
+      ],
+      installedPackages: [],
+      packageManifest: null,
+    };
+
+    const result = validateOutput(workspace, "graph-parent", "output-parent");
+    expect(result.diagnostics.some((d) => d.code === "subgraph.unsupported-package-target")).toBe(true);
   });
 
   test("rejects same-node select mapping references as unknown columns (still select.unknown-column)", () => {

@@ -303,6 +303,24 @@ describe("documentReducer", () => {
     expect(twice.workspace.installedPackages).toHaveLength(2);
   });
 
+  test("install-package is non-throwing and leaves state unchanged for invalid bundles", () => {
+    const initial = createInitialEditorState(createSampleWorkspace());
+
+    const cyclic: GraphPackageFile = {
+      formatVersion: 1,
+      packageId: "com.acme/cycle",
+      version: "1.0.0",
+      metadata: { name: "Cycle" },
+      exports: [],
+      graphs: [],
+      dependencies: [],
+    };
+    cyclic.dependencies = [cyclic];
+
+    const next = documentReducer(initial, { type: "install-package", pkg: cyclic });
+    expect(next).toBe(initial);
+  });
+
   test("set-package-manifest updates the workspace packageManifest", () => {
     const initial = createInitialEditorState(createSampleWorkspace());
 
