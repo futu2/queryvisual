@@ -95,6 +95,13 @@ function installPackageBundleInner(
     throw new Error(`Cyclic package bundle: ${visitKey}`);
   }
 
+  const duplicateExisting = workspace.installedPackages.filter((installed) =>
+    samePkg(installed, pkg),
+  );
+  if (duplicateExisting.length > 1) {
+    throw new Error(`Corrupt installedPackages inventory: duplicate ${visitKey}`);
+  }
+
   let next = workspace;
 
   inProgress.add(visitKey);

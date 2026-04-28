@@ -360,6 +360,26 @@ function normalizeWorkspace(workspace: GraphWorkspaceFile): GraphWorkspace {
   };
 }
 
+function normalizeWorkspaceInstalledPackages(workspace: GraphWorkspace): GraphWorkspace {
+  return {
+    ...workspace,
+    installedPackages: workspace.installedPackages.map((pkg) => ({
+      ...pkg,
+      graphs: pkg.graphs.map((graph) =>
+        normalizeSubgraphTargets(normalizeDocumentOutputs(graph)),
+      ),
+    })),
+  };
+}
+
+function hasInvalidInstalledPackageGraphs(workspace: GraphWorkspace): boolean {
+  return workspace.installedPackages.some((pkg) =>
+    pkg.graphs.some(
+      (graph) => hasInvalidLocalTargetMismatch(graph) || hasPackageTargetSubgraph(graph),
+    ),
+  );
+}
+
 function normalizeSubgraphTargets<TDocument extends GraphDocumentBase>(document: TDocument): TDocument {
   return {
     ...document,
@@ -473,11 +493,15 @@ export function parseWorkspaceJson(raw: string): GraphWorkspace {
   }
 
   if (isLegacyGraphDocument(parsed)) {
-    const workspace = migrateLegacyDocumentToWorkspace(parsed);
+    let workspace = migrateLegacyDocumentToWorkspace(parsed);
+    workspace = normalizeWorkspaceInstalledPackages(workspace);
     if (workspace.graphs.some((graph) => hasInvalidLocalTargetMismatch(graph))) {
       throw new Error("Invalid QueryVisual workspace");
     }
     if (workspace.graphs.some((graph) => hasPackageTargetSubgraph(graph))) {
+      throw new Error("Invalid QueryVisual workspace");
+    }
+    if (hasInvalidInstalledPackageGraphs(workspace)) {
       throw new Error("Invalid QueryVisual workspace");
     }
     return workspace;
@@ -487,14 +511,18 @@ export function parseWorkspaceJson(raw: string): GraphWorkspace {
     throw new Error("Invalid QueryVisual workspace");
   }
 
-  const normalized = normalizeWorkspace({
+  let normalized = normalizeWorkspace({
     ...parsed,
     graphs: parsed.graphs.map((graph) => normalizeSubgraphTargets(graph)),
   });
+  normalized = normalizeWorkspaceInstalledPackages(normalized);
   if (normalized.graphs.some((graph) => hasInvalidLocalTargetMismatch(graph))) {
     throw new Error("Invalid QueryVisual workspace");
   }
   if (normalized.graphs.some((graph) => hasPackageTargetSubgraph(graph))) {
+    throw new Error("Invalid QueryVisual workspace");
+  }
+  if (hasInvalidInstalledPackageGraphs(normalized)) {
     throw new Error("Invalid QueryVisual workspace");
   }
   return normalized;

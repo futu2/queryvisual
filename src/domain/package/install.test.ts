@@ -219,6 +219,42 @@ describe("installPackageBundle", () => {
     const next = installPackageBundle(workspace, root);
     expect(next.installedPackages.filter((p) => p.packageId === "com.acme/orders")).toHaveLength(1);
   });
+
+  test("throws when the workspace already contains duplicate installedPackages entries for the same packageId@version", () => {
+    const workspace = {
+      ...createEmptyWorkspace(),
+      installedPackages: [
+        {
+          packageId: "com.acme/orders",
+          version: "1.0.0",
+          metadata: { name: "Orders" },
+          exports: [],
+          graphs: [],
+          dependencyRefs: [],
+        },
+        {
+          packageId: "com.acme/orders",
+          version: "1.0.0",
+          metadata: { name: "Orders Duplicate" },
+          exports: [],
+          graphs: [],
+          dependencyRefs: [],
+        },
+      ],
+    };
+
+    const pkg: GraphPackageFile = {
+      formatVersion: 1,
+      packageId: "com.acme/orders",
+      version: "1.0.0",
+      metadata: { name: "Orders" },
+      exports: [],
+      graphs: [],
+      dependencies: [],
+    };
+
+    expect(() => installPackageBundle(workspace, pkg)).toThrow("Corrupt installedPackages inventory");
+  });
 });
 
 describe("resolveInstalledPackageExport", () => {

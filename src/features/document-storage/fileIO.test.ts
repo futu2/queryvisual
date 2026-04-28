@@ -478,6 +478,215 @@ describe("fileIO", () => {
     expect(reparsed.packageManifest?.packageId).toBe("com.acme/workspace");
   });
 
+  test("rejects workspaces where installed package graphs include package-target subgraph nodes", () => {
+    expect(() =>
+      parseWorkspaceJson(
+        JSON.stringify({
+          version: 2,
+          metadata: { name: "workspace" },
+          entryGraphId: "graph-main",
+          graphs: [
+            {
+              id: "graph-main",
+              metadata: { name: "Main" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+          ],
+          installedPackages: [
+            {
+              packageId: "com.acme/orders",
+              version: "1.0.0",
+              metadata: { name: "Orders" },
+              exports: [],
+              graphs: [
+                {
+                  id: "pkg-graph",
+                  metadata: { name: "Pkg Graph" },
+                  viewport: { x: 0, y: 0, zoom: 1 },
+                  nodes: [
+                    {
+                      id: "subgraph-1",
+                      kind: "subgraph",
+                      label: "Pkg Target",
+                      position: { x: 0, y: 0 },
+                      data: {
+                        graphId: "graph-child",
+                        target: {
+                          kind: "package",
+                          packageId: "com.acme/other",
+                          version: "1.0.0",
+                          exportKey: "x",
+                        },
+                      },
+                    },
+                  ],
+                  edges: [],
+                },
+              ],
+              dependencyRefs: [],
+            },
+          ],
+          packageManifest: null,
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual workspace");
+  });
+
+  test("normalizes installed package graph output nodes without listeners", () => {
+    const workspace = parseWorkspaceJson(
+      JSON.stringify({
+        version: 2,
+        metadata: { name: "workspace" },
+        entryGraphId: "graph-main",
+        graphs: [
+          {
+            id: "graph-main",
+            metadata: { name: "Main" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [],
+            edges: [],
+          },
+        ],
+        installedPackages: [
+          {
+            packageId: "com.acme/orders",
+            version: "1.0.0",
+            metadata: { name: "Orders" },
+            exports: [],
+            graphs: [
+              {
+                id: "pkg-graph",
+                metadata: { name: "Pkg Graph" },
+                viewport: { x: 0, y: 0, zoom: 1 },
+                nodes: [
+                  {
+                    id: "out-1",
+                    kind: "output",
+                    label: "Out",
+                    position: { x: 0, y: 0 },
+                    data: { outputName: "orders_report" },
+                  },
+                ],
+                edges: [],
+              },
+            ],
+            dependencyRefs: [],
+          },
+        ],
+        packageManifest: null,
+      }),
+    );
+
+    const outNode = workspace.installedPackages[0]?.graphs[0]?.nodes.find((n) => n.id === "out-1");
+    expect(outNode?.kind).toBe("output");
+    expect((outNode as any).data.listeners).toBeDefined();
+  });
+
+  test("normalizes legacy installed package subgraph { graphId } into a local target", () => {
+    const workspace = parseWorkspaceJson(
+      JSON.stringify({
+        version: 2,
+        metadata: { name: "workspace" },
+        entryGraphId: "graph-main",
+        graphs: [
+          {
+            id: "graph-main",
+            metadata: { name: "Main" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [],
+            edges: [],
+          },
+        ],
+        installedPackages: [
+          {
+            packageId: "com.acme/orders",
+            version: "1.0.0",
+            metadata: { name: "Orders" },
+            exports: [],
+            graphs: [
+              {
+                id: "pkg-graph",
+                metadata: { name: "Pkg Graph" },
+                viewport: { x: 0, y: 0, zoom: 1 },
+                nodes: [
+                  {
+                    id: "subgraph-1",
+                    kind: "subgraph",
+                    label: "Child",
+                    position: { x: 0, y: 0 },
+                    data: { graphId: "graph-child" },
+                  },
+                ],
+                edges: [],
+              },
+            ],
+            dependencyRefs: [],
+          },
+        ],
+        packageManifest: null,
+      }),
+    );
+
+    const node = workspace.installedPackages[0]?.graphs[0]?.nodes.find((n) => n.id === "subgraph-1");
+    expect(node).toMatchObject({
+      kind: "subgraph",
+      data: { target: { kind: "local", graphId: "graph-child" } },
+    });
+  });
+
+  test("rejects installed package graphs where local target mismatches graphId", () => {
+    expect(() =>
+      parseWorkspaceJson(
+        JSON.stringify({
+          version: 2,
+          metadata: { name: "workspace" },
+          entryGraphId: "graph-main",
+          graphs: [
+            {
+              id: "graph-main",
+              metadata: { name: "Main" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+          ],
+          installedPackages: [
+            {
+              packageId: "com.acme/orders",
+              version: "1.0.0",
+              metadata: { name: "Orders" },
+              exports: [],
+              graphs: [
+                {
+                  id: "pkg-graph",
+                  metadata: { name: "Pkg Graph" },
+                  viewport: { x: 0, y: 0, zoom: 1 },
+                  nodes: [
+                    {
+                      id: "subgraph-1",
+                      kind: "subgraph",
+                      label: "Child",
+                      position: { x: 0, y: 0 },
+                      data: {
+                        graphId: "graph-child-a",
+                        target: { kind: "local", graphId: "graph-child-b" },
+                      },
+                    },
+                  ],
+                  edges: [],
+                },
+              ],
+              dependencyRefs: [],
+            },
+          ],
+          packageManifest: null,
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual workspace");
+  });
+
   test("parsePackageJson parses package files separately from workspace JSON", () => {
     const pkg = parsePackageJson(
       JSON.stringify({
