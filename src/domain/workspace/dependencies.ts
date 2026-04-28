@@ -1,9 +1,16 @@
 import type { GraphDefinition, GraphNode, GraphWorkspace } from "../document/types";
+import { inferSubgraphTarget } from "./interfaces";
 
 export function collectReferencedGraphIds(graph: Pick<GraphDefinition, "nodes">): string[] {
   return graph.nodes
     .filter((node): node is Extract<GraphNode, { kind: "subgraph" }> => node.kind === "subgraph")
-    .map((node) => node.data.graphId);
+    .flatMap((node) => {
+      const target = inferSubgraphTarget(node.data);
+      if (!target || target.kind !== "local" || target.graphId === "") {
+        return [];
+      }
+      return [target.graphId];
+    });
 }
 
 export type DetectedGraphCycle = {
@@ -39,4 +46,3 @@ export function detectGraphCycle(
 
   return visit(startGraphId, []);
 }
-

@@ -8,6 +8,7 @@ import type { GraphDocument, GraphWorkspace } from "./domain/document/types";
 import { DocumentToolbar } from "./features/document-storage/DocumentToolbar";
 import { GraphCanvas } from "./features/graph-editor/GraphCanvas";
 import { NodePalette } from "./features/graph-editor/NodePalette";
+import { InstalledPackageList } from "./features/packages/InstalledPackageList";
 import { GraphCatalog } from "./features/workspace/GraphCatalog";
 import { I18nProvider, useI18n } from "./features/i18n/I18nContext";
 
@@ -28,6 +29,7 @@ export function AppLayout() {
         <GraphCatalog
           runGraphMutation={(action) => editorTransitionRef.current(action)}
         />
+        <InstalledPackageList packages={state.workspace.installedPackages} />
         <NodePalette />
       </aside>
 

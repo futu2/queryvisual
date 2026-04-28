@@ -823,10 +823,10 @@ describe("validateOutput", () => {
     expect(unknown?.ref?.field).toBe("mappings.0.expression");
   });
 
-  test("rejects package-target subgraphs as unsupported", () => {
+  test("accepts package-target subgraphs when the installed export exists", () => {
     const workspace: GraphWorkspace = {
       version: 2,
-      metadata: { name: "Package Targets Unsupported" },
+      metadata: { name: "Package Targets Supported" },
       entryGraphId: "graph-parent",
       graphs: [
         {
@@ -867,28 +867,67 @@ describe("validateOutput", () => {
             },
           ],
         },
+      ],
+      installedPackages: [
         {
-          id: "graph-child",
-          metadata: { name: "Child" },
-          viewport: { x: 0, y: 0, zoom: 1 },
-          nodes: [
+          packageId: "com.acme/orders",
+          version: "1.0.0",
+          metadata: { name: "Orders" },
+          exports: [
             {
-              id: "child-output",
-              kind: "output" as const,
-              label: "Output",
-              position: { x: 0, y: 0 },
-              data: outputData("child_out"),
+              exportKey: "orders_report",
+              graphId: "graph-child",
+              displayName: "Orders Report",
             },
           ],
-          edges: [],
+          graphs: [
+            {
+              id: "graph-child",
+              metadata: { name: "Child" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [
+                {
+                  id: "from-orders",
+                  kind: "fromTable" as const,
+                  label: "Orders",
+                  position: { x: 0, y: 0 },
+                  data: {
+                    tableRef: { schemaName: "sales", tableName: "orders" },
+                    columns: { total: "float" },
+                  },
+                },
+                {
+                  id: "child-output",
+                  kind: "output" as const,
+                  label: "Output",
+                  position: { x: 260, y: 0 },
+                  data: outputData("child_out"),
+                },
+              ],
+              edges: [
+                {
+                  id: "edge-child",
+                  source: "from-orders",
+                  sourceHandle: "out",
+                  target: "child-output",
+                  targetHandle: "in",
+                },
+              ],
+            },
+          ],
+          dependencyRefs: [],
         },
       ],
-      installedPackages: [],
       packageManifest: null,
     };
 
     const result = validateOutput(workspace, "graph-parent", "output-parent");
-    expect(result.diagnostics.some((d) => d.code === "subgraph.unsupported-package-target")).toBe(true);
+    expect(
+      result.diagnostics.some(
+        (diagnostic) => diagnostic.code === "subgraph.unsupported-package-target",
+      ),
+    ).toBe(false);
+    expect(result.diagnostics).toHaveLength(0);
   });
 
   test("rejects same-node select mapping references as unknown columns (still select.unknown-column)", () => {
@@ -1852,5 +1891,65 @@ describe("validateOutput", () => {
     expect(diag).toBeDefined();
     expect(diag?.ref?.nodeId).toBe("agg-1");
     expect(diag?.ref?.field).toBe("groupBy.0.expression");
+  });
+
+  test("reports a missing installed package export target", () => {
+    const workspace: GraphWorkspace = {
+      version: 2,
+      metadata: { name: "Workspace" },
+      entryGraphId: "graph-parent",
+      graphs: [
+        {
+          id: "graph-parent",
+          metadata: { name: "Parent" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [
+            {
+              id: "subgraph-orders",
+              kind: "subgraph",
+              label: "Package graph",
+              position: { x: 0, y: 0 },
+              data: {
+                graphId: "pkg-graph",
+                target: {
+                  kind: "package",
+                  packageId: "team/sales-lib",
+                  version: "1.2.0",
+                  exportKey: "daily_orders",
+                },
+              },
+            },
+            {
+              id: "output-parent",
+              kind: "output",
+              label: "Output",
+              position: { x: 260, y: 0 },
+              data: outputData("parent_out"),
+            },
+          ],
+          edges: [
+            {
+              id: "edge-subgraph-output",
+              source: "subgraph-orders",
+              sourceHandle: "out:output-child",
+              target: "output-parent",
+              targetHandle: "in",
+            },
+          ],
+        },
+      ],
+      installedPackages: [],
+      packageManifest: null,
+    };
+
+    const semantic = validateOutput(workspace, "graph-parent", "output-parent");
+
+    expect(
+      semantic.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.level === "error" &&
+          diagnostic.code === "subgraph.missing-package-export",
+      ),
+    ).toBe(true);
   });
 });

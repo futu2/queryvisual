@@ -10,6 +10,10 @@ import { formatTableRef } from "../schema/types";
 import { parseExpression } from "../expr/parser";
 import { renderExpressionSql } from "../expr/render";
 import { isGraphWorkspaceLikeRuntime, normalizeGraphWorkspaceLikeRuntime } from "../document/types";
+import {
+  buildSubgraphWorkspace,
+  resolveSubgraphTarget,
+} from "../workspace/interfaces";
 
 export interface CompileOutputResult {
   semantic: SemanticOutput;
@@ -85,17 +89,17 @@ function lowerWorkspaceOutputToIr(params: {
       return lowerNode(sourceNode);
     }
 
-    if (sourceNode.data.target?.kind === "package") {
-      // Defensive: package subgraph targets are not supported in lowering yet.
-      return null;
-    }
-
     const childOutputId = parseOutputHandle(edge.sourceHandle);
     if (!childOutputId) return null;
-    const childGraphId = sourceNode.data.graphId;
+    const resolved = resolveSubgraphTarget(params.workspace, sourceNode.data);
+    const childGraphId = resolved.graph?.id ?? null;
+    if (!childGraphId) {
+      return null;
+    }
+    const childWorkspace = buildSubgraphWorkspace(params.workspace, resolved);
 
     const childResult = compileOutput(
-      params.workspace,
+      childWorkspace,
       childGraphId,
       childOutputId,
       subgraphInputSchemas(sourceNode.id),

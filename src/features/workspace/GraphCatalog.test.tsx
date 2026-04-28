@@ -136,6 +136,30 @@ function createWorkspaceWithReferencedChildGraph() {
   };
 }
 
+function createWorkspaceWithInstalledPackage() {
+  const workspace = createSampleWorkspace();
+
+  return {
+    ...workspace,
+    installedPackages: [
+      {
+        packageId: "team/sales-lib",
+        version: "1.2.0",
+        metadata: { name: "Sales Lib" },
+        exports: [
+          {
+            exportKey: "daily_orders",
+            graphId: "pkg-graph",
+            displayName: "Daily Orders",
+          },
+        ],
+        graphs: [],
+        dependencyRefs: [],
+      },
+    ],
+  };
+}
+
 describe("GraphCatalog", () => {
   test("creates, renames, and switches graphs through the catalog", async () => {
     const user = userEvent.setup();
@@ -241,5 +265,16 @@ describe("GraphCatalog", () => {
     expect(screen.getByText("查询图")).toBeTruthy();
     expect(screen.getByRole("button", { name: "新建图" })).toBeTruthy();
     expect(screen.getByLabelText("图名称 Orders Sample")).toBeTruthy();
+  });
+
+  test("shows only local graphs in the graph catalog even when packages are installed", () => {
+    renderWithProviders(
+      <DocumentProvider initialWorkspace={createWorkspaceWithInstalledPackage()}>
+        <GraphCatalog />
+      </DocumentProvider>,
+    );
+
+    expect(screen.getByDisplayValue("Orders Sample")).toBeTruthy();
+    expect(screen.queryByText("Sales Lib")).toBeNull();
   });
 });

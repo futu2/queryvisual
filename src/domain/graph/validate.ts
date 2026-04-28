@@ -11,7 +11,11 @@ import type { ExpressionAnalysisDiagnosticCode } from "../expr/analyze";
 import { analyzeExpression } from "../expr/analyze";
 import type { ColumnMap, ColumnType } from "../schema/types";
 import { detectGraphCycle } from "../workspace/dependencies";
-import { findGraphById } from "../workspace/interfaces";
+import {
+  buildSubgraphWorkspace,
+  findGraphById,
+  resolveSubgraphTarget,
+} from "../workspace/interfaces";
 import { buildExpressionScope } from "./expressionScope";
 import type { SemanticOutput } from "./semantic";
 
@@ -217,31 +221,30 @@ function validateGraphOutput(params: {
           break;
         }
 
-        if (node.data.target?.kind === "package") {
-          diagnostics.push(
-            diagnostic(
-              "subgraph.unsupported-package-target",
-              "Package subgraph targets are not supported yet.",
-              node.id,
-              "target",
-            ),
-          );
-          schemas[node.id] = {};
-          invalidStructure.add(node.id);
-          break;
-        }
-
-        const childGraphId = node.data.graphId;
-        const childGraph = findGraphById(workspace, childGraphId);
+        const resolved = resolveSubgraphTarget(workspace, node.data);
+        const targetField =
+          resolved.target?.kind === "package" ? "target" : "graphId";
+        const childGraph = resolved.graph;
         if (!childGraph) {
-          diagnostics.push(
-            diagnostic(
-              "subgraph.missing-graph",
-              `Referenced graph ${childGraphId} does not exist in the workspace.`,
-              node.id,
-              "graphId",
-            ),
-          );
+          if (resolved.target?.kind === "package") {
+            diagnostics.push(
+              diagnostic(
+                "subgraph.missing-package-export",
+                `Installed package export ${resolved.target.packageId}@${resolved.target.version}#${resolved.target.exportKey} does not exist.`,
+                node.id,
+                "target",
+              ),
+            );
+          } else {
+            diagnostics.push(
+              diagnostic(
+                "subgraph.missing-graph",
+                `Referenced graph ${resolved.target?.graphId ?? node.data.graphId} does not exist in the workspace.`,
+                node.id,
+                "graphId",
+              ),
+            );
+          }
           schemas[node.id] = {};
           invalidStructure.add(node.id);
           break;
@@ -262,7 +265,7 @@ function validateGraphOutput(params: {
               "subgraph.duplicate-child-input-name",
               `Child graph has duplicate input name ${name}.`,
               node.id,
-              "graphId",
+              targetField,
             ),
           );
         }
@@ -282,7 +285,7 @@ function validateGraphOutput(params: {
               "subgraph.duplicate-child-output-name",
               `Child graph has duplicate output name ${name}.`,
               node.id,
-              "graphId",
+              targetField,
             ),
           );
         }
@@ -410,9 +413,10 @@ function validateGraphOutput(params: {
           break;
         }
 
+        const childWorkspace = buildSubgraphWorkspace(workspace, resolved);
         const childSemantic = validateOutput(
-          workspace,
-          childGraphId,
+          childWorkspace,
+          childGraph.id,
           childOutputId,
           childInputSchemas,
         );
@@ -420,7 +424,7 @@ function validateGraphOutput(params: {
           for (const childDiagnostic of childSemantic.diagnostics) {
             if (childDiagnostic.level !== "error") continue;
             const immediate = {
-              graphId: childGraphId,
+              graphId: childGraph.id,
               nodeId: childDiagnostic.ref?.nodeId,
               field: childDiagnostic.ref?.field,
             };
@@ -433,7 +437,7 @@ function validateGraphOutput(params: {
               level: childDiagnostic.level,
               code: childDiagnostic.code,
               message: childDiagnostic.message,
-              ref: { nodeId: node.id, field: "graphId" },
+              ref: { nodeId: node.id, field: targetField },
               context: {
                 parent: params.graphId ? { graphId: params.graphId, nodeId: node.id } : undefined,
                 child: deepest,

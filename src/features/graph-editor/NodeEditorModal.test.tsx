@@ -100,6 +100,161 @@ function ActiveGraphProbe() {
   return <span data-testid="active-graph-id">{state.activeGraphId}</span>;
 }
 
+function createPinnedPackageSubgraphNode() {
+  return {
+    id: "subgraph-1",
+    kind: "subgraph" as const,
+    label: "Orders Package",
+    position: { x: 0, y: 0 },
+    data: {
+      graphId: "pkg-graph-v1",
+      target: {
+        kind: "package" as const,
+        packageId: "team/sales-lib",
+        version: "1.2.0",
+        exportKey: "daily_orders",
+      },
+    },
+  };
+}
+
+function createPinnedPackageGraph(graphId: string, inputId: string, outputId: string) {
+  return {
+    id: graphId,
+    metadata: { name: graphId },
+    viewport: { x: 0, y: 0, zoom: 1 },
+    nodes: [
+      {
+        id: inputId,
+        kind: "graphInput" as const,
+        label: "Orders",
+        position: { x: 0, y: 0 },
+        data: {
+          inputName: "orders",
+          columns: { order_id: "int", total: "float" },
+        },
+      },
+      {
+        id: outputId,
+        kind: "output" as const,
+        label: "Output",
+        position: { x: 260, y: 0 },
+        data: {
+          outputName: "daily_orders",
+          listeners: createDefaultOutputListenerConfig("daily_orders"),
+        },
+      },
+    ],
+    edges: [
+      {
+        id: `edge-${graphId}`,
+        source: inputId,
+        sourceHandle: "out",
+        target: outputId,
+        targetHandle: "in",
+      },
+    ],
+  };
+}
+
+function createWorkspaceWithPinnedPackageUpgrade(options: {
+  nextVersion: string;
+  nextGraphId: string;
+  nextInputId: string;
+  nextOutputId: string;
+}) {
+  const node = createPinnedPackageSubgraphNode();
+
+  return {
+    version: 2,
+    metadata: { name: "Workspace" },
+    entryGraphId: "graph-parent",
+    graphs: [
+      {
+        id: "graph-parent",
+        metadata: { name: "Parent" },
+        viewport: { x: 0, y: 0, zoom: 1 },
+        nodes: [
+          {
+            id: "from-parent",
+            kind: "fromTable" as const,
+            label: "Orders",
+            position: { x: -260, y: 0 },
+            data: {
+              tableRef: { schemaName: "sales", tableName: "orders" },
+              columns: { order_id: "int", total: "float" },
+            },
+          },
+          node,
+          {
+            id: "output-parent",
+            kind: "output" as const,
+            label: "Output",
+            position: { x: 260, y: 0 },
+            data: {
+              outputName: "parent_out",
+              listeners: createDefaultOutputListenerConfig("parent_out"),
+            },
+          },
+        ],
+        edges: [
+          {
+            id: "edge-parent-input",
+            source: "from-parent",
+            sourceHandle: "out",
+            target: "subgraph-1",
+            targetHandle: "in:orders",
+          },
+          {
+            id: "edge-parent-output",
+            source: "subgraph-1",
+            sourceHandle: "out:daily_orders",
+            target: "output-parent",
+            targetHandle: "in",
+          },
+        ],
+      },
+    ],
+    installedPackages: [
+      {
+        packageId: "team/sales-lib",
+        version: "1.2.0",
+        metadata: { name: "Sales Lib" },
+        exports: [
+          {
+            exportKey: "daily_orders",
+            graphId: "pkg-graph-v1",
+            displayName: "Daily Orders",
+          },
+        ],
+        graphs: [createPinnedPackageGraph("pkg-graph-v1", "orders", "daily_orders")],
+        dependencyRefs: [],
+      },
+      {
+        packageId: "team/sales-lib",
+        version: options.nextVersion,
+        metadata: { name: "Sales Lib" },
+        exports: [
+          {
+            exportKey: "daily_orders",
+            graphId: options.nextGraphId,
+            displayName: "Daily Orders",
+          },
+        ],
+        graphs: [
+          createPinnedPackageGraph(
+            options.nextGraphId,
+            options.nextInputId,
+            options.nextOutputId,
+          ),
+        ],
+        dependencyRefs: [],
+      },
+    ],
+    packageManifest: null,
+  } satisfies GraphWorkspace;
+}
+
 describe("NodeEditorModal", () => {
   test("builds the modal aria label from the localized node kind label (not the raw kind)", () => {
     const node: GraphNode = {
@@ -2239,5 +2394,123 @@ describe("NodeEditorModal", () => {
     expect(onClose).toHaveBeenCalled();
     expect(onSave).not.toHaveBeenCalled();
     expect(screen.getByTestId("active-graph-id").textContent).toBe("graph-child-b");
+  });
+
+  test("subgraph editor can target an installed package export", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+    const workspace: GraphWorkspace = {
+      version: 2,
+      metadata: { name: "Workspace" },
+      entryGraphId: "graph-main",
+      graphs: [
+        {
+          id: "graph-main",
+          metadata: { name: "Main" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [
+            {
+              id: "subgraph-1",
+              kind: "subgraph",
+              label: "Library Query",
+              position: { x: 0, y: 0 },
+              data: {
+                graphId: "",
+                target: { kind: "local", graphId: "" },
+              },
+            },
+          ],
+          edges: [],
+        },
+      ],
+      installedPackages: [
+        {
+          packageId: "team/sales-lib",
+          version: "1.2.0",
+          metadata: { name: "Sales Lib" },
+          exports: [
+            {
+              exportKey: "daily_orders",
+              graphId: "pkg-graph",
+              displayName: "Daily Orders",
+            },
+          ],
+          graphs: [
+            {
+              id: "pkg-graph",
+              metadata: { name: "Daily Orders" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+          ],
+          dependencyRefs: [],
+        },
+      ],
+      packageManifest: null,
+    };
+
+    const node = workspace.graphs[0]!.nodes[0]!;
+    renderModal({ node, workspace, onSave });
+
+    await user.selectOptions(screen.getByLabelText("Subgraph source"), "package");
+    await user.selectOptions(
+      screen.getByLabelText("Package export"),
+      "team/sales-lib@1.2.0#daily_orders",
+    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave.mock.calls[0][0].data.target).toEqual({
+      kind: "package",
+      packageId: "team/sales-lib",
+      version: "1.2.0",
+      exportKey: "daily_orders",
+    });
+  });
+
+  test("blocks upgrading a package subgraph when the newer export is incompatible", async () => {
+    const workspace = createWorkspaceWithPinnedPackageUpgrade({
+      nextVersion: "2.0.0",
+      nextGraphId: "pkg-graph-v2",
+      nextInputId: "orders_v2",
+      nextOutputId: "daily_orders",
+    });
+    const node = workspace.graphs[0]!.nodes.find(
+      (candidate) => candidate.id === "subgraph-1",
+    )!;
+
+    renderModal({ node, workspace });
+
+    expect(
+      (screen.getByRole("button", {
+        name: "Upgrade to 2.0.0",
+      }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(screen.getByText("Upgrade blocked: incompatible interface")).toBeTruthy();
+  });
+
+  test("allows upgrading a package subgraph when the newer export is compatible", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+    const workspace = createWorkspaceWithPinnedPackageUpgrade({
+      nextVersion: "1.3.0",
+      nextGraphId: "pkg-graph-v13",
+      nextInputId: "orders",
+      nextOutputId: "daily_orders",
+    });
+    const node = workspace.graphs[0]!.nodes.find(
+      (candidate) => candidate.id === "subgraph-1",
+    )!;
+
+    renderModal({ node, workspace, onSave });
+    await user.click(screen.getByRole("button", { name: "Upgrade to 1.3.0" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave.mock.calls[0][0].data.target).toMatchObject({
+      kind: "package",
+      packageId: "team/sales-lib",
+      version: "1.3.0",
+      exportKey: "daily_orders",
+    });
   });
 });

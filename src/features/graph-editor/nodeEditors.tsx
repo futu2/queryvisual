@@ -8,6 +8,12 @@ import type {
   SortItem,
 } from "../../domain/document/types";
 import type { ColumnMap, ColumnType, TableRef } from "../../domain/schema/types";
+import {
+  inferGraphInterface,
+  inferSubgraphTarget,
+  resolveSubgraphTarget,
+} from "../../domain/workspace/interfaces";
+import { isPackageUpgradeCompatible } from "../../domain/package/compatibility";
 import { ExpressionInput } from "./ExpressionInput";
 import { RowActionBar } from "./RowActionBar";
 import { RowCard } from "./RowCard";
@@ -1074,26 +1080,190 @@ export function renderNodeEditor(
         </div>
       );
     case "subgraph": {
-      const graphs = options?.workspace?.graphs ?? [];
+      const workspace = options?.workspace;
+      const graphs = workspace?.graphs ?? [];
+      const currentTarget = inferSubgraphTarget(draft.data);
+      const sourceKind = currentTarget?.kind === "package" ? "package" : "local";
+      const currentPackageTarget =
+        currentTarget?.kind === "package" ? currentTarget : null;
+      const selectedGraphId =
+        currentTarget?.kind === "local" ? currentTarget.graphId : draft.data.graphId;
       const selectedGraph =
-        draft.data.graphId.trim() === ""
-          ? null
-          : graphs.find((graph) => graph.id === draft.data.graphId) ?? null;
+        sourceKind === "local" && selectedGraphId.trim() !== ""
+          ? graphs.find((graph) => graph.id === selectedGraphId) ?? null
+          : null;
+      const rawPackageExports =
+        workspace?.installedPackages.flatMap((pkg) =>
+          pkg.exports.map((entry) => ({
+            key: `${pkg.packageId}@${pkg.version}#${entry.exportKey}`,
+            target: {
+              kind: "package" as const,
+              packageId: pkg.packageId,
+              version: pkg.version,
+              exportKey: entry.exportKey,
+            },
+            displayName: `${pkg.metadata.name} / ${entry.displayName}`,
+            graphId: entry.graphId,
+          })),
+        ) ?? [];
+      const packageExports = rawPackageExports.filter((entry) => {
+        if (!currentPackageTarget) {
+          return true;
+        }
+
+        const isPinnedSiblingVersion =
+          entry.target.packageId === currentPackageTarget.packageId &&
+          entry.target.exportKey === currentPackageTarget.exportKey &&
+          entry.target.version !== currentPackageTarget.version;
+
+        return !isPinnedSiblingVersion;
+      });
+      const selectedPackageKey =
+        currentTarget?.kind === "package"
+          ? `${currentTarget.packageId}@${currentTarget.version}#${currentTarget.exportKey}`
+          : "";
+      const resolvedTarget = resolveSubgraphTarget(workspace, draft.data);
+      const currentPackageInterface =
+        currentPackageTarget && resolvedTarget.graph
+          ? inferGraphInterface(resolvedTarget.graph)
+          : null;
+      const usedInputHandles = Array.from(
+        new Set(
+          document.edges
+            .filter((edge) => edge.target === draft.id)
+            .map((edge) => edge.targetHandle),
+        ),
+      );
+      const usedOutputHandles = Array.from(
+        new Set(
+          document.edges
+            .filter((edge) => edge.source === draft.id)
+            .map((edge) => edge.sourceHandle),
+        ),
+      );
+      const currentInputSchemas = currentPackageInterface
+        ? Object.fromEntries(
+            currentPackageInterface.inputs.map((port) => [port.handleId, port.columns]),
+          )
+        : {};
+      const availableUpgrades =
+        currentPackageTarget && workspace
+          ? workspace.installedPackages
+              .filter(
+                (pkg) =>
+                  pkg.packageId === currentPackageTarget.packageId &&
+                  pkg.version.localeCompare(currentPackageTarget.version, undefined, {
+                    numeric: true,
+                    sensitivity: "base",
+                  }) > 0,
+              )
+              .map((pkg) => {
+                const exportEntry =
+                  pkg.exports.find(
+                    (entry) => entry.exportKey === currentPackageTarget.exportKey,
+                  ) ?? null;
+                if (!exportEntry) {
+                  return null;
+                }
+
+                const graph =
+                  pkg.graphs.find((candidate) => candidate.id === exportEntry.graphId) ??
+                  null;
+                if (!graph) {
+                  return null;
+                }
+
+                const nextInterface = inferGraphInterface(graph);
+                const nextInputSchemas = Object.fromEntries(
+                  nextInterface.inputs.map((port) => [port.handleId, port.columns]),
+                );
+                const compatibility = isPackageUpgradeCompatible({
+                  currentInputs: usedInputHandles,
+                  currentOutputs: usedOutputHandles,
+                  nextInputs: nextInterface.inputs.map((port) => port.handleId),
+                  nextOutputs: nextInterface.outputs.map((port) => port.handleId),
+                  currentInputSchemas,
+                  nextInputSchemas,
+                });
+
+                return {
+                  pkg,
+                  graph,
+                  exportEntry,
+                  compatibility,
+                };
+              })
+              .filter((entry) => entry !== null)
+              .sort((left, right) =>
+                right.pkg.version.localeCompare(left.pkg.version, undefined, {
+                  numeric: true,
+                  sensitivity: "base",
+                }),
+              )
+          : [];
       const canOpen =
-        Boolean(selectedGraph) && selectedGraph!.id !== options?.activeGraphId;
+        sourceKind === "local" &&
+        Boolean(selectedGraph) &&
+        selectedGraph!.id !== options?.activeGraphId;
 
       return (
         <div className="editor-stack">
           <label>
+            {t("editor.subgraphSource")}
+            <select
+              aria-label={t("editor.subgraphSource")}
+              value={sourceKind}
+              onChange={(event) => {
+                const nextSource = event.target.value;
+
+                if (nextSource === "package") {
+                  const firstPackageExport = packageExports[0] ?? null;
+                  setDraft({
+                    ...draft,
+                    data: {
+                      ...draft.data,
+                      graphId: firstPackageExport?.graphId ?? "",
+                      target: firstPackageExport?.target ?? {
+                        kind: "package",
+                        packageId: "",
+                        version: "",
+                        exportKey: "",
+                      },
+                    },
+                  });
+                  return;
+                }
+
+                const localGraphId =
+                  currentTarget?.kind === "local" ? currentTarget.graphId : "";
+                setDraft({
+                  ...draft,
+                  data: {
+                    ...draft.data,
+                    graphId: localGraphId,
+                    target: { kind: "local", graphId: localGraphId },
+                  },
+                });
+              }}
+            >
+              <option value="local">{t("editor.subgraphSource.local")}</option>
+              <option value="package">{t("editor.subgraphSource.package")}</option>
+            </select>
+          </label>
+
+          {sourceKind === "local" ? (
+          <label>
             {t("editor.childGraph")}
             <select
-              value={draft.data.graphId}
+              aria-label={t("editor.childGraph")}
+              value={selectedGraphId}
               onChange={(event) =>
                 setDraft({
                   ...draft,
                   data: {
                     ...draft.data,
                     graphId: event.target.value,
+                    target: { kind: "local", graphId: event.target.value },
                   },
                 })
               }
@@ -1106,22 +1276,107 @@ export function renderNodeEditor(
               ))}
             </select>
           </label>
-          {draft.data.graphId.trim() !== "" && !selectedGraph ? (
+          ) : (
+            <label>
+              {t("editor.packageExport")}
+              <select
+                aria-label={t("editor.packageExport")}
+                value={selectedPackageKey}
+                onChange={(event) => {
+                  const nextPackageExport =
+                    packageExports.find(
+                      (entry) => entry.key === event.target.value,
+                    ) ?? null;
+
+                  setDraft({
+                    ...draft,
+                    data: {
+                      ...draft.data,
+                      graphId: nextPackageExport?.graphId ?? "",
+                      target: nextPackageExport?.target ?? {
+                        kind: "package",
+                        packageId: "",
+                        version: "",
+                        exportKey: "",
+                      },
+                    },
+                  });
+                }}
+              >
+                <option value="">{t("editor.selectPackageExportPrompt")}</option>
+                {packageExports.map((entry) => (
+                  <option key={entry.key} value={entry.key}>
+                    {entry.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {sourceKind === "local" && selectedGraphId.trim() !== "" && !selectedGraph ? (
             <div role="status" aria-live="polite">
               {t("queryNode.missingGraph")}
             </div>
           ) : null}
-          <button
-            type="button"
-            className="ghost-button"
-            disabled={!canOpen}
-            onClick={() => {
-              if (!canOpen) return;
-              options?.onOpenGraph?.(selectedGraph!.id);
-            }}
-          >
-            {t("editor.openChildGraph")}
-          </button>
+          {sourceKind === "package" &&
+          currentTarget?.kind === "package" &&
+          currentTarget.exportKey.trim() !== "" &&
+          !resolvedTarget.graph ? (
+            <div role="status" aria-live="polite">
+              {t("queryNode.missingGraph")}
+            </div>
+          ) : null}
+          {sourceKind === "package" && availableUpgrades.length > 0 ? (
+            <div className="editor-section">
+              <div className="row-editor-actions">
+                {availableUpgrades.map((upgrade) => (
+                  <button
+                    key={upgrade.pkg.version}
+                    type="button"
+                    className="ghost-button"
+                    disabled={!upgrade.compatibility.ok}
+                    onClick={() =>
+                      setDraft({
+                        ...draft,
+                        data: {
+                          ...draft.data,
+                          graphId: upgrade.graph.id,
+                          target: {
+                            kind: "package",
+                            packageId: currentPackageTarget!.packageId,
+                            version: upgrade.pkg.version,
+                            exportKey: currentPackageTarget!.exportKey,
+                          },
+                        },
+                      })
+                    }
+                  >
+                    {t("editor.packageUpgradeTo", {
+                      version: upgrade.pkg.version,
+                    })}
+                  </button>
+                ))}
+              </div>
+              {availableUpgrades.some((upgrade) => !upgrade.compatibility.ok) ? (
+                <div role="status" aria-live="polite">
+                  {t("editor.packageUpgradeBlocked")}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {sourceKind === "local" ? (
+            <button
+              type="button"
+              className="ghost-button"
+              disabled={!canOpen}
+              onClick={() => {
+                if (!canOpen) return;
+                options?.onOpenGraph?.(selectedGraph!.id);
+              }}
+            >
+              {t("editor.openChildGraph")}
+            </button>
+          ) : null}
         </div>
       );
     }

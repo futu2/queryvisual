@@ -9,6 +9,10 @@ import type {
 import { analyzeExpression } from "../expr/analyze";
 import { buildExpressionScope } from "./expressionScope";
 import type { ColumnMap, ColumnType } from "../schema/types";
+import {
+  buildSubgraphWorkspace,
+  resolveSubgraphTarget,
+} from "../workspace/interfaces";
 
 type InferredNodeSchema = {
   schema: ColumnMap;
@@ -208,9 +212,8 @@ function inferNodeSchema(
       }
 
       const [childOutputId] = Array.from(outputIds);
-      const childGraphId = node.data.graphId;
-      const childGraph =
-        workspace.graphs.find((candidate) => candidate.id === childGraphId) ?? null;
+      const resolved = resolveSubgraphTarget(workspace, node.data);
+      const childGraph = resolved.graph;
       if (!childGraph) {
         result = invalidSchema();
         break;
@@ -309,9 +312,10 @@ function inferNodeSchema(
         break;
       }
 
+      const childWorkspace = buildSubgraphWorkspace(workspace, resolved);
       const childSchemas = inferWorkspaceGraphSchemasInternal({
-        workspace,
-        graphId: childGraphId,
+        workspace: childWorkspace,
+        graphId: childGraph.id,
         graphInputSchemas: childInputSchemas,
         visitingGraphs,
       });

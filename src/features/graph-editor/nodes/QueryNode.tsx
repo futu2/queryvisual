@@ -2,7 +2,10 @@ import { Handle, Position, type NodeProps, useUpdateNodeInternals } from "@xyflo
 import { useLayoutEffect, useMemo, useState } from "react";
 import type { GraphNode } from "../../../domain/document/types";
 import { formatTableRef } from "../../../domain/schema/types";
-import { inferChildGraphInterface } from "../../../domain/workspace/interfaces";
+import {
+  inferChildGraphInterface,
+  inferSubgraphTarget,
+} from "../../../domain/workspace/interfaces";
 import type { FlowNodeData } from "../flowAdapter";
 import { useI18n } from "../../i18n/I18nContext";
 import type { MessageKey } from "../../i18n/types";
@@ -58,12 +61,20 @@ function summaryText(
     case "graphInput":
       return t("queryNode.summary.cols", { count: Object.keys(node.data.columns).length });
     case "subgraph": {
-      const { graph, iface } = inferChildGraphInterface(workspace, node.data.graphId);
+      const { graph, iface } = inferChildGraphInterface(workspace, node.data);
+      const target = inferSubgraphTarget(node.data);
       const base = t("queryNode.interfaceSummary", {
         inputs: iface.inputs.length,
         outputs: iface.outputs.length,
       });
-      if (!node.data.graphId.trim()) {
+      if (
+        !target ||
+        (target.kind === "local" && target.graphId.trim() === "") ||
+        (target.kind === "package" &&
+          (target.packageId.trim() === "" ||
+            target.version.trim() === "" ||
+            target.exportKey.trim() === ""))
+      ) {
         return base;
       }
       if (!graph) {
@@ -154,7 +165,7 @@ export function QueryNode({ id, data, selected }: NodeProps<FlowNodeData>) {
   const updateNodeInternals = useUpdateNodeInternals();
   const subgraphInterface =
     data.node.kind === "subgraph"
-      ? inferChildGraphInterface(data.workspace, data.node.data.graphId)
+      ? inferChildGraphInterface(data.workspace, data.node.data)
       : null;
 
   const subgraphInterfaceSignature = useMemo(() => {
@@ -219,10 +230,12 @@ export function QueryNode({ id, data, selected }: NodeProps<FlowNodeData>) {
         <div className="query-node__ports" aria-label={t("queryNode.subgraphInterface")}>
           {subgraphInterface && subgraphInterface.graph ? (
             <div className="query-node__ports-heading">
-              {subgraphInterface.graph.metadata.name}
+              {subgraphInterface.label ?? subgraphInterface.graph.metadata.name}
             </div>
           ) : null}
-          {subgraphInterface && !subgraphInterface.graph && data.node.data.graphId.trim() ? (
+          {subgraphInterface &&
+          !subgraphInterface.graph &&
+          inferSubgraphTarget(data.node.data) ? (
             <div className="query-node__ports-heading is-missing">
               {t("queryNode.missingGraph")}
             </div>

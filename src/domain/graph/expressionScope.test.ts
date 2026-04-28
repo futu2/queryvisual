@@ -959,4 +959,113 @@ describe("namespace suggestions", () => {
     expect(scope.flatTypes).toEqual({});
     expect(scope.suggestions).toEqual([]);
   });
+
+  test("single-input scope can expose installed package export columns across a subgraph boundary", () => {
+    const packageGraph = {
+      id: "pkg-graph",
+      metadata: { name: "Daily Orders" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "from-orders",
+          kind: "fromTable" as const,
+          label: "Orders",
+          position: { x: 0, y: 0 },
+          data: {
+            tableRef: { schemaName: "sales", tableName: "orders" },
+            columns: { total: "float" },
+          },
+        },
+        {
+          id: "output-child",
+          kind: "output" as const,
+          label: "Output",
+          position: { x: 260, y: 0 },
+          data: {
+            outputName: "daily_orders",
+            listeners: createDefaultOutputListenerConfig("daily_orders"),
+          },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-child",
+          source: "from-orders",
+          sourceHandle: "out",
+          target: "output-child",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const parentGraph = {
+      id: "graph-parent",
+      metadata: { name: "Parent" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "subgraph-orders",
+          kind: "subgraph" as const,
+          label: "Package graph",
+          position: { x: 0, y: 0 },
+          data: {
+            graphId: "pkg-graph",
+            target: {
+              kind: "package" as const,
+              packageId: "team/sales-lib",
+              version: "1.2.0",
+              exportKey: "daily_orders",
+            },
+          },
+        },
+        {
+          id: "select-parent",
+          kind: "select" as const,
+          label: "Select",
+          position: { x: 260, y: 0 },
+          data: { mappings: [{ name: "gross_total", expression: "total" }] },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-subgraph-select",
+          source: "subgraph-orders",
+          sourceHandle: "out:output-child",
+          target: "select-parent",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const workspace: GraphWorkspace = {
+      version: 2,
+      metadata: { name: "Workspace" },
+      entryGraphId: "graph-parent",
+      graphs: [parentGraph],
+      installedPackages: [
+        {
+          packageId: "team/sales-lib",
+          version: "1.2.0",
+          metadata: { name: "Sales Lib" },
+          exports: [
+            {
+              exportKey: "daily_orders",
+              graphId: "pkg-graph",
+              displayName: "Daily Orders",
+            },
+          ],
+          graphs: [packageGraph],
+          dependencyRefs: [],
+        },
+      ],
+      packageManifest: null,
+    };
+
+    const schemas = inferWorkspaceGraphSchemas(workspace, "graph-parent");
+    const scope = buildExpressionScope(parentGraph, "select-parent", { schemas });
+
+    expect(scope.kind).toBe("single");
+    expect(scope.flatTypes["input.total"]).toBe("float");
+    expect(scope.flatTypes.total).toBe("float");
+  });
 });

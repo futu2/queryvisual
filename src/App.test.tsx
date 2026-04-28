@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { flushSync } from "react-dom";
+import userEvent from "@testing-library/user-event";
 import { DocumentProvider, useDocumentContext } from "./app/state/DocumentContext";
 import type { GraphWorkspace } from "./domain/document/types";
 import { createSampleWorkspace } from "./domain/workspace/sample";
@@ -60,6 +67,8 @@ describe("App", () => {
           edges: [],
         },
       ],
+      installedPackages: [],
+      packageManifest: null,
     };
 
     await act(async () => {
@@ -107,6 +116,8 @@ describe("App", () => {
             edges: [],
           },
         ],
+        installedPackages: [],
+        packageManifest: null,
       };
 
       await act(async () => {
@@ -212,5 +223,50 @@ describe("App", () => {
         delete (navigator as unknown as Record<string, unknown>).language;
       }
     }
+  });
+
+  test("installs a package from toolbar import and renders it in package inventory", async () => {
+    const user = userEvent.setup();
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    const packageFile = new File(
+      [
+        JSON.stringify({
+          formatVersion: 1,
+          packageId: "team/sales-lib",
+          version: "1.2.0",
+          metadata: { name: "Sales Lib" },
+          exports: [
+            {
+              exportKey: "daily_orders",
+              graphId: "pkg-graph",
+              displayName: "Daily Orders",
+            },
+          ],
+          graphs: [
+            {
+              id: "pkg-graph",
+              metadata: { name: "Daily Orders" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+          ],
+          dependencies: [],
+        }),
+      ],
+      "sales-lib.qvpkg.json",
+      { type: "application/json" },
+    );
+
+    const input = screen.getByLabelText("Install package file");
+    await user.upload(input, packageFile);
+
+    expect(await screen.findByText("team/sales-lib")).toBeTruthy();
+    expect(screen.getByText("1.2.0")).toBeTruthy();
+    expect(screen.getByText("1 export")).toBeTruthy();
   });
 });

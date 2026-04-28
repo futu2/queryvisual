@@ -244,4 +244,124 @@ describe("compileOutput", () => {
     expect(result.optimizedIr).toBeNull();
     expect(result.sql).toBe("");
   });
+
+  test("compiles a parent output that references an installed package export", () => {
+    const packageGraph = {
+      id: "pkg-graph",
+      metadata: { name: "Daily Orders" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "from-orders",
+          kind: "fromTable" as const,
+          label: "Orders",
+          position: { x: 0, y: 0 },
+          data: {
+            tableRef: { schemaName: "sales", tableName: "orders" },
+            columns: { total: "float" },
+          },
+        },
+        {
+          id: "output-child",
+          kind: "output" as const,
+          label: "Output",
+          position: { x: 260, y: 0 },
+          data: outputData("daily_orders"),
+        },
+      ],
+      edges: [
+        {
+          id: "edge-child",
+          source: "from-orders",
+          sourceHandle: "out",
+          target: "output-child",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const parentGraph = {
+      id: "graph-parent",
+      metadata: { name: "Parent" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "subgraph-orders",
+          kind: "subgraph" as const,
+          label: "Package graph",
+          position: { x: 0, y: 0 },
+          data: {
+            graphId: "pkg-graph",
+            target: {
+              kind: "package" as const,
+              packageId: "team/sales-lib",
+              version: "1.2.0",
+              exportKey: "daily_orders",
+            },
+          },
+        },
+        {
+          id: "select-parent",
+          kind: "select" as const,
+          label: "Select",
+          position: { x: 260, y: 0 },
+          data: { mappings: [{ name: "gross_total", expression: "total" }] },
+        },
+        {
+          id: "output-parent",
+          kind: "output" as const,
+          label: "Output",
+          position: { x: 520, y: 0 },
+          data: outputData("parent_out"),
+        },
+      ],
+      edges: [
+        {
+          id: "edge-subgraph-select",
+          source: "subgraph-orders",
+          sourceHandle: "out:output-child",
+          target: "select-parent",
+          targetHandle: "in",
+        },
+        {
+          id: "edge-select-out",
+          source: "select-parent",
+          sourceHandle: "out",
+          target: "output-parent",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const workspace: GraphWorkspace = {
+      version: 2,
+      metadata: { name: "Workspace" },
+      entryGraphId: "graph-parent",
+      graphs: [parentGraph],
+      installedPackages: [
+        {
+          packageId: "team/sales-lib",
+          version: "1.2.0",
+          metadata: { name: "Sales Lib" },
+          exports: [
+            {
+              exportKey: "daily_orders",
+              graphId: "pkg-graph",
+              displayName: "Daily Orders",
+            },
+          ],
+          graphs: [packageGraph],
+          dependencyRefs: [],
+        },
+      ],
+      packageManifest: null,
+    };
+
+    const result = compileOutput(workspace, "graph-parent", "output-parent");
+
+    expect(result.semantic.diagnostics).toHaveLength(0);
+    expect(result.sql).toContain("SELECT");
+    expect(result.sql).toContain("FROM sales.orders");
+    expect(result.sql).toContain("gross_total");
+  });
 });
