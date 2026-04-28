@@ -152,17 +152,112 @@ export function isGraphWorkspaceLikeRuntime(value: unknown): value is GraphWorks
 export function normalizeGraphWorkspaceLikeRuntime(value: GraphWorkspaceLikeRuntime): GraphWorkspace {
   const record = value as Record<string, unknown>;
 
+  function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null;
+  }
+
+  function isGraphPackageExportLike(value: unknown): value is {
+    exportKey: string;
+    graphId: string;
+    displayName: string;
+  } {
+    return (
+      isRecord(value) &&
+      typeof value.exportKey === "string" &&
+      typeof value.graphId === "string" &&
+      typeof value.displayName === "string"
+    );
+  }
+
+  function isGraphDefinitionLike(value: unknown): value is GraphDefinition {
+    if (!isRecord(value)) return false;
+    if (typeof value.id !== "string") return false;
+    if (!isRecord(value.metadata) || typeof value.metadata.name !== "string") return false;
+    if (
+      !isRecord(value.viewport) ||
+      typeof value.viewport.x !== "number" ||
+      typeof value.viewport.y !== "number" ||
+      typeof value.viewport.zoom !== "number"
+    ) {
+      return false;
+    }
+    if (!Array.isArray(value.nodes) || !Array.isArray(value.edges)) return false;
+    return true;
+  }
+
   const installedPackages = Array.isArray(record.installedPackages)
-    ? (record.installedPackages as InstalledGraphPackage[])
+    ? record.installedPackages
+        .filter((entry): entry is Record<string, unknown> => isRecord(entry))
+        .filter((entry) => typeof entry.packageId === "string" && typeof entry.version === "string")
+        .map((entry) => {
+          const metadata =
+            isRecord(entry.metadata) && typeof entry.metadata.name === "string"
+              ? {
+                  name: entry.metadata.name,
+                  description:
+                    typeof entry.metadata.description === "string"
+                      ? entry.metadata.description
+                      : undefined,
+                }
+              : { name: entry.packageId as string };
+
+          const exports = Array.isArray(entry.exports)
+            ? entry.exports.filter(isGraphPackageExportLike)
+            : [];
+
+          const graphs = Array.isArray(entry.graphs)
+            ? entry.graphs.filter(isGraphDefinitionLike)
+            : [];
+
+          const dependencyRefs = Array.isArray(entry.dependencyRefs)
+            ? entry.dependencyRefs
+                .filter((ref): ref is Record<string, unknown> => isRecord(ref))
+                .filter(
+                  (ref) => typeof ref.packageId === "string" && typeof ref.version === "string",
+                )
+                .map((ref) => ({ packageId: ref.packageId as string, version: ref.version as string }))
+            : [];
+
+          const normalized: InstalledGraphPackage = {
+            packageId: entry.packageId as string,
+            version: entry.version as string,
+            metadata,
+            exports,
+            graphs,
+            dependencyRefs,
+          };
+
+          return normalized;
+        })
     : [];
 
-  const packageManifest = "packageManifest" in record
-    ? (record.packageManifest as WorkspacePackageManifest | null)
-    : null;
+  const packageManifest = (() => {
+    if (!("packageManifest" in record)) return null;
+    const raw = record.packageManifest;
+    if (raw === null) return null;
+    if (!isRecord(raw)) return null;
+    if (
+      typeof raw.packageId !== "string" ||
+      typeof raw.version !== "string" ||
+      typeof raw.name !== "string" ||
+      !Array.isArray(raw.exports)
+    ) {
+      return null;
+    }
+
+    const exports = raw.exports.filter(isGraphPackageExportLike);
+    return {
+      packageId: raw.packageId,
+      version: raw.version,
+      name: raw.name,
+      description: typeof raw.description === "string" ? raw.description : undefined,
+      exports,
+    } satisfies WorkspacePackageManifest;
+  })();
 
   return {
     ...(value as Omit<GraphWorkspace, "installedPackages" | "packageManifest">),
     installedPackages,
-    packageManifest: packageManifest ?? null,
+    packageManifest,
   };
 }

@@ -18,6 +18,32 @@ describe("documentReducer", () => {
     expect(getActiveGraph(state)?.id).toBe(state.workspace.entryGraphId);
   });
 
+  test("createInitialEditorState normalizes workspace-like inputs with malformed package fields", () => {
+    const state = createInitialEditorState({
+      version: 2,
+      metadata: { name: "Workspace" },
+      entryGraphId: "graph-main",
+      graphs: [
+        {
+          id: "graph-main",
+          metadata: { name: "Main" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [],
+          edges: [],
+        },
+      ],
+      // @ts-expect-error runtime boundary shape
+      installedPackages: [123, { packageId: "com.acme/orders", version: "1.0.0", exports: "nope" }],
+      // @ts-expect-error runtime boundary shape
+      packageManifest: { packageId: 1, version: "0.0.1", name: "Bad", exports: [] },
+    } as any);
+
+    expect(Array.isArray(state.workspace.installedPackages)).toBe(true);
+    expect(state.workspace.installedPackages).toHaveLength(1);
+    expect(state.workspace.installedPackages[0]?.packageId).toBe("com.acme/orders");
+    expect(state.workspace.packageManifest).toBeNull();
+  });
+
   test("tracks open editor state", () => {
     const initial = createInitialEditorState(createSampleDocument());
     const next = documentReducer(initial, {
