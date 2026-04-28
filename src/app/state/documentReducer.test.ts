@@ -289,13 +289,13 @@ describe("documentReducer", () => {
       dependencies: [sharedDep],
     };
 
-    const once = documentReducer(initial, { type: "install-package", pkg } as never);
+    const once = documentReducer(initial, { type: "install-package", pkg });
     expect(once.workspace.installedPackages.map((p) => p.packageId)).toEqual([
       "com.acme/shared",
       "com.acme/orders",
     ]);
 
-    const twice = documentReducer(once, { type: "install-package", pkg } as never);
+    const twice = documentReducer(once, { type: "install-package", pkg });
     expect(twice.workspace.installedPackages).toHaveLength(2);
   });
 
@@ -312,7 +312,7 @@ describe("documentReducer", () => {
     const next = documentReducer(initial, {
       type: "set-package-manifest",
       manifest,
-    } as never);
+    });
 
     expect(next.workspace.packageManifest?.packageId).toBe("com.acme/workspace");
   });

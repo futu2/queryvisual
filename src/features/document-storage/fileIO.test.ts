@@ -727,6 +727,138 @@ describe("fileIO", () => {
     ).toThrow("Invalid QueryVisual workspace");
   });
 
+  test("rejects installed packages with duplicate graph ids", () => {
+    expect(() =>
+      parseWorkspaceJson(
+        JSON.stringify({
+          version: 2,
+          metadata: { name: "workspace" },
+          entryGraphId: "graph-main",
+          graphs: [
+            {
+              id: "graph-main",
+              metadata: { name: "Main" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+          ],
+          installedPackages: [
+            {
+              packageId: "com.acme/orders",
+              version: "1.0.0",
+              metadata: { name: "Orders" },
+              exports: [{ exportKey: "main", graphId: "pkg-graph", displayName: "Main" }],
+              graphs: [
+                {
+                  id: "pkg-graph",
+                  metadata: { name: "A" },
+                  viewport: { x: 0, y: 0, zoom: 1 },
+                  nodes: [],
+                  edges: [],
+                },
+                {
+                  id: "pkg-graph",
+                  metadata: { name: "Dup" },
+                  viewport: { x: 0, y: 0, zoom: 1 },
+                  nodes: [],
+                  edges: [],
+                },
+              ],
+              dependencyRefs: [],
+            },
+          ],
+          packageManifest: null,
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual workspace");
+  });
+
+  test("rejects installed packages with duplicate export keys", () => {
+    expect(() =>
+      parseWorkspaceJson(
+        JSON.stringify({
+          version: 2,
+          metadata: { name: "workspace" },
+          entryGraphId: "graph-main",
+          graphs: [
+            {
+              id: "graph-main",
+              metadata: { name: "Main" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+          ],
+          installedPackages: [
+            {
+              packageId: "com.acme/orders",
+              version: "1.0.0",
+              metadata: { name: "Orders" },
+              exports: [
+                { exportKey: "main", graphId: "pkg-graph", displayName: "Main" },
+                { exportKey: "main", graphId: "pkg-graph", displayName: "Dup" },
+              ],
+              graphs: [
+                {
+                  id: "pkg-graph",
+                  metadata: { name: "A" },
+                  viewport: { x: 0, y: 0, zoom: 1 },
+                  nodes: [],
+                  edges: [],
+                },
+              ],
+              dependencyRefs: [],
+            },
+          ],
+          packageManifest: null,
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual workspace");
+  });
+
+  test("rejects installed packages whose exports point to missing graphs", () => {
+    expect(() =>
+      parseWorkspaceJson(
+        JSON.stringify({
+          version: 2,
+          metadata: { name: "workspace" },
+          entryGraphId: "graph-main",
+          graphs: [
+            {
+              id: "graph-main",
+              metadata: { name: "Main" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+          ],
+          installedPackages: [
+            {
+              packageId: "com.acme/orders",
+              version: "1.0.0",
+              metadata: { name: "Orders" },
+              exports: [
+                { exportKey: "main", graphId: "graph-missing", displayName: "Main" },
+              ],
+              graphs: [
+                {
+                  id: "pkg-graph",
+                  metadata: { name: "A" },
+                  viewport: { x: 0, y: 0, zoom: 1 },
+                  nodes: [],
+                  edges: [],
+                },
+              ],
+              dependencyRefs: [],
+            },
+          ],
+          packageManifest: null,
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual workspace");
+  });
+
   test("parsePackageJson parses package files separately from workspace JSON", () => {
     const pkg = parsePackageJson(
       JSON.stringify({
@@ -1145,6 +1277,158 @@ describe("fileIO", () => {
     }
 
     expect(() => parsePackageJson(JSON.stringify(pkg))).toThrow("Invalid QueryVisual package");
+  });
+
+  test("parsePackageJson rejects duplicate top-level package graph ids", () => {
+    expect(() =>
+      parsePackageJson(
+        JSON.stringify({
+          formatVersion: 1,
+          packageId: "com.acme/pkg",
+          version: "1.0.0",
+          metadata: { name: "Pkg" },
+          exports: [{ exportKey: "main", graphId: "graph-a", displayName: "Main" }],
+          graphs: [
+            {
+              id: "graph-a",
+              metadata: { name: "A" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+            {
+              id: "graph-a",
+              metadata: { name: "A2" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+          ],
+          dependencies: [],
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual package");
+  });
+
+  test("parsePackageJson rejects duplicate top-level export keys", () => {
+    expect(() =>
+      parsePackageJson(
+        JSON.stringify({
+          formatVersion: 1,
+          packageId: "com.acme/pkg",
+          version: "1.0.0",
+          metadata: { name: "Pkg" },
+          exports: [
+            { exportKey: "main", graphId: "graph-a", displayName: "Main" },
+            { exportKey: "main", graphId: "graph-a", displayName: "Main Again" },
+          ],
+          graphs: [
+            {
+              id: "graph-a",
+              metadata: { name: "A" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+          ],
+          dependencies: [],
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual package");
+  });
+
+  test("parsePackageJson rejects dependency packages with duplicate graph ids", () => {
+    expect(() =>
+      parsePackageJson(
+        JSON.stringify({
+          formatVersion: 1,
+          packageId: "com.acme/root",
+          version: "1.0.0",
+          metadata: { name: "Root" },
+          exports: [{ exportKey: "main", graphId: "graph-main", displayName: "Main" }],
+          graphs: [
+            {
+              id: "graph-main",
+              metadata: { name: "Main" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+          ],
+          dependencies: [
+            {
+              formatVersion: 1,
+              packageId: "com.acme/dep",
+              version: "1.0.0",
+              metadata: { name: "Dep" },
+              exports: [{ exportKey: "dep", graphId: "graph-dep", displayName: "Dep" }],
+              graphs: [
+                {
+                  id: "graph-dep",
+                  metadata: { name: "Dep Graph" },
+                  viewport: { x: 0, y: 0, zoom: 1 },
+                  nodes: [],
+                  edges: [],
+                },
+                {
+                  id: "graph-dep",
+                  metadata: { name: "Dup" },
+                  viewport: { x: 0, y: 0, zoom: 1 },
+                  nodes: [],
+                  edges: [],
+                },
+              ],
+              dependencies: [],
+            },
+          ],
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual package");
+  });
+
+  test("parsePackageJson rejects dependency packages with duplicate export keys", () => {
+    expect(() =>
+      parsePackageJson(
+        JSON.stringify({
+          formatVersion: 1,
+          packageId: "com.acme/root",
+          version: "1.0.0",
+          metadata: { name: "Root" },
+          exports: [{ exportKey: "main", graphId: "graph-main", displayName: "Main" }],
+          graphs: [
+            {
+              id: "graph-main",
+              metadata: { name: "Main" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+          ],
+          dependencies: [
+            {
+              formatVersion: 1,
+              packageId: "com.acme/dep",
+              version: "1.0.0",
+              metadata: { name: "Dep" },
+              exports: [
+                { exportKey: "dep", graphId: "graph-dep", displayName: "Dep" },
+                { exportKey: "dep", graphId: "graph-dep", displayName: "Dup" },
+              ],
+              graphs: [
+                {
+                  id: "graph-dep",
+                  metadata: { name: "Dep Graph" },
+                  viewport: { x: 0, y: 0, zoom: 1 },
+                  nodes: [],
+                  edges: [],
+                },
+              ],
+              dependencies: [],
+            },
+          ],
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual package");
   });
 
   test("rejects workspaces with duplicate graph ids", () => {

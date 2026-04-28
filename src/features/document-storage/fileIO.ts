@@ -380,6 +380,24 @@ function hasInvalidInstalledPackageGraphs(workspace: GraphWorkspace): boolean {
   );
 }
 
+function hasInvalidInstalledPackageDefinition(pkg: InstalledGraphPackage): boolean {
+  const graphIds = new Set(pkg.graphs.map((graph) => graph.id));
+  if (graphIds.size !== pkg.graphs.length) {
+    return true;
+  }
+
+  const exportKeys = new Set(pkg.exports.map((entry) => entry.exportKey));
+  if (exportKeys.size !== pkg.exports.length) {
+    return true;
+  }
+
+  if (!pkg.exports.every((entry) => graphIds.has(entry.graphId))) {
+    return true;
+  }
+
+  return false;
+}
+
 function hasDuplicateInstalledPackageIdentities(workspace: GraphWorkspace): boolean {
   const keys = workspace.installedPackages.map((pkg) => `${pkg.packageId}@${pkg.version}`);
   return new Set(keys).size !== keys.length;
@@ -509,6 +527,9 @@ export function parseWorkspaceJson(raw: string): GraphWorkspace {
     if (hasInvalidInstalledPackageGraphs(workspace)) {
       throw new Error("Invalid QueryVisual workspace");
     }
+    if (workspace.installedPackages.some(hasInvalidInstalledPackageDefinition)) {
+      throw new Error("Invalid QueryVisual workspace");
+    }
     if (hasDuplicateInstalledPackageIdentities(workspace)) {
       throw new Error("Invalid QueryVisual workspace");
     }
@@ -531,6 +552,9 @@ export function parseWorkspaceJson(raw: string): GraphWorkspace {
     throw new Error("Invalid QueryVisual workspace");
   }
   if (hasInvalidInstalledPackageGraphs(normalized)) {
+    throw new Error("Invalid QueryVisual workspace");
+  }
+  if (normalized.installedPackages.some(hasInvalidInstalledPackageDefinition)) {
     throw new Error("Invalid QueryVisual workspace");
   }
   if (hasDuplicateInstalledPackageIdentities(normalized)) {
@@ -564,6 +588,15 @@ function isGraphPackageFileAtDepth(value: unknown, depth: number): value is Grap
   }
 
   const graphIds = new Set(value.graphs.map((graph) => graph.id));
+  if (graphIds.size !== value.graphs.length) {
+    return false;
+  }
+
+  const exportKeys = new Set(value.exports.map((entry) => entry.exportKey));
+  if (exportKeys.size !== value.exports.length) {
+    return false;
+  }
+
   if (!value.exports.every((entry) => graphIds.has(entry.graphId))) {
     return false;
   }
@@ -593,6 +626,15 @@ export function parsePackageJson(raw: string): GraphPackageFile {
 
 function normalizeAndValidatePackageBundle(pkg: GraphPackageFile, depth: number): GraphPackageFile {
   if (depth > MAX_PACKAGE_DEPENDENCY_DEPTH) {
+    throw new Error("Invalid QueryVisual package");
+  }
+
+  const graphIdSet = new Set(pkg.graphs.map((graph) => graph.id));
+  if (graphIdSet.size !== pkg.graphs.length) {
+    throw new Error("Invalid QueryVisual package");
+  }
+  const exportKeySet = new Set(pkg.exports.map((entry) => entry.exportKey));
+  if (exportKeySet.size !== pkg.exports.length) {
     throw new Error("Invalid QueryVisual package");
   }
 

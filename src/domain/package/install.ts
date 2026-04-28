@@ -76,6 +76,8 @@ export function installPackageBundle(
   workspace: GraphWorkspace,
   pkg: GraphPackageFile,
 ): GraphWorkspace {
+  // Precondition: `pkg` and its bundled `dependencies` should already be validated and normalized
+  // (including export->graph consistency and subgraph invariants) by the persistence layer.
   const inProgress = new Set<string>();
   return installPackageBundleInner(workspace, pkg, inProgress, 0);
 }
