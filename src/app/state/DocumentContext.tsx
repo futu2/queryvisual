@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import type { GraphDocument, GraphWorkspace } from "../../domain/document/types";
-import { isGraphWorkspaceRuntime } from "../../domain/document/types";
+import { isGraphWorkspaceLikeRuntime, normalizeGraphWorkspaceLikeRuntime } from "../../domain/document/types";
 import {
   createInitialEditorState,
   documentReducer,
@@ -46,8 +46,8 @@ export function DocumentProvider({
       return;
     }
 
-    if (isGraphWorkspaceRuntime(initialState)) {
-      dispatch({ type: "replace-workspace", workspace: initialState });
+    if (isGraphWorkspaceLikeRuntime(initialState)) {
+      dispatch({ type: "replace-workspace", workspace: normalizeGraphWorkspaceLikeRuntime(initialState) });
     } else {
       dispatch({ type: "replace-document", document: initialState });
     }

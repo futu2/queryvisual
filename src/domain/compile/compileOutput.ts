@@ -5,11 +5,11 @@ import { optimizeOutput } from "../ir/optimize";
 import type { IRRelNode } from "../ir/types";
 import { renderSql } from "../sql/renderer";
 import type { GraphDocument, GraphNode, GraphWorkspace } from "../document/types";
-import { isGraphWorkspaceRuntime } from "../document/types";
 import type { ColumnMap } from "../schema/types";
 import { formatTableRef } from "../schema/types";
 import { parseExpression } from "../expr/parser";
 import { renderExpressionSql } from "../expr/render";
+import { isGraphWorkspaceLikeRuntime, normalizeGraphWorkspaceLikeRuntime } from "../document/types";
 
 export interface CompileOutputResult {
   semantic: SemanticOutput;
@@ -19,7 +19,7 @@ export interface CompileOutputResult {
 }
 
 function isWorkspace(value: unknown): value is GraphWorkspace {
-  return isGraphWorkspaceRuntime(value);
+  return isGraphWorkspaceLikeRuntime(value);
 }
 
 function parseOutputHandle(handle: string): string | null {
@@ -269,7 +269,7 @@ export function compileOutput(
   arg5?: Record<string, IRRelNode>,
 ): CompileOutputResult {
   if (isWorkspace(arg1)) {
-    const workspace = arg1;
+    const workspace = normalizeGraphWorkspaceLikeRuntime(arg1);
     const graphId = arg2;
     const outputId = arg3 ?? arg2;
     const graphInputSchemas = arg4 ?? {};

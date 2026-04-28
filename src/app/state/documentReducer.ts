@@ -6,7 +6,7 @@ import type {
   GraphNode,
   GraphWorkspace,
 } from "../../domain/document/types";
-import { isGraphWorkspaceRuntime } from "../../domain/document/types";
+import { isGraphWorkspaceLikeRuntime, normalizeGraphWorkspaceLikeRuntime } from "../../domain/document/types";
 import type { GraphPackageFile, WorkspacePackageManifest } from "../../domain/package/types";
 import { isWorkspacePackageManifestValid } from "../../domain/package/types";
 import { installPackageBundle } from "../../domain/package/install";
@@ -85,7 +85,7 @@ function toWorkspace(document: GraphDocument): GraphWorkspace {
 function isWorkspaceInput(
   value: GraphWorkspace | GraphDocument,
 ): value is GraphWorkspace {
-  return isGraphWorkspaceRuntime(value);
+  return isGraphWorkspaceLikeRuntime(value);
 }
 
 function getActiveGraphById(
@@ -150,7 +150,7 @@ export function createInitialEditorState(
   documentOrWorkspace: GraphWorkspace | GraphDocument = createSampleWorkspace(),
 ): EditorState {
   if (isWorkspaceInput(documentOrWorkspace)) {
-    return createStateFromWorkspace(documentOrWorkspace);
+    return createStateFromWorkspace(normalizeGraphWorkspaceLikeRuntime(documentOrWorkspace));
   }
 
   return createStateFromWorkspace(toWorkspace(documentOrWorkspace));

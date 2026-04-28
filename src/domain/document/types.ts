@@ -126,3 +126,43 @@ export function isGraphWorkspaceRuntime(value: unknown): value is GraphWorkspace
 
   return true;
 }
+
+export type GraphWorkspaceLikeRuntime = Omit<GraphWorkspace, "installedPackages" | "packageManifest"> & {
+  installedPackages?: unknown;
+  packageManifest?: unknown;
+};
+
+export function isGraphWorkspaceLikeRuntime(value: unknown): value is GraphWorkspaceLikeRuntime {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    (value as { version?: unknown }).version !== 2
+  ) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (!("graphs" in record) || !Array.isArray(record.graphs)) return false;
+  if (!("entryGraphId" in record) || typeof record.entryGraphId !== "string") return false;
+  if (!("metadata" in record) || typeof record.metadata !== "object" || record.metadata === null) return false;
+
+  return true;
+}
+
+export function normalizeGraphWorkspaceLikeRuntime(value: GraphWorkspaceLikeRuntime): GraphWorkspace {
+  const record = value as Record<string, unknown>;
+
+  const installedPackages = Array.isArray(record.installedPackages)
+    ? (record.installedPackages as InstalledGraphPackage[])
+    : [];
+
+  const packageManifest = "packageManifest" in record
+    ? (record.packageManifest as WorkspacePackageManifest | null)
+    : null;
+
+  return {
+    ...(value as Omit<GraphWorkspace, "installedPackages" | "packageManifest">),
+    installedPackages,
+    packageManifest: packageManifest ?? null,
+  };
+}

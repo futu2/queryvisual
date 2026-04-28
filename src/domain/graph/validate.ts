@@ -6,7 +6,7 @@ import type {
   GraphWorkspace,
   NamedExpression,
 } from "../document/types";
-import { isGraphWorkspaceRuntime } from "../document/types";
+import { isGraphWorkspaceLikeRuntime, normalizeGraphWorkspaceLikeRuntime } from "../document/types";
 import type { ExpressionAnalysisDiagnosticCode } from "../expr/analyze";
 import { analyzeExpression } from "../expr/analyze";
 import type { ColumnMap, ColumnType } from "../schema/types";
@@ -36,7 +36,7 @@ function parseInputHandle(handle: string): string | null {
 }
 
 function isWorkspace(value: unknown): value is GraphWorkspace {
-  return isGraphWorkspaceRuntime(value);
+  return isGraphWorkspaceLikeRuntime(value);
 }
 
 function isTypeCompatible(provided: ColumnType | undefined, required: ColumnType) {
@@ -725,7 +725,7 @@ export function validateOutput(
   arg4?: Record<string, ColumnMap>,
 ): SemanticOutput {
   if (isWorkspace(arg1)) {
-    const workspace = arg1;
+    const workspace = normalizeGraphWorkspaceLikeRuntime(arg1);
     const graphId = arg2;
     const outputId = arg3 ?? arg2;
     const graphInputSchemas = arg4 ?? {};
