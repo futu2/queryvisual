@@ -10,6 +10,8 @@ const paletteItems: Array<{
     | "nodeKinds.graphInput"
     | "nodeKinds.fromTable"
     | "nodeKinds.subgraph"
+    | "nodeKinds.helperFunctions"
+    | "nodeKinds.importHelperFunctions"
     | "nodeKinds.join"
     | "nodeKinds.where"
     | "nodeKinds.select"
@@ -21,6 +23,8 @@ const paletteItems: Array<{
   { kind: "graphInput", canonicalLabel: "Graph Input", messageKey: "nodeKinds.graphInput" },
   { kind: "fromTable", canonicalLabel: "From", messageKey: "nodeKinds.fromTable" },
   { kind: "subgraph", canonicalLabel: "Subgraph", messageKey: "nodeKinds.subgraph" },
+  { kind: "helperFunctions", canonicalLabel: "Helper Functions", messageKey: "nodeKinds.helperFunctions" },
+  { kind: "importHelperFunctions", canonicalLabel: "Import Helpers", messageKey: "nodeKinds.importHelperFunctions" },
   { kind: "join", canonicalLabel: "Join", messageKey: "nodeKinds.join" },
   { kind: "where", canonicalLabel: "Where", messageKey: "nodeKinds.where" },
   { kind: "select", canonicalLabel: "Select", messageKey: "nodeKinds.select" },
@@ -74,6 +78,18 @@ function createNode(kind: NodeKind, index: number): GraphNode {
         kind,
         data: { graphId: "" },
       };
+    case "helperFunctions":
+      return {
+        ...base,
+        kind,
+        data: { helpers: [{ name: "add10", expression: "$1 + 10" }] },
+      };
+    case "importHelperFunctions":
+      return {
+        ...base,
+        kind,
+        data: { moduleName: "" },
+      };
     case "where":
       return { ...base, kind, data: { predicate: "id > 0" } };
     case "select":
@@ -108,6 +124,21 @@ function createNode(kind: NodeKind, index: number): GraphNode {
   }
 }
 
+function PaletteLabel({ label }: { label: string }) {
+  const parts = label.split(" ");
+
+  return (
+    <>
+      {parts.map((part, index) => (
+        <span key={`${part}-${index}`}>
+          {index > 0 ? " " : ""}
+          {part}
+        </span>
+      ))}
+    </>
+  );
+}
+
 export function NodePalette() {
   const { state, dispatch } = useDocumentContext();
   const { t } = useI18n();
@@ -128,7 +159,7 @@ export function NodePalette() {
               })
             }
           >
-            {t(item.messageKey)}
+            <PaletteLabel label={t(item.messageKey)} />
           </button>
         ))}
       </div>

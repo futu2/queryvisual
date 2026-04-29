@@ -4,12 +4,15 @@ import type { BinaryOp, Expr } from "./ast";
 type Token =
   | { kind: "identifier"; value: string }
   | { kind: "number"; value: string }
+  | { kind: "placeholder"; value: string }
   | { kind: "string"; value: string }
   | { kind: "symbol"; value: string }
   | { kind: "keyword"; value: string };
 
 const TOKEN_RE =
-  /\s*(>=|<=|!=|[(),*/+-]|=|>|<|\bcase\b|\bwhen\b|\bthen\b|\belse\b|\bend\b|\bcast\b|\bas\b|\band\b|\bor\b|\bnot\b|\bnull\b|\btrue\b|\bfalse\b|[A-Za-z_][A-Za-z0-9_.]*|\d+\.\d+|\d+|'[^']*')/giy;
+  /\s*(>=|<=|!=|\$\d+|[(),*/+-]|=|>|<|\bcase\b|\bwhen\b|\bthen\b|\belse\b|\bend\b|\bcast\b|\bas\b|\band\b|\bor\b|\bnot\b|\bnull\b|\btrue\b|\bfalse\b|[A-Za-z_][A-Za-z0-9_.]*|\d+\.\d+|\d+|'[^']*')/giy;
+
+export type ParseExpressionOptions = { allowPlaceholders?: boolean };
 
 const COLUMN_TYPES: ReadonlySet<ColumnType> = new Set([
   "boolean",
@@ -46,6 +49,8 @@ function tokenize(input: string): Token[] {
 
     if (/^\d/.test(value)) {
       tokens.push({ kind: "number", value });
+    } else if (value.startsWith("$")) {
+      tokens.push({ kind: "placeholder", value });
     } else if (value.startsWith("'")) {
       tokens.push({ kind: "string", value: value.slice(1, -1) });
     } else if (
@@ -66,7 +71,10 @@ function tokenize(input: string): Token[] {
   return tokens;
 }
 
-export function parseExpression(input: string): Expr {
+export function parseExpression(
+  input: string,
+  options: ParseExpressionOptions = {},
+): Expr {
   const tokens = tokenize(input);
   let index = 0;
 
@@ -98,6 +106,19 @@ export function parseExpression(input: string): Expr {
 
     if (token.kind === "number") {
       return { kind: "literal", value: Number(token.value) };
+    }
+
+    if (token.kind === "placeholder") {
+      if (!options.allowPlaceholders) {
+        throw new Error("Placeholders are not allowed");
+      }
+
+      const placeholderIndex = Number(token.value.slice(1));
+      if (placeholderIndex === 0) {
+        throw new Error("Placeholder index must be greater than zero");
+      }
+
+      return { kind: "placeholder", index: placeholderIndex };
     }
 
     if (token.kind === "string") {

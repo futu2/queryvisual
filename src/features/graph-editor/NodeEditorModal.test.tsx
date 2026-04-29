@@ -388,6 +388,80 @@ describe("NodeEditorModal", () => {
     expect(onSave.mock.calls[0][0].data.mappings[0].name).toBe("net_total");
   });
 
+  test("edits helper function rows", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+    const node: GraphNode = {
+      id: "helpers",
+      kind: "helperFunctions",
+      label: "Helper Functions",
+      position: { x: 0, y: 0 },
+      data: { helpers: [{ name: "add10", expression: "$1 + 10" }] },
+    };
+
+    renderModal({ node, onSave });
+
+    await user.clear(screen.getByLabelText("Helper name 1"));
+    await user.type(screen.getByLabelText("Helper name 1"), "gross");
+    await user.clear(screen.getByLabelText("Helper expression 1"));
+    await user.type(screen.getByLabelText("Helper expression 1"), "$1 + $2");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "helperFunctions",
+        data: { helpers: [{ name: "gross", expression: "$1 + $2" }] },
+      }),
+    );
+  });
+
+  test("edits importer module name", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+    const node: GraphNode = {
+      id: "import",
+      kind: "importHelperFunctions",
+      label: "Import Helpers",
+      position: { x: 0, y: 0 },
+      data: { moduleName: "" },
+    };
+
+    renderModal({ node, onSave });
+
+    await user.type(screen.getByLabelText("Module name"), "math");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "importHelperFunctions",
+        data: { moduleName: "math" },
+      }),
+    );
+  });
+
+  test("renders helper row action controls", () => {
+    const node: GraphNode = {
+      id: "helpers-actions",
+      kind: "helperFunctions",
+      label: "Helper Functions",
+      position: { x: 0, y: 0 },
+      data: {
+        helpers: [
+          { name: "add10", expression: "$1 + 10" },
+          { name: "add20", expression: "$1 + 20" },
+        ],
+      },
+    };
+
+    renderModal({ node });
+
+    expect(screen.getByRole("button", { name: "Move helper 1 up" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Move helper 1 down" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Duplicate helper 1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Remove helper 1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Drag helper 1" })).toBeTruthy();
+  });
+
   test("duplicates and reorders select mappings before save", async () => {
     const user = userEvent.setup();
     const onSave = mock();

@@ -1,17 +1,22 @@
 import type { ColumnType } from "../schema/types";
 import type { ExpressionScope } from "../graph/expressionScope";
+import type { HelperRegistry } from "../helpers/types";
 import type { Expr } from "./ast";
 import { inferExpressionType } from "./infer";
 import { parseExpression } from "./parser";
 
 export type AnalyzeExpressionOptions = {
   requireBoolean?: boolean;
+  helpers?: HelperRegistry;
+  allowPlaceholders?: boolean;
 };
 
 export type ExpressionAnalysisDiagnosticCode =
   | "expr.parse-error"
   | "expr.unknown-column"
   | "expr.ambiguous-column"
+  | "expr.ambiguous-helper"
+  | "expr.helper-arity"
   | "expr.non-boolean";
 
 export type ExpressionAnalysisDiagnostic = {
@@ -41,6 +46,7 @@ function collectColumnPaths(expr: Expr, out: string[][]) {
       out.push(expr.path);
       return;
     case "literal":
+    case "placeholder":
       return;
     case "unary":
       collectColumnPaths(expr.expression, out);
@@ -61,6 +67,36 @@ function collectColumnPaths(expr: Expr, out: string[][]) {
       return;
     case "cast":
       collectColumnPaths(expr.expression, out);
+      return;
+  }
+}
+
+function collectCalls(expr: Expr, out: Array<Extract<Expr, { kind: "call" }>>) {
+  switch (expr.kind) {
+    case "call":
+      out.push(expr);
+      for (const arg of expr.args) collectCalls(arg, out);
+      return;
+    case "unary":
+      collectCalls(expr.expression, out);
+      return;
+    case "binary":
+      collectCalls(expr.left, out);
+      collectCalls(expr.right, out);
+      return;
+    case "case":
+      for (const branch of expr.branches) {
+        collectCalls(branch.when, out);
+        collectCalls(branch.then, out);
+      }
+      if (expr.elseExpression) collectCalls(expr.elseExpression, out);
+      return;
+    case "cast":
+      collectCalls(expr.expression, out);
+      return;
+    case "column":
+    case "literal":
+    case "placeholder":
       return;
   }
 }
@@ -89,7 +125,9 @@ export function analyzeExpression(
 ): ExpressionAnalysis {
   let ast: Expr;
   try {
-    ast = parseExpression(expression);
+    ast = parseExpression(expression, {
+      allowPlaceholders: options.allowPlaceholders,
+    });
   } catch (error) {
     return {
       ast: null,
@@ -137,9 +175,40 @@ export function analyzeExpression(
     });
   }
 
+  const calls: Array<Extract<Expr, { kind: "call" }>> = [];
+  collectCalls(ast, calls);
+
+  let hasHelperDiagnostics = false;
+  for (const call of calls) {
+    const resolution = options.helpers?.resolveCall(call.name);
+    if (!resolution) continue;
+
+    if (resolution.status === "ambiguous") {
+      diagnostics.push({
+        code: "expr.ambiguous-helper",
+        message: `Ambiguous helper call "${call.name}". Use a module-qualified helper name.`,
+      });
+      hasHelperDiagnostics = true;
+      continue;
+    }
+
+    if (
+      resolution.status === "resolved" &&
+      resolution.helper.arity !== call.args.length
+    ) {
+      diagnostics.push({
+        code: "expr.helper-arity",
+        message: `Helper "${call.name}" expects ${resolution.helper.arity} arguments but received ${call.args.length}.`,
+      });
+      hasHelperDiagnostics = true;
+    }
+  }
+
   // If we already know column resolution failed, do not report a misleading concrete type.
-  const inferredType = inferExpressionType(ast, scope.flatTypes);
-  const type: ColumnType = hasAnyColumnDiagnostics(diagnostics)
+  const inferredType = inferExpressionType(ast, scope.flatTypes, {
+    helpers: options.helpers,
+  });
+  const type: ColumnType = hasAnyColumnDiagnostics(diagnostics) || hasHelperDiagnostics
     ? "unknown"
     : inferredType;
 

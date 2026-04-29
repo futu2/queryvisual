@@ -8,6 +8,8 @@ export type NodeKind =
   | "graphInput"
   | "fromTable"
   | "subgraph"
+  | "helperFunctions"
+  | "importHelperFunctions"
   | "join"
   | "where"
   | "select"
@@ -22,6 +24,11 @@ export interface Position {
 }
 
 export interface NamedExpression {
+  name: string;
+  expression: string;
+}
+
+export interface HelperFunctionDefinition {
   name: string;
   expression: string;
 }
@@ -56,6 +63,8 @@ export type GraphNode =
   | GraphNodeBase<"graphInput", { inputName: string; columns: ColumnMap }>
   | GraphNodeBase<"fromTable", { tableRef: TableRef; columns: ColumnMap }>
   | GraphNodeBase<"subgraph", { graphId: string; target?: SubgraphTarget }>
+  | GraphNodeBase<"helperFunctions", { helpers: HelperFunctionDefinition[] }>
+  | GraphNodeBase<"importHelperFunctions", { moduleName: string }>
   | GraphNodeBase<"join", { joinType: "inner" | "left" | "right" | "full"; predicate: string }>
   | GraphNodeBase<"where", { predicate: string }>
   | GraphNodeBase<"select", { mappings: NamedExpression[] }>

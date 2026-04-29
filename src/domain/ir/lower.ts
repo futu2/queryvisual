@@ -2,6 +2,7 @@ import { parseExpression } from "../expr/parser";
 import { renderExpressionSql } from "../expr/render";
 import type { GraphNode } from "../document/types";
 import type { SemanticOutput } from "../graph/semantic";
+import { buildHelperRegistry } from "../helpers/registry";
 import { formatTableRef } from "../schema/types";
 import type { IRRelNode } from "./types";
 
@@ -10,6 +11,8 @@ export function lowerOutputToIr(semantic: SemanticOutput): IRRelNode | null {
     return null;
   }
 
+  const helpers = buildHelperRegistry(semantic.document);
+  const renderOptions = { helpers };
   const cache = new Map<string, IRRelNode>();
   const inProgress = new Set<string>();
   const edgesByTarget = new Map(
@@ -67,7 +70,10 @@ export function lowerOutputToIr(semantic: SemanticOutput): IRRelNode | null {
           lowered = {
             kind: "join",
             joinType: node.data.joinType,
-            predicateSql: renderExpressionSql(parseExpression(node.data.predicate)),
+            predicateSql: renderExpressionSql(
+              parseExpression(node.data.predicate),
+              renderOptions,
+            ),
             left,
             right,
             schema,
@@ -79,7 +85,10 @@ export function lowerOutputToIr(semantic: SemanticOutput): IRRelNode | null {
           if (!input) return null;
           lowered = {
             kind: "filter",
-            predicateSql: renderExpressionSql(parseExpression(node.data.predicate)),
+            predicateSql: renderExpressionSql(
+              parseExpression(node.data.predicate),
+              renderOptions,
+            ),
             input,
           };
           break;
@@ -92,7 +101,10 @@ export function lowerOutputToIr(semantic: SemanticOutput): IRRelNode | null {
             kind: "project",
             projections: node.data.mappings.map((mapping) => ({
               alias: mapping.name,
-              expressionSql: renderExpressionSql(parseExpression(mapping.expression)),
+              expressionSql: renderExpressionSql(
+                parseExpression(mapping.expression),
+                renderOptions,
+              ),
             })),
             input,
             schema,
@@ -107,11 +119,17 @@ export function lowerOutputToIr(semantic: SemanticOutput): IRRelNode | null {
             kind: "aggregate",
             groupBy: node.data.groupBy.map((row) => ({
               alias: row.name,
-              expressionSql: renderExpressionSql(parseExpression(row.expression)),
+              expressionSql: renderExpressionSql(
+                parseExpression(row.expression),
+                renderOptions,
+              ),
             })),
             aggregates: node.data.aggregates.map((row) => ({
               alias: row.name,
-              expressionSql: renderExpressionSql(parseExpression(row.expression)),
+              expressionSql: renderExpressionSql(
+                parseExpression(row.expression),
+                renderOptions,
+              ),
             })),
             input,
             schema,
@@ -124,7 +142,10 @@ export function lowerOutputToIr(semantic: SemanticOutput): IRRelNode | null {
           lowered = {
             kind: "sort",
             items: node.data.items.map((item) => ({
-              expressionSql: renderExpressionSql(parseExpression(item.expression)),
+              expressionSql: renderExpressionSql(
+                parseExpression(item.expression),
+                renderOptions,
+              ),
               direction: item.direction,
             })),
             input,
@@ -144,6 +165,10 @@ export function lowerOutputToIr(semantic: SemanticOutput): IRRelNode | null {
         }
         case "output":
           lowered = oneInput();
+          break;
+        case "helperFunctions":
+        case "importHelperFunctions":
+          lowered = null;
           break;
       }
 

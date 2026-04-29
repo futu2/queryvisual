@@ -7,6 +7,8 @@ import type {
   NamedExpression,
 } from "../document/types";
 import { analyzeExpression } from "../expr/analyze";
+import { buildHelperRegistry } from "../helpers/registry";
+import type { HelperRegistry } from "../helpers/types";
 import { buildExpressionScope } from "./expressionScope";
 import type { ColumnMap, ColumnType } from "../schema/types";
 import {
@@ -81,13 +83,14 @@ function inferNamedExpressionsSchema(
   nodeId: string,
   rows: NamedExpression[],
   schemas: Record<string, ColumnMap>,
+  helpers: HelperRegistry,
 ) {
   const scope = buildExpressionScope(document, nodeId, { schemas });
 
   return Object.fromEntries(
     rows.map((row) => [
       row.name,
-      analyzeExpression(row.expression, scope).type,
+      analyzeExpression(row.expression, scope, { helpers }).type,
     ]),
   );
 }
@@ -107,6 +110,7 @@ type WorkspaceInferenceContext = {
   graphId?: string;
   graphInputSchemas?: Record<string, ColumnMap>;
   visitingGraphs?: Set<string>;
+  helpers?: HelperRegistry;
 };
 
 function inferGraphSchemasInternal(params: {
@@ -117,11 +121,13 @@ function inferGraphSchemasInternal(params: {
 }): Record<string, ColumnMap> {
   const byId = nodesById(params.graph);
   const cache = new Map<string, InferredNodeSchema>();
+  const helperRegistry = buildHelperRegistry(params.graph);
   const context: WorkspaceInferenceContext = {
     workspace: params.workspace,
     graphId: params.graph.id,
     graphInputSchemas: params.graphInputSchemas ?? {},
     visitingGraphs: params.visitingGraphs,
+    helpers: helperRegistry,
   };
 
   for (const node of params.graph.nodes) {
@@ -192,6 +198,10 @@ function inferNodeSchema(
     }
     case "fromTable":
       result = { schema: node.data.columns ?? {}, structurallyValid: true };
+      break;
+    case "helperFunctions":
+    case "importHelperFunctions":
+      result = { schema: {}, structurallyValid: true };
       break;
     case "subgraph": {
       const workspace = context.workspace;
@@ -410,6 +420,7 @@ function inferNodeSchema(
           Object.fromEntries(
             Array.from(cache.entries()).map(([id, entry]) => [id, entry.schema]),
           ),
+          context.helpers ?? buildHelperRegistry(document),
         ),
         structurallyValid: true,
       };
@@ -440,12 +451,19 @@ function inferNodeSchema(
       );
       result = {
         schema: {
-          ...inferNamedExpressionsSchema(document, nodeId, node.data.groupBy, schemas),
+          ...inferNamedExpressionsSchema(
+            document,
+            nodeId,
+            node.data.groupBy,
+            schemas,
+            context.helpers ?? buildHelperRegistry(document),
+          ),
           ...inferNamedExpressionsSchema(
             document,
             nodeId,
             node.data.aggregates,
             schemas,
+            context.helpers ?? buildHelperRegistry(document),
           ),
         },
         structurallyValid: true,
@@ -472,15 +490,21 @@ export function inferNodeSchemas(
 ): Record<string, ColumnMap> {
   const byId = nodesById(document);
   const cache = new Map<string, InferredNodeSchema>();
-  inferNodeSchema(document, nodeId, byId, cache, new Set(), context);
+  inferNodeSchema(document, nodeId, byId, cache, new Set(), {
+    ...context,
+    helpers: context.helpers ?? buildHelperRegistry(document),
+  });
   return cachedSchemas(cache);
 }
 
 export function inferDocumentSchemas(document: GraphDocument): Record<string, ColumnMap> {
   const byId = nodesById(document);
   const cache = new Map<string, InferredNodeSchema>();
+  const helperRegistry = buildHelperRegistry(document);
   for (const node of document.nodes) {
-    inferNodeSchema(document, node.id, byId, cache, new Set(), {});
+    inferNodeSchema(document, node.id, byId, cache, new Set(), {
+      helpers: helperRegistry,
+    });
   }
   return cachedSchemas(cache);
 }

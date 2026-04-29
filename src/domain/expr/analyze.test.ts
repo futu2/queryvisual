@@ -79,6 +79,80 @@ describe("analyzeExpression", () => {
     expect(result.type).toBe("unknown");
   });
 
+  test("rejects placeholders in normal expressions", () => {
+    const result = analyzeExpression("$1 + 10", singleScope());
+
+    expect(result.diagnostics[0]?.code).toBe("expr.parse-error");
+    expect(result.type).toBe("unknown");
+  });
+
+  test("reports ambiguous helper calls", () => {
+    const result = analyzeExpression("add10(total, total)", singleScope(), {
+      helpers: {
+        resolveCall: () => ({ status: "ambiguous", helpers: [] }),
+        helpers: [],
+        diagnostics: [],
+      },
+    });
+
+    expect(result.diagnostics[0]?.code).toBe("expr.ambiguous-helper");
+    expect(result.type).toBe("unknown");
+  });
+
+  test("reports wrong helper arity", () => {
+    const result = analyzeExpression("add10(total)", singleScope(), {
+      helpers: {
+        resolveCall: () => ({
+          status: "resolved",
+          helper: {
+            id: "math:add10:import:0",
+            name: "add10",
+            moduleName: "math",
+            expression: "$1 + $2 + 10",
+            ast: null,
+            arity: 2,
+            returnType: "float",
+            definingNodeId: "helpers",
+            importerNodeId: "import",
+            rowIndex: 0,
+          },
+        }),
+        helpers: [],
+        diagnostics: [],
+      },
+    });
+
+    expect(result.diagnostics[0]?.code).toBe("expr.helper-arity");
+    expect(result.type).toBe("unknown");
+  });
+
+  test("uses resolved helper return type", () => {
+    const result = analyzeExpression("add10(total, total)", singleScope(), {
+      helpers: {
+        resolveCall: () => ({
+          status: "resolved",
+          helper: {
+            id: "math:add10:import:0",
+            name: "add10",
+            moduleName: "math",
+            expression: "$1 + $2 + 10",
+            ast: null,
+            arity: 2,
+            returnType: "float",
+            definingNodeId: "helpers",
+            importerNodeId: "import",
+            rowIndex: 0,
+          },
+        }),
+        helpers: [],
+        diagnostics: [],
+      },
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.type).toBe("float");
+  });
+
   test("requireBoolean reports predicate not boolean", () => {
     const result = analyzeExpression("1 + 2", singleScope(), {
       requireBoolean: true,

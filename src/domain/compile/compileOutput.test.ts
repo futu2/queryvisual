@@ -245,6 +245,82 @@ describe("compileOutput", () => {
     expect(result.sql).toBe("");
   });
 
+  test("expands imported helper calls in compiled SQL", () => {
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "helper sql" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "orders",
+          kind: "fromTable",
+          label: "Orders",
+          position: { x: 0, y: 0 },
+          data: {
+            tableRef: { tableName: "orders" },
+            columns: { total: "float", tax: "float" },
+          },
+        },
+        {
+          id: "helpers",
+          kind: "helperFunctions",
+          label: "Helpers",
+          position: { x: 0, y: 160 },
+          data: { helpers: [{ name: "add10", expression: "$1 + $2 + 10" }] },
+        },
+        {
+          id: "import",
+          kind: "importHelperFunctions",
+          label: "Import Helpers",
+          position: { x: 180, y: 160 },
+          data: { moduleName: "math" },
+        },
+        {
+          id: "select",
+          kind: "select",
+          label: "Select",
+          position: { x: 260, y: 0 },
+          data: { mappings: [{ name: "gross", expression: "math.add10(total, tax)" }] },
+        },
+        {
+          id: "output",
+          kind: "output",
+          label: "Output",
+          position: { x: 520, y: 0 },
+          data: outputData("out"),
+        },
+      ],
+      edges: [
+        {
+          id: "e-orders-select",
+          source: "orders",
+          sourceHandle: "out",
+          target: "select",
+          targetHandle: "in",
+        },
+        {
+          id: "e-select-output",
+          source: "select",
+          sourceHandle: "out",
+          target: "output",
+          targetHandle: "in",
+        },
+        {
+          id: "e-helper-import",
+          source: "helpers",
+          sourceHandle: "out",
+          target: "import",
+          targetHandle: "in",
+        },
+      ],
+    };
+
+    const result = compileOutput(document, "output");
+
+    expect(result.semantic.diagnostics).toEqual([]);
+    expect(result.sql).toContain('((total + tax) + 10) AS "gross"');
+  });
+
   test("compiles a parent output that references an installed package export", () => {
     const packageGraph = {
       id: "pkg-graph",

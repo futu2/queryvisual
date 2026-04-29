@@ -90,6 +90,53 @@ function createWorkspaceWithChildInterface(): GraphWorkspace {
 }
 
 describe("QueryNode", () => {
+  test("renders helper node handles and summaries", () => {
+    const { container } = renderWithI18n(
+      <ReactFlowProvider>
+        <QueryNode
+          id="helpers"
+          data={{
+            node: {
+              id: "helpers",
+              kind: "helperFunctions",
+              label: "Helper Functions",
+              position: { x: 0, y: 0 },
+              data: { helpers: [{ name: "add10", expression: "$1 + 10" }] },
+            },
+            diagnostics: [],
+          }}
+          selected={false}
+          dragging={false}
+        />
+        <QueryNode
+          id="import"
+          data={{
+            node: {
+              id: "import",
+              kind: "importHelperFunctions",
+              label: "Import Helpers",
+              position: { x: 0, y: 120 },
+              data: { moduleName: "math" },
+            },
+            diagnostics: [],
+          }}
+          selected={false}
+          dragging={false}
+        />
+      </ReactFlowProvider>,
+    );
+
+    const helpersNode = container.querySelector('[data-node-kind="helperFunctions"]');
+    const importNode = container.querySelector('[data-node-kind="importHelperFunctions"]');
+
+    expect(screen.getByText("1 helper")).toBeTruthy();
+    expect(screen.getByText("math")).toBeTruthy();
+    expect(helpersNode?.querySelector('[data-query-node-handle="source-out"]')).toBeTruthy();
+    expect(helpersNode?.querySelector('[data-query-node-handle="target-in"]')).toBeNull();
+    expect(importNode?.querySelector('[data-query-node-handle="target-in"]')).toBeTruthy();
+    expect(importNode?.querySelector('[data-query-node-handle="source-out"]')).toBeNull();
+  });
+
   test("shows a compact summary for fromTable nodes", () => {
     renderWithI18n(
       <ReactFlowProvider>

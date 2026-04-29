@@ -4,6 +4,7 @@ import type {
   GraphDocument,
   GraphNode,
   GraphWorkspace,
+  HelperFunctionDefinition,
   NamedExpression,
   SortItem,
 } from "../../domain/document/types";
@@ -39,7 +40,9 @@ type FromTableNode = Extract<GraphNode, { kind: "fromTable" }>;
 type SelectNode = Extract<GraphNode, { kind: "select" }>;
 type AggregationNode = Extract<GraphNode, { kind: "aggregation" }>;
 type SortNode = Extract<GraphNode, { kind: "sort" }>;
+type HelperFunctionsNode = Extract<GraphNode, { kind: "helperFunctions" }>;
 type NamedExpressionDraftRow = DraftRow<NamedExpression>;
+type HelperFunctionDraftRow = DraftRow<HelperFunctionDefinition>;
 type SortItemDraftValue = SortItem & {
   isPlaceholder?: boolean;
 };
@@ -71,11 +74,21 @@ type SortEditorDraft = Omit<SortNode, "data"> & {
   };
 };
 
+type HelperFunctionsEditorDraft = Omit<HelperFunctionsNode, "data"> & {
+  data: {
+    helpers: HelperFunctionDraftRow[];
+  };
+};
+
 type EditableNodeDraft =
-  | Exclude<GraphNode, FromTableNode | SelectNode | AggregationNode | SortNode>
+  | Exclude<
+      GraphNode,
+      FromTableNode | SelectNode | AggregationNode | SortNode | HelperFunctionsNode
+    >
   | SelectEditorDraft
   | AggregationEditorDraft
   | SortEditorDraft
+  | HelperFunctionsEditorDraft
   | FromTableEditorDraft;
 
 const rowActionItemMessageKeys = {
@@ -85,8 +98,15 @@ const rowActionItemMessageKeys = {
   groupKey: "rowActions.groupKey",
   aggregate: "rowActions.aggregate",
   sortItem: "rowActions.sortItem",
+  helper: "rowActions.helper",
 } as const satisfies Record<
-  "mapping" | "field" | "column" | "groupKey" | "aggregate" | "sortItem",
+  | "mapping"
+  | "field"
+  | "column"
+  | "groupKey"
+  | "aggregate"
+  | "sortItem"
+  | "helper",
   MessageKey
 >;
 
@@ -119,6 +139,10 @@ function blankFieldRow(): FieldRow {
 }
 
 function blankNamedExpression(): NamedExpression {
+  return { name: "", expression: "" };
+}
+
+function blankHelperFunction(): HelperFunctionDefinition {
   return { name: "", expression: "" };
 }
 
@@ -341,6 +365,15 @@ function toEditableNodeDraft(node: GraphNode): EditableNodeDraft {
     };
   }
 
+  if (node.kind === "helperFunctions") {
+    return {
+      ...node,
+      data: {
+        helpers: ensureDraftRows(node.data.helpers, blankHelperFunction),
+      },
+    };
+  }
+
   if (node.kind !== "fromTable") {
     return node;
   }
@@ -393,6 +426,17 @@ export function serializeNodeEditorDraft(draft: EditableNodeDraft): GraphNode {
     };
   }
 
+  if (draft.kind === "helperFunctions") {
+    const helpers = stripDraftRows(draft.data.helpers);
+
+    return {
+      ...draft,
+      data: {
+        helpers: sanitizeNamedExpressions(helpers),
+      },
+    };
+  }
+
   if (draft.kind !== "fromTable") {
     return draft;
   }
@@ -426,7 +470,7 @@ function NamedExpressionRows({
   onChange,
 }: {
   rows: NamedExpressionDraftRow[];
-  itemKey: "mapping" | "groupKey" | "aggregate";
+  itemKey: "mapping" | "groupKey" | "aggregate" | "helper";
   addButtonLabel: string;
   nameLabel: (rowNumber: number) => string;
   expressionLabel: (rowNumber: number) => string;
@@ -478,19 +522,81 @@ function NamedExpressionRows({
               />
             }
             actions={
-              <RowActionBar
-                itemKey={itemKey}
-                rowNumber={index + 1}
-                rowCount={rows.length}
-                onMoveUp={() => onChange(moveDraftRow(rows, index, index - 1))}
-                onMoveDown={() => onChange(moveDraftRow(rows, index, index + 1))}
-                onDuplicate={() =>
-                  onChange(duplicateDraftRow(rows, index, (item) => ({ ...item })))
-                }
-                onRemove={() =>
-                  onChange(removeDraftRow(rows, index, blankNamedExpression))
-                }
-              />
+              itemKey === "helper" ? (
+                <div
+                  className="row-action-bar"
+                  role="group"
+                  aria-label={t("rowActions.group", {
+                    item: itemLabel,
+                    row: index + 1,
+                  })}
+                >
+                  <button
+                    className="row-icon-button"
+                    type="button"
+                    aria-label={t("rowActions.moveUp", {
+                      item: itemLabel,
+                      row: index + 1,
+                    })}
+                    onClick={() => onChange(moveDraftRow(rows, index, index - 1))}
+                    disabled={index === 0}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    className="row-icon-button"
+                    type="button"
+                    aria-label={t("rowActions.moveDown", {
+                      item: itemLabel,
+                      row: index + 1,
+                    })}
+                    onClick={() => onChange(moveDraftRow(rows, index, index + 1))}
+                    disabled={index === rows.length - 1}
+                  >
+                    ↓
+                  </button>
+                  <button
+                    className="row-icon-button"
+                    type="button"
+                    aria-label={t("rowActions.duplicate", {
+                      item: itemLabel,
+                      row: index + 1,
+                    })}
+                    onClick={() =>
+                      onChange(duplicateDraftRow(rows, index, (item) => ({ ...item })))
+                    }
+                  >
+                    ⧉
+                  </button>
+                  <button
+                    className="row-icon-button row-icon-button-danger"
+                    type="button"
+                    aria-label={t("rowActions.remove", {
+                      item: itemLabel,
+                      row: index + 1,
+                    })}
+                    onClick={() =>
+                      onChange(removeDraftRow(rows, index, blankNamedExpression))
+                    }
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <RowActionBar
+                  itemKey={itemKey}
+                  rowNumber={index + 1}
+                  rowCount={rows.length}
+                  onMoveUp={() => onChange(moveDraftRow(rows, index, index - 1))}
+                  onMoveDown={() => onChange(moveDraftRow(rows, index, index + 1))}
+                  onDuplicate={() =>
+                    onChange(duplicateDraftRow(rows, index, (item) => ({ ...item })))
+                  }
+                  onRemove={() =>
+                    onChange(removeDraftRow(rows, index, blankNamedExpression))
+                  }
+                />
+              )
             }
           >
             <ExpressionInput
@@ -645,6 +751,31 @@ function SelectMappingRows({
       schemaOverrides={schemaOverrides}
       t={t}
       onChange={onChange}
+    />
+  );
+}
+
+function HelperFunctionRows(props: {
+  rows: HelperFunctionDraftRow[];
+  document: GraphDocument;
+  nodeId: string;
+  t: Translator;
+  onChange: (rows: HelperFunctionDraftRow[]) => void;
+}) {
+  return (
+    <NamedExpressionRows
+      rows={props.rows}
+      itemKey="helper"
+      addButtonLabel={props.t("editor.addHelper")}
+      nameLabel={(rowNumber) => props.t("editor.helperName", { row: rowNumber })}
+      expressionLabel={(rowNumber) =>
+        props.t("editor.helperExpression", { row: rowNumber })
+      }
+      rowCardTestIdPrefix="helper-row-card"
+      document={props.document}
+      nodeId={props.nodeId}
+      t={props.t}
+      onChange={props.onChange}
     />
   );
 }
@@ -870,6 +1001,28 @@ export function renderNodeEditor(
             setDraft({ ...draft, data: { items } })
           }
         />
+      );
+    case "helperFunctions":
+      return (
+        <HelperFunctionRows
+          rows={draft.data.helpers}
+          document={document}
+          nodeId={draft.id}
+          t={t}
+          onChange={(helpers) => setDraft({ ...draft, data: { helpers } })}
+        />
+      );
+    case "importHelperFunctions":
+      return (
+        <label>
+          {t("editor.moduleName")}
+          <input
+            value={draft.data.moduleName}
+            onChange={(event) =>
+              setDraft({ ...draft, data: { moduleName: event.target.value } })
+            }
+          />
+        </label>
       );
     case "limit":
       return (

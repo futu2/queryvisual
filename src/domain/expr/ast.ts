@@ -16,6 +16,7 @@ export type BinaryOp =
 
 export type Expr =
   | { kind: "literal"; value: string | number | boolean | null }
+  | { kind: "placeholder"; index: number }
   | { kind: "column"; path: string[] }
   | { kind: "unary"; op: "-" | "not"; expression: Expr }
   | { kind: "binary"; op: BinaryOp; left: Expr; right: Expr }

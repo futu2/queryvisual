@@ -45,4 +45,24 @@ describe("parseExpression", () => {
   test("throws on invalid cast target types", () => {
     expect(() => parseExpression("cast(total as nonsense)")).toThrow();
   });
+
+  test("parses placeholders when explicitly enabled", () => {
+    const parsed = parseExpression("$1 + $2 + 10", { allowPlaceholders: true });
+
+    expect(parsed.kind).toBe("binary");
+    expect(parsed.op).toBe("+");
+    expect(JSON.stringify(parsed)).toContain('"kind":"placeholder"');
+    expect(JSON.stringify(parsed)).toContain('"index":1');
+    expect(JSON.stringify(parsed)).toContain('"index":2');
+  });
+
+  test("rejects placeholders by default", () => {
+    expect(() => parseExpression("$1 + 10")).toThrow();
+  });
+
+  test("rejects zero placeholders", () => {
+    expect(() =>
+      parseExpression("$0 + 10", { allowPlaceholders: true }),
+    ).toThrow();
+  });
 });

@@ -42,7 +42,48 @@ function NodeLabelProbe() {
   );
 }
 
+function NodeModelProbe() {
+  const { state } = useDocumentContext();
+
+  return (
+    <ul>
+      {state.document.nodes.map((node) => (
+        <li key={node.id} data-testid={`node-model-${node.kind}`}>
+          {JSON.stringify({ kind: node.kind, data: node.data })}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 describe("NodePalette", () => {
+  test("creates helper function and importer nodes", async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(
+      <DocumentProvider initialWorkspace={createSampleWorkspace()}>
+        <NodePalette />
+        <NodeModelProbe />
+      </DocumentProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Helper Functions" }));
+    await user.click(screen.getByRole("button", { name: "Import Helpers" }));
+
+    expect(screen.getByTestId("node-model-helperFunctions").textContent).toBe(
+      JSON.stringify({
+        kind: "helperFunctions",
+        data: { helpers: [{ name: "add10", expression: "$1 + 10" }] },
+      }),
+    );
+    expect(screen.getByTestId("node-model-importHelperFunctions").textContent).toBe(
+      JSON.stringify({
+        kind: "importHelperFunctions",
+        data: { moduleName: "" },
+      }),
+    );
+  });
+
   test("localizes palette labels without translating created node labels", async () => {
     const user = userEvent.setup();
 
@@ -60,4 +101,3 @@ describe("NodePalette", () => {
     expect(screen.getByText("Graph Input")).toBeTruthy();
   });
 });
-

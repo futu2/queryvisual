@@ -10,6 +10,7 @@ import { formatTableRef } from "../schema/types";
 import { parseExpression } from "../expr/parser";
 import { renderExpressionSql } from "../expr/render";
 import { isGraphWorkspaceLikeRuntime, normalizeGraphWorkspaceLikeRuntime } from "../document/types";
+import { buildHelperRegistry } from "../helpers/registry";
 import {
   buildSubgraphWorkspace,
   resolveSubgraphTarget,
@@ -47,6 +48,8 @@ function lowerWorkspaceOutputToIr(params: {
     return null;
   }
 
+  const helpers = buildHelperRegistry(params.semantic.document);
+  const renderOptions = { helpers };
   const cache = new Map<string, IRRelNode>();
   const inProgress = new Set<string>();
   const edgesByTarget = new Map(
@@ -161,7 +164,10 @@ function lowerWorkspaceOutputToIr(params: {
           lowered = {
             kind: "join",
             joinType: node.data.joinType,
-            predicateSql: renderExpressionSql(parseExpression(node.data.predicate)),
+            predicateSql: renderExpressionSql(
+              parseExpression(node.data.predicate),
+              renderOptions,
+            ),
             left,
             right,
             schema,
@@ -173,7 +179,10 @@ function lowerWorkspaceOutputToIr(params: {
           if (!input) return null;
           lowered = {
             kind: "filter",
-            predicateSql: renderExpressionSql(parseExpression(node.data.predicate)),
+            predicateSql: renderExpressionSql(
+              parseExpression(node.data.predicate),
+              renderOptions,
+            ),
             input,
           };
           break;
@@ -186,7 +195,10 @@ function lowerWorkspaceOutputToIr(params: {
             kind: "project",
             projections: node.data.mappings.map((mapping) => ({
               alias: mapping.name,
-              expressionSql: renderExpressionSql(parseExpression(mapping.expression)),
+              expressionSql: renderExpressionSql(
+                parseExpression(mapping.expression),
+                renderOptions,
+              ),
             })),
             input,
             schema,
@@ -201,11 +213,17 @@ function lowerWorkspaceOutputToIr(params: {
             kind: "aggregate",
             groupBy: node.data.groupBy.map((row) => ({
               alias: row.name,
-              expressionSql: renderExpressionSql(parseExpression(row.expression)),
+              expressionSql: renderExpressionSql(
+                parseExpression(row.expression),
+                renderOptions,
+              ),
             })),
             aggregates: node.data.aggregates.map((row) => ({
               alias: row.name,
-              expressionSql: renderExpressionSql(parseExpression(row.expression)),
+              expressionSql: renderExpressionSql(
+                parseExpression(row.expression),
+                renderOptions,
+              ),
             })),
             input,
             schema,
@@ -218,7 +236,10 @@ function lowerWorkspaceOutputToIr(params: {
           lowered = {
             kind: "sort",
             items: node.data.items.map((item) => ({
-              expressionSql: renderExpressionSql(parseExpression(item.expression)),
+              expressionSql: renderExpressionSql(
+                parseExpression(item.expression),
+                renderOptions,
+              ),
               direction: item.direction,
             })),
             input,
@@ -241,6 +262,10 @@ function lowerWorkspaceOutputToIr(params: {
           break;
         case "subgraph":
           // Lowering must be driven by the connected output handle (edge sourceHandle).
+          lowered = null;
+          break;
+        case "helperFunctions":
+        case "importHelperFunctions":
           lowered = null;
           break;
       }

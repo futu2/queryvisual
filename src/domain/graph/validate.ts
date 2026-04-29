@@ -9,6 +9,8 @@ import type {
 import { isGraphWorkspaceLikeRuntime, normalizeGraphWorkspaceLikeRuntime } from "../document/types";
 import type { ExpressionAnalysisDiagnosticCode } from "../expr/analyze";
 import { analyzeExpression } from "../expr/analyze";
+import { buildHelperRegistry } from "../helpers/registry";
+import type { HelperRegistry } from "../helpers/types";
 import type { ColumnMap, ColumnType } from "../schema/types";
 import { detectGraphCycle } from "../workspace/dependencies";
 import {
@@ -92,6 +94,8 @@ const analyzerCodeToNodeSuffix: Record<ExpressionAnalysisDiagnosticCode, string>
   "expr.parse-error": "invalid-expression",
   "expr.unknown-column": "unknown-column",
   "expr.ambiguous-column": "ambiguous-column",
+  "expr.ambiguous-helper": "ambiguous-helper",
+  "expr.helper-arity": "helper-arity",
   "expr.non-boolean": "non-boolean",
 };
 
@@ -104,12 +108,14 @@ function pushAnalyzerDiagnostics(params: {
   requireBoolean?: boolean;
   document: GraphDocument;
   schemaOverrides: Record<string, ColumnMap>;
+  helpers: HelperRegistry;
 }) {
   const scope = buildExpressionScope(params.document, params.nodeId, {
     schemas: params.schemaOverrides,
   });
   const analysis = analyzeExpression(params.expression, scope, {
     requireBoolean: params.requireBoolean,
+    helpers: params.helpers,
   });
 
   for (const diag of analysis.diagnostics) {
@@ -134,6 +140,7 @@ function mappingsToSchema(
   fieldPrefix: string,
   document: GraphDocument,
   schemaOverrides: Record<string, ColumnMap>,
+  helpers: HelperRegistry,
 ) {
   return Object.fromEntries(
     mappings.map((mapping, index) => {
@@ -145,6 +152,7 @@ function mappingsToSchema(
         expression: mapping.expression,
         document,
         schemaOverrides,
+        helpers,
       });
       return [mapping.name, type];
     }),
@@ -192,6 +200,8 @@ function validateGraphOutput(params: {
   const reachableNodeIds = new Set(orderedNodes.map(node => node.id));
   const diagnostics: Diagnostic[] = [];
   const schemas: Record<string, ColumnMap> = {};
+  const helperRegistry = buildHelperRegistry(document);
+  diagnostics.push(...helperRegistry.diagnostics);
   // Tracks nodes whose output schema/scope is not trustworthy due to structural issues
   // (missing/duplicate wiring) either on the node itself or upstream. Downstream consumers
   // should not emit analyzer diagnostics based on these broken scopes.
@@ -205,6 +215,10 @@ function validateGraphOutput(params: {
         break;
       case "fromTable":
         schemas[node.id] = node.data.columns;
+        break;
+      case "helperFunctions":
+      case "importHelperFunctions":
+        schemas[node.id] = {};
         break;
       case "subgraph": {
         if (!workspace) {
@@ -512,6 +526,7 @@ function validateGraphOutput(params: {
           requireBoolean: true,
           document,
           schemaOverrides: schemas,
+          helpers: helperRegistry,
         });
         schemas[node.id] = { ...leftSchema, ...rightSchema };
         break;
@@ -543,6 +558,7 @@ function validateGraphOutput(params: {
           requireBoolean: true,
           document,
           schemaOverrides: schemas,
+          helpers: helperRegistry,
         });
         schemas[node.id] = schemas[input.source] ?? {};
         break;
@@ -573,6 +589,7 @@ function validateGraphOutput(params: {
           "mappings",
           document,
           schemas,
+          helperRegistry,
         );
         break;
       }
@@ -603,6 +620,7 @@ function validateGraphOutput(params: {
             "groupBy",
             document,
             schemas,
+            helperRegistry,
           ),
           ...mappingsToSchema(
             node.data.aggregates,
@@ -612,6 +630,7 @@ function validateGraphOutput(params: {
             "aggregates",
             document,
             schemas,
+            helperRegistry,
           ),
         };
         break;
@@ -643,6 +662,7 @@ function validateGraphOutput(params: {
             expression: item.expression,
             document,
             schemaOverrides: schemas,
+            helpers: helperRegistry,
           });
         }
         schemas[node.id] = schemas[input.source] ?? {};

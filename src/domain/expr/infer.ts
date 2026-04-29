@@ -1,7 +1,13 @@
 import type { ColumnType } from "../schema/types";
+import type { HelperRegistry } from "../helpers/types";
 import type { Expr } from "./ast";
 
 export type ExprScope = Record<string, ColumnType>;
+
+export type InferExpressionOptions = {
+  helpers?: HelperRegistry;
+  placeholderTypes?: Record<number, ColumnType>;
+};
 
 const numericOperators = new Set(["+", "-", "*", "/"]);
 const booleanOperators = new Set(["and", "or"]);
@@ -27,7 +33,11 @@ function unifyExpressionTypes(types: ColumnType[]): ColumnType {
   return nonNullTypes.every(type => type === firstType) ? firstType : "unknown";
 }
 
-export function inferExpressionType(expr: Expr, scope: ExprScope): ColumnType {
+export function inferExpressionType(
+  expr: Expr,
+  scope: ExprScope,
+  options: InferExpressionOptions = {},
+): ColumnType {
   switch (expr.kind) {
     case "literal":
       if (expr.value === null) return "null";
@@ -35,6 +45,8 @@ export function inferExpressionType(expr: Expr, scope: ExprScope): ColumnType {
       if (typeof expr.value === "number")
         return Number.isInteger(expr.value) ? "int" : "float";
       return "string";
+    case "placeholder":
+      return options.placeholderTypes?.[expr.index] ?? "unknown";
     case "column": {
       const key = expr.path.join(".");
       return scope[key] ?? scope[expr.path.at(-1) ?? ""] ?? "unknown";
@@ -42,20 +54,30 @@ export function inferExpressionType(expr: Expr, scope: ExprScope): ColumnType {
     case "unary":
       return expr.op === "not"
         ? "boolean"
-        : inferExpressionType(expr.expression, scope);
+        : inferExpressionType(expr.expression, scope, options);
     case "binary":
       if (booleanOperators.has(expr.op)) return "boolean";
       if (comparisonOperators.has(expr.op)) return "boolean";
       if (numericOperators.has(expr.op)) {
-        const left = inferExpressionType(expr.left, scope);
-        const right = inferExpressionType(expr.right, scope);
+        const left = inferExpressionType(expr.left, scope, options);
+        const right = inferExpressionType(expr.right, scope, options);
         if (!isNumericType(left) || !isNumericType(right)) {
           return "unknown";
         }
         return left === "float" || right === "float" ? "float" : "int";
       }
       return "unknown";
-    case "call":
+    case "call": {
+      const resolution = options.helpers?.resolveCall(expr.name);
+      if (resolution?.status === "resolved") {
+        return resolution.helper.arity === expr.args.length
+          ? resolution.helper.returnType
+          : "unknown";
+      }
+      if (resolution?.status === "ambiguous") {
+        return "unknown";
+      }
+
       switch (expr.name) {
         case "count":
           return "int";
@@ -64,16 +86,21 @@ export function inferExpressionType(expr: Expr, scope: ExprScope): ColumnType {
           return "float";
         case "coalesce":
           return unifyExpressionTypes(
-            expr.args.map(argument => inferExpressionType(argument, scope)),
+            expr.args.map(argument =>
+              inferExpressionType(argument, scope, options),
+            ),
           );
         default:
           return "unknown";
       }
+    }
     case "case":
       return unifyExpressionTypes([
-        ...expr.branches.map(branch => inferExpressionType(branch.then, scope)),
+        ...expr.branches.map(branch =>
+          inferExpressionType(branch.then, scope, options),
+        ),
         ...(expr.elseExpression
-          ? [inferExpressionType(expr.elseExpression, scope)]
+          ? [inferExpressionType(expr.elseExpression, scope, options)]
           : []),
       ]);
     case "cast":

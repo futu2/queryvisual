@@ -823,6 +823,246 @@ describe("validateOutput", () => {
     expect(unknown?.ref?.field).toBe("mappings.0.expression");
   });
 
+  test("validates select expressions using imported helpers", () => {
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "helper select" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "orders",
+          kind: "fromTable",
+          label: "Orders",
+          position: { x: 0, y: 0 },
+          data: { tableRef: { tableName: "orders" }, columns: { total: "float" } },
+        },
+        {
+          id: "helpers",
+          kind: "helperFunctions",
+          label: "Helpers",
+          position: { x: 0, y: 160 },
+          data: { helpers: [{ name: "add10", expression: "$1 + 10" }] },
+        },
+        {
+          id: "import",
+          kind: "importHelperFunctions",
+          label: "Import Helpers",
+          position: { x: 180, y: 160 },
+          data: { moduleName: "math" },
+        },
+        {
+          id: "select",
+          kind: "select",
+          label: "Select",
+          position: { x: 260, y: 0 },
+          data: { mappings: [{ name: "gross", expression: "add10(total)" }] },
+        },
+        {
+          id: "output",
+          kind: "output",
+          label: "Output",
+          position: { x: 520, y: 0 },
+          data: outputData("out"),
+        },
+      ],
+      edges: [
+        { id: "e-orders-select", source: "orders", sourceHandle: "out", target: "select", targetHandle: "in" },
+        { id: "e-select-output", source: "select", sourceHandle: "out", target: "output", targetHandle: "in" },
+        { id: "e-helper-import", source: "helpers", sourceHandle: "out", target: "import", targetHandle: "in" },
+      ],
+    };
+
+    const semantic = validateOutput(document, "output");
+
+    expect(semantic.diagnostics).toEqual([]);
+    expect(semantic.schemas.select).toEqual({ gross: "unknown" });
+  });
+
+  test("reports importer without helper input", () => {
+    const document = createSampleDocument();
+    document.nodes.push({
+      id: "import",
+      kind: "importHelperFunctions",
+      label: "Import Helpers",
+      position: { x: 0, y: 200 },
+      data: { moduleName: "" },
+    });
+
+    const semantic = validateOutput(document, "output-orders");
+
+    expect(semantic.diagnostics.some((diagnostic) => diagnostic.code === "helpers.importer-missing-input")).toBe(true);
+  });
+
+  test("reports wrong helper arity in select expressions", () => {
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "helper arity" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "orders",
+          kind: "fromTable",
+          label: "Orders",
+          position: { x: 0, y: 0 },
+          data: { tableRef: { tableName: "orders" }, columns: { total: "float" } },
+        },
+        {
+          id: "helpers",
+          kind: "helperFunctions",
+          label: "Helpers",
+          position: { x: 0, y: 160 },
+          data: { helpers: [{ name: "add", expression: "$1 + $2" }] },
+        },
+        {
+          id: "import",
+          kind: "importHelperFunctions",
+          label: "Import Helpers",
+          position: { x: 180, y: 160 },
+          data: { moduleName: "" },
+        },
+        {
+          id: "select",
+          kind: "select",
+          label: "Select",
+          position: { x: 260, y: 0 },
+          data: { mappings: [{ name: "gross", expression: "add(total)" }] },
+        },
+        {
+          id: "output",
+          kind: "output",
+          label: "Output",
+          position: { x: 520, y: 0 },
+          data: outputData("out"),
+        },
+      ],
+      edges: [
+        { id: "e-orders-select", source: "orders", sourceHandle: "out", target: "select", targetHandle: "in" },
+        { id: "e-select-output", source: "select", sourceHandle: "out", target: "output", targetHandle: "in" },
+        { id: "e-helper-import", source: "helpers", sourceHandle: "out", target: "import", targetHandle: "in" },
+      ],
+    };
+
+    const semantic = validateOutput(document, "output");
+    const arity = semantic.diagnostics.find((diagnostic) => diagnostic.code === "select.helper-arity");
+
+    expect(arity).toBeDefined();
+    expect(arity?.ref?.nodeId).toBe("select");
+    expect(arity?.ref?.field).toBe("mappings.0.expression");
+  });
+
+  test("reports ambiguous helper calls in select expressions", () => {
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "ambiguous helper" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "orders",
+          kind: "fromTable",
+          label: "Orders",
+          position: { x: 0, y: 0 },
+          data: { tableRef: { tableName: "orders" }, columns: { total: "float" } },
+        },
+        {
+          id: "math-helpers",
+          kind: "helperFunctions",
+          label: "Math Helpers",
+          position: { x: 0, y: 160 },
+          data: { helpers: [{ name: "adjust", expression: "$1 + 10" }] },
+        },
+        {
+          id: "finance-helpers",
+          kind: "helperFunctions",
+          label: "Finance Helpers",
+          position: { x: 0, y: 320 },
+          data: { helpers: [{ name: "adjust", expression: "$1 + 20" }] },
+        },
+        {
+          id: "math-import",
+          kind: "importHelperFunctions",
+          label: "Import Math",
+          position: { x: 180, y: 160 },
+          data: { moduleName: "math" },
+        },
+        {
+          id: "finance-import",
+          kind: "importHelperFunctions",
+          label: "Import Finance",
+          position: { x: 180, y: 320 },
+          data: { moduleName: "finance" },
+        },
+        {
+          id: "select",
+          kind: "select",
+          label: "Select",
+          position: { x: 260, y: 0 },
+          data: { mappings: [{ name: "gross", expression: "adjust(total)" }] },
+        },
+        {
+          id: "output",
+          kind: "output",
+          label: "Output",
+          position: { x: 520, y: 0 },
+          data: outputData("out"),
+        },
+      ],
+      edges: [
+        { id: "e-orders-select", source: "orders", sourceHandle: "out", target: "select", targetHandle: "in" },
+        { id: "e-select-output", source: "select", sourceHandle: "out", target: "output", targetHandle: "in" },
+        { id: "e-math-helper-import", source: "math-helpers", sourceHandle: "out", target: "math-import", targetHandle: "in" },
+        { id: "e-finance-helper-import", source: "finance-helpers", sourceHandle: "out", target: "finance-import", targetHandle: "in" },
+      ],
+    };
+
+    const semantic = validateOutput(document, "output");
+    const ambiguous = semantic.diagnostics.find((diagnostic) => diagnostic.code === "select.ambiguous-helper");
+
+    expect(ambiguous).toBeDefined();
+    expect(ambiguous?.ref?.nodeId).toBe("select");
+    expect(ambiguous?.ref?.field).toBe("mappings.0.expression");
+  });
+
+  test("helper and importer nodes do not require relational wiring", () => {
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "helper node output" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "helpers",
+          kind: "helperFunctions",
+          label: "Helpers",
+          position: { x: 0, y: 0 },
+          data: { helpers: [{ name: "identity", expression: "$1" }] },
+        },
+        {
+          id: "import",
+          kind: "importHelperFunctions",
+          label: "Import Helpers",
+          position: { x: 200, y: 0 },
+          data: { moduleName: "" },
+        },
+        {
+          id: "output",
+          kind: "output",
+          label: "Output",
+          position: { x: 400, y: 0 },
+          data: outputData("out"),
+        },
+      ],
+      edges: [
+        { id: "e-helper-import", source: "helpers", sourceHandle: "out", target: "import", targetHandle: "in" },
+        { id: "e-import-output", source: "import", sourceHandle: "out", target: "output", targetHandle: "in" },
+      ],
+    };
+
+    const semantic = validateOutput(document, "output");
+
+    expect(semantic.diagnostics).toEqual([]);
+    expect(semantic.schemas.helpers).toEqual({});
+    expect(semantic.schemas.import).toEqual({});
+  });
+
   test("accepts package-target subgraphs when the installed export exists", () => {
     const workspace: GraphWorkspace = {
       version: 2,
