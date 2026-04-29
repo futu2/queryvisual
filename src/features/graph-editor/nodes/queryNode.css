@@ -146,6 +146,12 @@
   box-shadow: 0 0 0 1px rgba(174, 63, 47, 0.18), 0 10px 24px rgba(174, 63, 47, 0.12);
 }
 
+.query-node--preview {
+  opacity: 0.72;
+  border-style: dashed;
+  pointer-events: none;
+}
+
 .query-node__handle {
   width: 24px;
   height: 24px;

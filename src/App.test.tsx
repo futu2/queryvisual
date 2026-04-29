@@ -80,6 +80,21 @@ describe("App", () => {
     expect(screen.getByLabelText("Graph name Beta Graph")).toBeTruthy();
   });
 
+  test("palette click enters node placement mode instead of creating immediately", async () => {
+    const user = userEvent.setup();
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    expect(screen.getAllByText("Project")).toHaveLength(1);
+
+    await user.click(screen.getByRole("button", { name: "Select" }));
+
+    expect(screen.getByText("Click canvas to place Select · Esc to cancel")).toBeTruthy();
+    expect(screen.getAllByText("Project")).toHaveLength(1);
+  });
+
   test("graph names stay as user content while surrounding shell labels localize (zh-CN)", async () => {
     const hadOwnLanguage = Object.prototype.hasOwnProperty.call(
       navigator,

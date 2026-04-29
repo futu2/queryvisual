@@ -202,7 +202,7 @@ export function QueryNode({ id, data, selected }: NodeProps<FlowNodeData>) {
   }, [subgraphInterface]);
 
   useLayoutEffect(() => {
-    if (data.node.kind !== "subgraph") {
+    if (data.isPreview || data.node.kind !== "subgraph") {
       return;
     }
 
@@ -213,13 +213,15 @@ export function QueryNode({ id, data, selected }: NodeProps<FlowNodeData>) {
 
   return (
     <div
-      className={`query-node query-node--${presentation.family} query-node--${data.node.kind} ${selected ? "is-selected" : ""} ${hasErrors ? "has-errors" : ""}`}
+      className={`query-node query-node--${presentation.family} query-node--${data.node.kind} ${data.isPreview ? "query-node--preview" : ""} ${selected ? "is-selected" : ""} ${hasErrors ? "has-errors" : ""}`}
       data-node-kind={data.node.kind}
       data-node-family={presentation.family}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <TargetHandles node={data.node} workspace={data.workspace} />
+      {data.isPreview ? null : (
+        <TargetHandles node={data.node} workspace={data.workspace} />
+      )}
       {data.node.kind === "join" ? <span className="query-node__accent" aria-hidden="true" /> : null}
       {data.onDelete && (selected || isHovered) ? (
         <button
@@ -247,7 +249,7 @@ export function QueryNode({ id, data, selected }: NodeProps<FlowNodeData>) {
       </div>
       <div className="query-node__title">{data.node.label}</div>
       <div className="query-node__summary">{summaryText(t, data.node, data.workspace)}</div>
-      {data.node.kind === "subgraph" ? (
+      {data.node.kind === "subgraph" && !data.isPreview ? (
         <div className="query-node__ports" aria-label={t("queryNode.subgraphInterface")}>
           {subgraphInterface && subgraphInterface.graph ? (
             <div className="query-node__ports-heading">
@@ -312,7 +314,8 @@ export function QueryNode({ id, data, selected }: NodeProps<FlowNodeData>) {
         </div>
       ) : null}
       {hasErrors ? <span className="query-node__badge">{t("queryNode.error")}</span> : null}
-      {data.node.kind === "output" ||
+      {data.isPreview ||
+      data.node.kind === "output" ||
       data.node.kind === "subgraph" ||
       data.node.kind === "helperFunctions" ||
       data.node.kind === "importGraphHelpers" ||

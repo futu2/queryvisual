@@ -2,7 +2,7 @@ import {
   DocumentProvider,
   useDocumentContext,
 } from "./app/state/DocumentContext";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useOutputRuntime } from "./features/output-runtime/outputRuntime";
 import type { GraphDocument, GraphWorkspace } from "./domain/document/types";
 import { DocumentToolbar } from "./features/document-storage/DocumentToolbar";
@@ -11,10 +11,13 @@ import { NodePalette } from "./features/graph-editor/NodePalette";
 import { InstalledPackageList } from "./features/packages/InstalledPackageList";
 import { GraphCatalog } from "./features/workspace/GraphCatalog";
 import { I18nProvider, useI18n } from "./features/i18n/I18nContext";
+import type { NodePlacementRequest } from "./features/graph-editor/nodeFactory";
 
 export function AppLayout() {
   const { state } = useDocumentContext();
   const outputRuntime = useOutputRuntime(state.workspace, state.activeGraphId);
+  const [pendingNodePlacement, setPendingNodePlacement] =
+    useState<NodePlacementRequest | null>(null);
   const editorTransitionRef = useRef<(action: () => void) => void>((action) =>
     action(),
   );
@@ -30,7 +33,10 @@ export function AppLayout() {
           runGraphMutation={(action) => editorTransitionRef.current(action)}
         />
         <InstalledPackageList packages={state.workspace.installedPackages} />
-        <NodePalette />
+        <NodePalette
+          pendingKind={pendingNodePlacement?.kind ?? null}
+          onRequestNodePlacement={setPendingNodePlacement}
+        />
       </aside>
 
       <main
@@ -39,6 +45,8 @@ export function AppLayout() {
         <h2>{t("app.canvasTitle")}</h2>
         <GraphCanvas
           outputRuntime={outputRuntime}
+          pendingNodePlacement={pendingNodePlacement}
+          onClearPendingNodePlacement={() => setPendingNodePlacement(null)}
           registerEditorTransition={(runner) => {
             editorTransitionRef.current = runner;
           }}

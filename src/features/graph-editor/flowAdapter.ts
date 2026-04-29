@@ -8,6 +8,7 @@ export interface FlowNodeData {
   diagnostics: Diagnostic[];
   workspace?: GraphWorkspace;
   onDelete?: (nodeId: string) => void;
+  isPreview?: boolean;
 }
 
 export interface FlowNodeRuntime {

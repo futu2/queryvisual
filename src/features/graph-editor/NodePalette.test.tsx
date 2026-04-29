@@ -1,8 +1,9 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, test } from "bun:test";
 import userEvent from "@testing-library/user-event";
-import type { ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import { DocumentProvider, useDocumentContext } from "../../app/state/DocumentContext";
+import type { NodeKind } from "../../domain/document/types";
 import { createSampleWorkspace } from "../../domain/workspace/sample";
 import { I18nProvider } from "../i18n/I18nContext";
 import { NodePalette } from "./NodePalette";
@@ -56,32 +57,40 @@ function NodeModelProbe() {
   );
 }
 
+function PlacementProbe() {
+  const [pendingKind, setPendingKind] = useState<NodeKind | null>(null);
+
+  return (
+    <>
+      <NodePalette
+        pendingKind={pendingKind}
+        onRequestNodePlacement={(request) => setPendingKind(request.kind)}
+      />
+      <span data-testid="pending-kind">{pendingKind ?? "null"}</span>
+    </>
+  );
+}
+
 describe("NodePalette", () => {
-  test("creates helper function and graph helper importer nodes", async () => {
+  test("requests helper function and graph helper importer placement without creating nodes immediately", async () => {
     const user = userEvent.setup();
 
     renderWithProviders(
       <DocumentProvider initialWorkspace={createSampleWorkspace()}>
-        <NodePalette />
+        <PlacementProbe />
         <NodeModelProbe />
       </DocumentProvider>,
     );
 
     await user.click(screen.getByRole("button", { name: "Helper Functions" }));
+
+    expect(screen.getByTestId("pending-kind").textContent).toBe("helperFunctions");
+    expect(screen.queryByTestId("node-model-helperFunctions")).toBeNull();
+
     await user.click(screen.getByRole("button", { name: "Import Graph Helpers" }));
 
-    expect(screen.getByTestId("node-model-helperFunctions").textContent).toBe(
-      JSON.stringify({
-        kind: "helperFunctions",
-        data: { moduleName: "", helpers: [{ name: "add10", expression: "$1 + 10" }] },
-      }),
-    );
-    expect(screen.getByTestId("node-model-importGraphHelpers").textContent).toBe(
-      JSON.stringify({
-        kind: "importGraphHelpers",
-        data: { graphId: "", moduleName: "" },
-      }),
-    );
+    expect(screen.getByTestId("pending-kind").textContent).toBe("importGraphHelpers");
+    expect(screen.queryByTestId("node-model-importGraphHelpers")).toBeNull();
   });
 
   test("localizes palette labels without translating created node labels", async () => {
@@ -89,7 +98,7 @@ describe("NodePalette", () => {
 
     renderWithProviders(
       <DocumentProvider initialWorkspace={createSampleWorkspace()}>
-        <NodePalette />
+        <PlacementProbe />
         <NodeLabelProbe />
       </DocumentProvider>,
       { navigatorLanguage: "zh-CN" },
@@ -98,6 +107,7 @@ describe("NodePalette", () => {
     expect(screen.getByText("节点")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "图输入" }));
 
-    expect(screen.getByText("Graph Input")).toBeTruthy();
+    expect(screen.getByTestId("pending-kind").textContent).toBe("graphInput");
+    expect(screen.queryByText("Graph Input")).toBeNull();
   });
 });

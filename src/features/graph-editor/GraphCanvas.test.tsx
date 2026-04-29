@@ -8,9 +8,16 @@ import type { OutputRuntimeSnapshot } from "../output-runtime/outputRuntime";
 import { I18nProvider } from "../i18n/I18nContext";
 
 let reactFlowProps: Record<string, unknown> | null = null;
+const screenToFlowPositionMock = mock(({ x, y }: { x: number; y: number }) => ({
+  x: x + 10,
+  y: y + 20,
+}));
 
 mock.module("@xyflow/react", () => ({
   ReactFlowProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useReactFlow: () => ({
+    screenToFlowPosition: screenToFlowPositionMock,
+  }),
   useUpdateNodeInternals: () => () => {},
   ReactFlow: (props: Record<string, unknown>) => {
     reactFlowProps = props;
@@ -167,14 +174,25 @@ async function invokeNodeClick(nodeId: string) {
   });
 }
 
-async function invokePaneClick() {
+async function invokePaneClick(event: Record<string, unknown> = {}) {
   const onPaneClick = reactFlowProps?.onPaneClick;
   if (typeof onPaneClick !== "function") {
     throw new Error("Missing onPaneClick handler");
   }
 
   await act(async () => {
-    await Promise.resolve(onPaneClick({ type: "click" }));
+    await Promise.resolve(onPaneClick({ type: "click", ...event }));
+  });
+}
+
+async function invokePaneMouseMove(event: Record<string, unknown> = {}) {
+  const onPaneMouseMove = reactFlowProps?.onPaneMouseMove;
+  if (typeof onPaneMouseMove !== "function") {
+    throw new Error("Missing onPaneMouseMove handler");
+  }
+
+  await act(async () => {
+    await Promise.resolve(onPaneMouseMove({ type: "mousemove", ...event }));
   });
 }
 
@@ -202,6 +220,7 @@ function EditorStateProbe() {
 afterEach(() => {
   cleanup();
   reactFlowProps = null;
+  screenToFlowPositionMock.mockClear();
 });
 
 describe("GraphCanvas", () => {
@@ -262,6 +281,153 @@ describe("GraphCanvas", () => {
       | { data?: { workspace?: unknown } }
       | undefined;
     expect(flowNode?.data?.workspace).toBeTruthy();
+  });
+
+  test("places a pending node at the clicked flow position and opens its editor", async () => {
+    const clearPending = mock();
+
+    render(
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialDocument={createSampleDocument()}>
+          <GraphCanvas
+            outputRuntime={createEmptyOutputRuntime()}
+            pendingNodePlacement={{ kind: "where", label: "Where" }}
+            onClearPendingNodePlacement={clearPending}
+          />
+        </DocumentProvider>
+      </I18nProvider>,
+    );
+
+    await invokePaneClick({ clientX: 30, clientY: 40 });
+
+    const placedNode = getFlowNodes().find((node) => {
+      if (
+        typeof node !== "object" ||
+        node === null ||
+        !("data" in node) ||
+        typeof node.data !== "object" ||
+        node.data === null ||
+        !("node" in node.data)
+      ) {
+        return false;
+      }
+
+      const graphNode = node.data.node;
+      return (
+        typeof graphNode === "object" &&
+        graphNode !== null &&
+        "kind" in graphNode &&
+        graphNode.kind === "where"
+      );
+    });
+
+    expect(placedNode).toMatchObject({
+      position: { x: 40, y: 60 },
+      selected: true,
+    });
+    expect(screen.getByRole("dialog", { name: "Edit Where node" })).toBeTruthy();
+    expect(clearPending).toHaveBeenCalledTimes(1);
+  });
+
+  test("pending node placement shows a handle-free ghost at the latest mouse position", async () => {
+    render(
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialDocument={createSampleDocument()}>
+          <GraphCanvas
+            outputRuntime={createEmptyOutputRuntime()}
+            pendingNodePlacement={{ kind: "select", label: "Select" }}
+            onClearPendingNodePlacement={() => {}}
+          />
+        </DocumentProvider>
+      </I18nProvider>,
+    );
+
+    expect(getFlowNode("pending-node-preview")).toBeUndefined();
+
+    await invokePaneMouseMove({ clientX: 70, clientY: 80 });
+
+    expect(getFlowNode("pending-node-preview")).toBeUndefined();
+    const preview = screen
+      .getAllByText("Select")
+      .find((element) => element.closest(".query-node--preview"));
+
+    expect(preview).toBeTruthy();
+    expect(preview?.closest(".node-placement-preview")).toBeTruthy();
+    expect(
+      preview?.closest(".query-node--preview")?.querySelector("[data-query-node-handle]"),
+    ).toBeNull();
+  });
+
+  test("Escape cancels pending node placement", async () => {
+    const clearPending = mock();
+
+    render(
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialDocument={createSampleDocument()}>
+          <GraphCanvas
+            outputRuntime={createEmptyOutputRuntime()}
+            pendingNodePlacement={{ kind: "where", label: "Where" }}
+            onClearPendingNodePlacement={clearPending}
+          />
+        </DocumentProvider>
+      </I18nProvider>,
+    );
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(clearPending).toHaveBeenCalledTimes(1);
+  });
+
+  test("pending node placement respects dirty editor discard protection", async () => {
+    const user = userEvent.setup();
+    const clearPending = mock();
+
+    render(
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialDocument={createSampleDocument()}>
+          <GraphCanvas
+            outputRuntime={createEmptyOutputRuntime()}
+            pendingNodePlacement={{ kind: "where", label: "Where" }}
+            onClearPendingNodePlacement={clearPending}
+          />
+        </DocumentProvider>
+      </I18nProvider>,
+    );
+
+    await invokeNodeClick("from-orders");
+    await user.clear(screen.getByLabelText("Node name"));
+    await user.type(screen.getByLabelText("Node name"), "Dirty orders");
+    await invokePaneClick({ clientX: 30, clientY: 40 });
+
+    expect(screen.getByRole("dialog", { name: "Discard changes?" })).toBeTruthy();
+    expect(clearPending).toHaveBeenCalledTimes(0);
+    expect(
+      getFlowNodes().some((node) => {
+        if (
+          typeof node !== "object" ||
+          node === null ||
+          !("data" in node) ||
+          typeof node.data !== "object" ||
+          node.data === null ||
+          !("node" in node.data)
+        ) {
+          return false;
+        }
+
+        const graphNode = node.data.node;
+        return (
+          typeof graphNode === "object" &&
+          graphNode !== null &&
+          "kind" in graphNode &&
+          graphNode.kind === "where"
+        );
+      }),
+    ).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "Keep editing" }));
+
+    expect(screen.getByText("Click canvas to place Where · Esc to cancel")).toBeTruthy();
+    expect(clearPending).toHaveBeenCalledTimes(0);
   });
 
   test("defers node switching through React Flow onNodeClick until discard is confirmed", async () => {

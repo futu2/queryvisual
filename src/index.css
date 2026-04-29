@@ -61,13 +61,45 @@ body {
 }
 
 .graph-canvas-frame {
+  position: relative;
   width: 100%;
   flex: 1 1 auto;
   min-height: 0;
 }
 
+.graph-canvas-frame.is-placing-node {
+  cursor: crosshair;
+}
+
 .graph-canvas-frame .react-flow {
   height: 100%;
+}
+
+.graph-canvas-frame.is-placing-node .react-flow {
+  cursor: crosshair;
+}
+
+.node-placement-hint {
+  position: absolute;
+  z-index: 5;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.94);
+  color: #4f4337;
+  font-size: 13px;
+  box-shadow: 0 6px 18px rgba(38, 26, 18, 0.14);
+  pointer-events: none;
+}
+
+.node-placement-preview {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  left: 0;
+  pointer-events: none;
 }
 
 .placeholder {

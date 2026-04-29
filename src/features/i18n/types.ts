@@ -56,6 +56,7 @@ export type MessageKey =
   | "nodeKinds.sort"
   | "nodeKinds.limit"
   | "nodeKinds.output"
+  | "nodePlacement.hint"
   | "modal.editNodeAria"
   | "modal.nodeName"
   | "modal.cancel"
