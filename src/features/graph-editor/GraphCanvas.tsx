@@ -193,7 +193,7 @@ export function GraphCanvas({
   };
 
   return (
-    <div style={{ width: "100%", minHeight: 520, flex: 1 }}>
+    <div className="graph-canvas-frame">
       <ReactFlow
         nodes={nodes}
         edges={edges}

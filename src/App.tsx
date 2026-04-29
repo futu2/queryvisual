@@ -35,7 +35,6 @@ export function AppLayout() {
 
       <main
         className="pane canvas-pane"
-        style={{ display: "flex", flexDirection: "column", gap: 12 }}
       >
         <h2>{t("app.canvasTitle")}</h2>
         <GraphCanvas

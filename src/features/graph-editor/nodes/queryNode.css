@@ -145,3 +145,35 @@
   border-color: #ae3f2f;
   box-shadow: 0 0 0 1px rgba(174, 63, 47, 0.18), 0 10px 24px rgba(174, 63, 47, 0.12);
 }
+
+.query-node__handle {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  cursor: crosshair;
+}
+
+.query-node__handle::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 253, 248, 0.96);
+  background: #9a5f19;
+  box-shadow: 0 2px 8px rgba(38, 26, 18, 0.22);
+}
+
+.query-node__handle[data-query-node-handle^="target"] {
+  left: 0;
+}
+
+.query-node__handle[data-query-node-handle^="source"] {
+  right: 0;
+}
+
+.query-node__handle:hover::after,
+.query-node__handle:focus-visible::after {
+  background: #6f4514;
+  box-shadow: 0 0 0 4px rgba(154, 95, 25, 0.18), 0 2px 8px rgba(38, 26, 18, 0.24);
+}

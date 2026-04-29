@@ -205,6 +205,20 @@ afterEach(() => {
 });
 
 describe("GraphCanvas", () => {
+  test("wraps React Flow in a full-height canvas frame", () => {
+    render(
+      <I18nProvider deps={{ navigatorLanguage: "en-US" }}>
+        <DocumentProvider initialDocument={createSampleDocument()}>
+          <GraphCanvas outputRuntime={createEmptyOutputRuntime()} />
+        </DocumentProvider>
+      </I18nProvider>,
+    );
+
+    expect(screen.getByTestId("react-flow").parentElement?.className).toBe(
+      "graph-canvas-frame",
+    );
+  });
+
   test("passes workspace context through to flow node data for subgraph interface inference", () => {
     const workspace: GraphWorkspace = {
       version: 2,

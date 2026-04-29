@@ -90,6 +90,50 @@ function createWorkspaceWithChildInterface(): GraphWorkspace {
 }
 
 describe("QueryNode", () => {
+  test("marks React Flow handles with the enlarged query handle class", () => {
+    const { container } = renderWithI18n(
+      <ReactFlowProvider>
+        <QueryNode
+          id="select"
+          data={{
+            node: {
+              id: "select",
+              kind: "select",
+              label: "Select",
+              position: { x: 0, y: 0 },
+              data: { mappings: [{ name: "id", expression: "id" }] },
+            },
+            diagnostics: [],
+          }}
+          selected={false}
+          dragging={false}
+        />
+      </ReactFlowProvider>,
+    );
+
+    expect(
+      container
+        .querySelector('[data-query-node-handle="target-in"]')
+        ?.classList.contains("query-node__handle"),
+    ).toBe(true);
+    expect(
+      container
+        .querySelector('[data-query-node-handle="source-out"]')
+        ?.classList.contains("query-node__handle"),
+    ).toBe(true);
+  });
+
+  test("keeps enlarged handle anchors on the node edge", async () => {
+    const css = await Bun.file(new URL("./queryNode.css", import.meta.url)).text();
+
+    expect(css).toContain(
+      '.query-node__handle[data-query-node-handle^="target"] {\n  left: 0;',
+    );
+    expect(css).toContain(
+      '.query-node__handle[data-query-node-handle^="source"] {\n  right: 0;',
+    );
+  });
+
   test("renders helper and graph helper import nodes without dataflow handles", () => {
     const { container } = renderWithI18n(
       <ReactFlowProvider>

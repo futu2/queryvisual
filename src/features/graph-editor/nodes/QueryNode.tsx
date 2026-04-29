@@ -129,6 +129,7 @@ function TargetHandles({
       <>
         <span hidden data-query-node-handle-marker="target-left" />
         <Handle
+          className="query-node__handle"
           type="target"
           id="left"
           position={Position.Left}
@@ -137,6 +138,7 @@ function TargetHandles({
         />
         <span hidden data-query-node-handle-marker="target-right" />
         <Handle
+          className="query-node__handle"
           type="target"
           id="right"
           position={Position.Left}
@@ -164,6 +166,7 @@ function TargetHandles({
     <>
       <span hidden data-query-node-handle-marker="target-in" />
       <Handle
+        className="query-node__handle"
         type="target"
         id="in"
         position={Position.Left}
@@ -272,6 +275,7 @@ export function QueryNode({ id, data, selected }: NodeProps<FlowNodeData>) {
                       data-query-node-handle-marker={`target-${port.handleId}`}
                     />
                     <Handle
+                      className="query-node__handle"
                       type="target"
                       id={port.handleId}
                       position={Position.Left}
@@ -293,6 +297,7 @@ export function QueryNode({ id, data, selected }: NodeProps<FlowNodeData>) {
                       data-query-node-handle-marker={`source-${port.handleId}`}
                     />
                     <Handle
+                      className="query-node__handle"
                       type="source"
                       id={port.handleId}
                       position={Position.Right}
@@ -315,6 +320,7 @@ export function QueryNode({ id, data, selected }: NodeProps<FlowNodeData>) {
         <>
           <span hidden data-query-node-handle-marker="source-out" />
           <Handle
+            className="query-node__handle"
             type="source"
             id="out"
             position={Position.Right}
