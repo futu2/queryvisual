@@ -136,6 +136,99 @@ function createWorkspaceWithReferencedChildGraph() {
   };
 }
 
+function createWorkspaceWithReferencedHelperGraph() {
+  const workspace = createSampleWorkspace();
+
+  return {
+    ...workspace,
+    graphs: [
+      {
+        ...workspace.graphs[0]!,
+        nodes: [
+          ...workspace.graphs[0]!.nodes,
+          {
+            id: "import-helpers",
+            kind: "importGraphHelpers" as const,
+            label: "Import Graph Helpers",
+            position: { x: 700, y: 80 },
+            data: { graphId: "graph-helpers", moduleName: "" },
+          },
+        ],
+      },
+      {
+        id: "graph-helpers",
+        metadata: { name: "Helper Library" },
+        viewport: { x: 0, y: 0, zoom: 1 },
+        nodes: [],
+        edges: [],
+      },
+    ],
+  };
+}
+
+function createWorkspaceWithPackageHelperImportAndSameIdLocalGraph() {
+  const workspace = createSampleWorkspace();
+
+  return {
+    ...workspace,
+    graphs: [
+      {
+        ...workspace.graphs[0]!,
+        nodes: [
+          ...workspace.graphs[0]!.nodes,
+          {
+            id: "import-package-helpers",
+            kind: "importGraphHelpers" as const,
+            label: "Import Package Helpers",
+            position: { x: 700, y: 80 },
+            data: {
+              graphId: "pkg-helper-graph",
+              target: {
+                kind: "package" as const,
+                packageId: "team/helper-lib",
+                version: "1.0.0",
+                exportKey: "helpers",
+              },
+              moduleName: "pkg",
+            },
+          },
+        ],
+      },
+      {
+        id: "pkg-helper-graph",
+        metadata: { name: "Local Same ID" },
+        viewport: { x: 0, y: 0, zoom: 1 },
+        nodes: [],
+        edges: [],
+      },
+    ],
+    installedPackages: [
+      {
+        packageId: "team/helper-lib",
+        version: "1.0.0",
+        metadata: { name: "Helper Lib" },
+        exports: [
+          {
+            exportKey: "helpers",
+            graphId: "pkg-helper-graph",
+            displayName: "Helpers",
+          },
+        ],
+        graphs: [
+          {
+            id: "pkg-helper-graph",
+            metadata: { name: "Package Helpers" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [],
+            edges: [],
+          },
+        ],
+        dependencyRefs: [],
+      },
+    ],
+  };
+}
+
 function createWorkspaceWithInstalledPackage() {
   const workspace = createSampleWorkspace();
 
@@ -252,6 +345,36 @@ describe("GraphCatalog", () => {
 
     expect(screen.getByText("Graph is still referenced.")).toBeTruthy();
     expect(screen.getByLabelText("Graph name Orders Child")).toBeTruthy();
+  });
+
+  test("blocks deleting a graph that is still referenced by a helper import node", async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(
+      <DocumentProvider initialWorkspace={createWorkspaceWithReferencedHelperGraph()}>
+        <GraphCatalog />
+      </DocumentProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Delete Helper Library" }));
+
+    expect(screen.getByText("Graph is still referenced.")).toBeTruthy();
+    expect(screen.getByLabelText("Graph name Helper Library")).toBeTruthy();
+  });
+
+  test("does not treat package helper imports as local graph references", async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(
+      <DocumentProvider initialWorkspace={createWorkspaceWithPackageHelperImportAndSameIdLocalGraph()}>
+        <GraphCatalog />
+      </DocumentProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Delete Local Same ID" }));
+
+    expect(screen.queryByText("Graph is still referenced.")).toBeNull();
+    expect(screen.queryByLabelText("Graph name Local Same ID")).toBeNull();
   });
 
   test("localizes visible chrome but keeps graph names as user content", () => {

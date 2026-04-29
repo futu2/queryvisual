@@ -57,7 +57,7 @@ function NodeModelProbe() {
 }
 
 describe("NodePalette", () => {
-  test("creates helper function and importer nodes", async () => {
+  test("creates helper function and graph helper importer nodes", async () => {
     const user = userEvent.setup();
 
     renderWithProviders(
@@ -68,18 +68,18 @@ describe("NodePalette", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Helper Functions" }));
-    await user.click(screen.getByRole("button", { name: "Import Helpers" }));
+    await user.click(screen.getByRole("button", { name: "Import Graph Helpers" }));
 
     expect(screen.getByTestId("node-model-helperFunctions").textContent).toBe(
       JSON.stringify({
         kind: "helperFunctions",
-        data: { helpers: [{ name: "add10", expression: "$1 + 10" }] },
+        data: { moduleName: "", helpers: [{ name: "add10", expression: "$1 + 10" }] },
       }),
     );
-    expect(screen.getByTestId("node-model-importHelperFunctions").textContent).toBe(
+    expect(screen.getByTestId("node-model-importGraphHelpers").textContent).toBe(
       JSON.stringify({
-        kind: "importHelperFunctions",
-        data: { moduleName: "" },
+        kind: "importGraphHelpers",
+        data: { graphId: "", moduleName: "" },
       }),
     );
   });

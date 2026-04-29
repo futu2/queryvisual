@@ -38,6 +38,228 @@ function documentWithHelpers(): GraphDocument {
 }
 
 describe("buildHelperRegistry", () => {
+  test("automatically registers helper function nodes in their own graph", () => {
+    const document = documentWithHelpers();
+    document.nodes = document.nodes.filter((node) => node.kind !== "importHelperFunctions");
+    document.edges = [];
+    const helperNode = document.nodes.find((node) => node.id === "helpers");
+    if (helperNode?.kind !== "helperFunctions") throw new Error("bad fixture");
+    helperNode.data = {
+      moduleName: "math",
+      helpers: [{ name: "add10", expression: "$1 + 10" }],
+    } as never;
+
+    const registry = buildHelperRegistry(document);
+
+    expect(registry.diagnostics).toEqual([]);
+    expect(registry.resolveCall("math.add10")?.status).toBe("resolved");
+    expect(registry.resolveCall("add10")?.status).toBe("resolved");
+  });
+
+  test("imports helpers from another local graph with an optional module alias", () => {
+    const libraryGraph = documentWithHelpers();
+    libraryGraph.id = "graph-library";
+    libraryGraph.nodes = libraryGraph.nodes.filter((node) => node.kind !== "importHelperFunctions");
+    libraryGraph.edges = [];
+    const helperNode = libraryGraph.nodes.find((node) => node.id === "helpers");
+    if (helperNode?.kind !== "helperFunctions") throw new Error("bad fixture");
+    helperNode.data = {
+      moduleName: "",
+      helpers: [{ name: "add10", expression: "$1 + 10" }],
+    } as never;
+
+    const consumerGraph: GraphDocument = {
+      version: 1,
+      metadata: { name: "consumer" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "import-graph",
+          kind: "importGraphHelpers",
+          label: "Import Graph Helpers",
+          position: { x: 0, y: 0 },
+          data: { graphId: "graph-library", moduleName: "lib" },
+        } as never,
+      ],
+      edges: [],
+    };
+
+    const registry = buildHelperRegistry(consumerGraph, {
+      workspace: {
+        version: 2,
+        metadata: { name: "workspace" },
+        entryGraphId: "graph-consumer",
+        graphs: [
+          { ...consumerGraph, id: "graph-consumer" },
+          { ...libraryGraph, id: "graph-library" },
+        ],
+        installedPackages: [],
+        packageManifest: null,
+      },
+      graphId: "graph-consumer",
+    });
+
+    expect(registry.diagnostics).toEqual([]);
+    expect(registry.resolveCall("lib.add10")?.status).toBe("resolved");
+    expect(registry.resolveCall("add10")?.status).toBe("resolved");
+  });
+
+  test("imports helpers from an installed package graph export", () => {
+    const consumerGraph: GraphDocument = {
+      version: 1,
+      metadata: { name: "consumer" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "import-package-helpers",
+          kind: "importGraphHelpers",
+          label: "Import Package Helpers",
+          position: { x: 0, y: 0 },
+          data: {
+            graphId: "pkg-helper-graph",
+            target: {
+              kind: "package",
+              packageId: "team/helper-lib",
+              version: "1.0.0",
+              exportKey: "helpers",
+            },
+            moduleName: "pkg",
+          },
+        } as never,
+      ],
+      edges: [],
+    };
+
+    const packageGraph = {
+      id: "pkg-helper-graph",
+      metadata: { name: "Package Helpers" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "helpers",
+          kind: "helperFunctions" as const,
+          label: "Helpers",
+          position: { x: 0, y: 0 },
+          data: {
+            moduleName: "math",
+            helpers: [{ name: "add10", expression: "$1 + 10" }],
+          },
+        },
+      ],
+      edges: [],
+    };
+
+    const registry = buildHelperRegistry(consumerGraph, {
+      workspace: {
+        version: 2,
+        metadata: { name: "workspace" },
+        entryGraphId: "graph-consumer",
+        graphs: [{ ...consumerGraph, id: "graph-consumer" }],
+        installedPackages: [
+          {
+            packageId: "team/helper-lib",
+            version: "1.0.0",
+            metadata: { name: "Helper Lib" },
+            exports: [
+              {
+                exportKey: "helpers",
+                graphId: "pkg-helper-graph",
+                displayName: "Helpers",
+              },
+            ],
+            graphs: [packageGraph],
+            dependencyRefs: [],
+          },
+        ],
+        packageManifest: null,
+      },
+      graphId: "graph-consumer",
+    });
+
+    expect(registry.diagnostics).toEqual([]);
+    expect(registry.resolveCall("pkg.add10")?.status).toBe("resolved");
+    expect(registry.resolveCall("add10")?.status).toBe("resolved");
+  });
+
+  test("reports missing local helper import graphs", () => {
+    const document: GraphDocument = {
+      version: 1,
+      metadata: { name: "consumer" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "import-graph",
+          kind: "importGraphHelpers",
+          label: "Import Graph Helpers",
+          position: { x: 0, y: 0 },
+          data: { graphId: "missing", moduleName: "" },
+        } as never,
+      ],
+      edges: [],
+    };
+
+    const registry = buildHelperRegistry(document, {
+      workspace: {
+        version: 2,
+        metadata: { name: "workspace" },
+        entryGraphId: "graph-consumer",
+        graphs: [{ ...document, id: "graph-consumer" }],
+        installedPackages: [],
+        packageManifest: null,
+      },
+      graphId: "graph-consumer",
+    });
+
+    expect(registry.diagnostics.some((diagnostic) => diagnostic.code === "helpers.graph-import-missing-graph")).toBe(true);
+  });
+
+  test("reports local helper import cycles", () => {
+    const graphA = {
+      id: "graph-a",
+      metadata: { name: "A" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "import-b",
+          kind: "importGraphHelpers" as const,
+          label: "Import B",
+          position: { x: 0, y: 0 },
+          data: { graphId: "graph-b", moduleName: "" },
+        },
+      ],
+      edges: [],
+    };
+    const graphB = {
+      id: "graph-b",
+      metadata: { name: "B" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "import-a",
+          kind: "importGraphHelpers" as const,
+          label: "Import A",
+          position: { x: 0, y: 0 },
+          data: { graphId: "graph-a", moduleName: "" },
+        },
+      ],
+      edges: [],
+    };
+
+    const registry = buildHelperRegistry(graphA, {
+      workspace: {
+        version: 2,
+        metadata: { name: "workspace" },
+        entryGraphId: "graph-a",
+        graphs: [graphA, graphB],
+        installedPackages: [],
+        packageManifest: null,
+      },
+      graphId: "graph-a",
+    });
+
+    expect(registry.diagnostics.some((diagnostic) => diagnostic.code === "helpers.graph-import-cycle")).toBe(true);
+  });
+
   test("imports helpers with module and inferred arity", () => {
     const registry = buildHelperRegistry(documentWithHelpers());
 

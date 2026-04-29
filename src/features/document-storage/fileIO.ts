@@ -29,6 +29,9 @@ const nodeKinds = [
   "graphInput",
   "fromTable",
   "subgraph",
+  "helperFunctions",
+  "importHelperFunctions",
+  "importGraphHelpers",
   "join",
   "where",
   "select",
@@ -133,6 +136,20 @@ function isNodeData(kind: typeof nodeKinds[number], value: unknown) {
     case "subgraph":
       return (
         typeof value.graphId === "string" &&
+        (value.target === undefined || isSubgraphTarget(value.target))
+      );
+    case "helperFunctions":
+      return (
+        (value.moduleName === undefined || typeof value.moduleName === "string") &&
+        Array.isArray(value.helpers) &&
+        value.helpers.every(isNamedExpression)
+      );
+    case "importHelperFunctions":
+      return typeof value.moduleName === "string";
+    case "importGraphHelpers":
+      return (
+        typeof value.graphId === "string" &&
+        typeof value.moduleName === "string" &&
         (value.target === undefined || isSubgraphTarget(value.target))
       );
     case "join":

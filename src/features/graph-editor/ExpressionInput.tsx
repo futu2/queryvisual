@@ -15,6 +15,7 @@ type ExpressionInputProps = {
   schemaOverrides?: Record<string, ColumnMap>;
   multiline?: boolean;
   requireBoolean?: boolean;
+  allowPlaceholders?: boolean;
 };
 
 type TokenPrefix = {
@@ -59,6 +60,7 @@ export function ExpressionInput({
   schemaOverrides,
   multiline = false,
   requireBoolean,
+  allowPlaceholders,
 }: ExpressionInputProps) {
   const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
@@ -70,8 +72,8 @@ export function ExpressionInput({
     [document, nodeId, schemaOverrides],
   );
   const analysis: ExpressionAnalysis = useMemo(() => {
-    return analyzeExpression(value, scope, { requireBoolean });
-  }, [value, scope, requireBoolean]);
+    return analyzeExpression(value, scope, { requireBoolean, allowPlaceholders });
+  }, [value, scope, requireBoolean, allowPlaceholders]);
 
   // Keep caret in sync while typing and while controlled value updates.
   useLayoutEffect(() => {

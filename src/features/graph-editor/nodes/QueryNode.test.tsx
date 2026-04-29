@@ -90,7 +90,7 @@ function createWorkspaceWithChildInterface(): GraphWorkspace {
 }
 
 describe("QueryNode", () => {
-  test("renders helper node handles and summaries", () => {
+  test("renders helper and graph helper import nodes without dataflow handles", () => {
     const { container } = renderWithI18n(
       <ReactFlowProvider>
         <QueryNode
@@ -101,7 +101,7 @@ describe("QueryNode", () => {
               kind: "helperFunctions",
               label: "Helper Functions",
               position: { x: 0, y: 0 },
-              data: { helpers: [{ name: "add10", expression: "$1 + 10" }] },
+              data: { moduleName: "math", helpers: [{ name: "add10", expression: "$1 + 10" }] },
             },
             diagnostics: [],
           }}
@@ -113,10 +113,10 @@ describe("QueryNode", () => {
           data={{
             node: {
               id: "import",
-              kind: "importHelperFunctions",
-              label: "Import Helpers",
+              kind: "importGraphHelpers",
+              label: "Import Graph Helpers",
               position: { x: 0, y: 120 },
-              data: { moduleName: "math" },
+              data: { graphId: "graph-helpers", moduleName: "lib" },
             },
             diagnostics: [],
           }}
@@ -127,13 +127,13 @@ describe("QueryNode", () => {
     );
 
     const helpersNode = container.querySelector('[data-node-kind="helperFunctions"]');
-    const importNode = container.querySelector('[data-node-kind="importHelperFunctions"]');
+    const importNode = container.querySelector('[data-node-kind="importGraphHelpers"]');
 
     expect(screen.getByText("1 helper")).toBeTruthy();
-    expect(screen.getByText("math")).toBeTruthy();
-    expect(helpersNode?.querySelector('[data-query-node-handle="source-out"]')).toBeTruthy();
+    expect(screen.getByText("lib")).toBeTruthy();
+    expect(helpersNode?.querySelector('[data-query-node-handle="source-out"]')).toBeNull();
     expect(helpersNode?.querySelector('[data-query-node-handle="target-in"]')).toBeNull();
-    expect(importNode?.querySelector('[data-query-node-handle="target-in"]')).toBeTruthy();
+    expect(importNode?.querySelector('[data-query-node-handle="target-in"]')).toBeNull();
     expect(importNode?.querySelector('[data-query-node-handle="source-out"]')).toBeNull();
   });
 

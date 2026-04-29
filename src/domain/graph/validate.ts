@@ -200,7 +200,10 @@ function validateGraphOutput(params: {
   const reachableNodeIds = new Set(orderedNodes.map(node => node.id));
   const diagnostics: Diagnostic[] = [];
   const schemas: Record<string, ColumnMap> = {};
-  const helperRegistry = buildHelperRegistry(document);
+  const helperRegistry = buildHelperRegistry(document, {
+    workspace,
+    graphId: params.graphId,
+  });
   diagnostics.push(...helperRegistry.diagnostics);
   // Tracks nodes whose output schema/scope is not trustworthy due to structural issues
   // (missing/duplicate wiring) either on the node itself or upstream. Downstream consumers
@@ -218,6 +221,7 @@ function validateGraphOutput(params: {
         break;
       case "helperFunctions":
       case "importHelperFunctions":
+      case "importGraphHelpers":
         schemas[node.id] = {};
         break;
       case "subgraph": {

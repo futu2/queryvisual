@@ -121,7 +121,10 @@ function inferGraphSchemasInternal(params: {
 }): Record<string, ColumnMap> {
   const byId = nodesById(params.graph);
   const cache = new Map<string, InferredNodeSchema>();
-  const helperRegistry = buildHelperRegistry(params.graph);
+  const helperRegistry = buildHelperRegistry(params.graph, {
+    workspace: params.workspace,
+    graphId: params.graph.id,
+  });
   const context: WorkspaceInferenceContext = {
     workspace: params.workspace,
     graphId: params.graph.id,
@@ -201,6 +204,7 @@ function inferNodeSchema(
       break;
     case "helperFunctions":
     case "importHelperFunctions":
+    case "importGraphHelpers":
       result = { schema: {}, structurallyValid: true };
       break;
     case "subgraph": {
@@ -420,7 +424,11 @@ function inferNodeSchema(
           Object.fromEntries(
             Array.from(cache.entries()).map(([id, entry]) => [id, entry.schema]),
           ),
-          context.helpers ?? buildHelperRegistry(document),
+          context.helpers ??
+            buildHelperRegistry(document, {
+              workspace: context.workspace,
+              graphId: context.graphId,
+            }),
         ),
         structurallyValid: true,
       };
@@ -456,14 +464,22 @@ function inferNodeSchema(
             nodeId,
             node.data.groupBy,
             schemas,
-            context.helpers ?? buildHelperRegistry(document),
+            context.helpers ??
+              buildHelperRegistry(document, {
+                workspace: context.workspace,
+                graphId: context.graphId,
+              }),
           ),
           ...inferNamedExpressionsSchema(
             document,
             nodeId,
             node.data.aggregates,
             schemas,
-            context.helpers ?? buildHelperRegistry(document),
+            context.helpers ??
+              buildHelperRegistry(document, {
+                workspace: context.workspace,
+                graphId: context.graphId,
+              }),
           ),
         },
         structurallyValid: true,
@@ -492,7 +508,12 @@ export function inferNodeSchemas(
   const cache = new Map<string, InferredNodeSchema>();
   inferNodeSchema(document, nodeId, byId, cache, new Set(), {
     ...context,
-    helpers: context.helpers ?? buildHelperRegistry(document),
+    helpers:
+      context.helpers ??
+      buildHelperRegistry(document, {
+        workspace: context.workspace,
+        graphId: context.graphId,
+      }),
   });
   return cachedSchemas(cache);
 }

@@ -321,6 +321,188 @@ describe("compileOutput", () => {
     expect(result.sql).toContain('((total + tax) + 10) AS "gross"');
   });
 
+  test("expands helper calls imported from another local graph", () => {
+    const helperGraph = {
+      id: "graph-helpers",
+      metadata: { name: "Helper Library" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "helpers",
+          kind: "helperFunctions" as const,
+          label: "Helpers",
+          position: { x: 0, y: 0 },
+          data: {
+            moduleName: "math",
+            helpers: [{ name: "add10", expression: "$1 + 10" }],
+          },
+        },
+      ],
+      edges: [],
+    };
+
+    const consumerGraph = {
+      id: "graph-consumer",
+      metadata: { name: "Consumer" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "orders",
+          kind: "fromTable" as const,
+          label: "Orders",
+          position: { x: 0, y: 0 },
+          data: {
+            tableRef: { tableName: "orders" },
+            columns: { total: "float" },
+          },
+        },
+        {
+          id: "import-helpers",
+          kind: "importGraphHelpers" as const,
+          label: "Import Graph Helpers",
+          position: { x: 0, y: 160 },
+          data: { graphId: "graph-helpers", moduleName: "lib" },
+        },
+        {
+          id: "select",
+          kind: "select" as const,
+          label: "Select",
+          position: { x: 260, y: 0 },
+          data: { mappings: [{ name: "gross", expression: "lib.add10(total)" }] },
+        },
+        {
+          id: "output",
+          kind: "output" as const,
+          label: "Output",
+          position: { x: 520, y: 0 },
+          data: outputData("out"),
+        },
+      ],
+      edges: [
+        { id: "e-orders-select", source: "orders", sourceHandle: "out", target: "select", targetHandle: "in" },
+        { id: "e-select-output", source: "select", sourceHandle: "out", target: "output", targetHandle: "in" },
+      ],
+    };
+
+    const workspace: GraphWorkspace = {
+      version: 2,
+      metadata: { name: "Workspace" },
+      entryGraphId: "graph-consumer",
+      graphs: [consumerGraph, helperGraph],
+      installedPackages: [],
+      packageManifest: null,
+    };
+
+    const result = compileOutput(workspace, "graph-consumer", "output");
+
+    expect(result.semantic.diagnostics).toEqual([]);
+    expect(result.sql).toContain('(total + 10) AS "gross"');
+  });
+
+  test("expands helper calls imported from an installed package graph export", () => {
+    const packageGraph = {
+      id: "pkg-helper-graph",
+      metadata: { name: "Package Helpers" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "helpers",
+          kind: "helperFunctions" as const,
+          label: "Helpers",
+          position: { x: 0, y: 0 },
+          data: {
+            moduleName: "math",
+            helpers: [{ name: "add10", expression: "$1 + 10" }],
+          },
+        },
+      ],
+      edges: [],
+    };
+
+    const consumerGraph = {
+      id: "graph-consumer",
+      metadata: { name: "Consumer" },
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "orders",
+          kind: "fromTable" as const,
+          label: "Orders",
+          position: { x: 0, y: 0 },
+          data: {
+            tableRef: { tableName: "orders" },
+            columns: { total: "float" },
+          },
+        },
+        {
+          id: "import-helpers",
+          kind: "importGraphHelpers" as const,
+          label: "Import Graph Helpers",
+          position: { x: 0, y: 160 },
+          data: {
+            graphId: "pkg-helper-graph",
+            target: {
+              kind: "package" as const,
+              packageId: "team/helper-lib",
+              version: "1.0.0",
+              exportKey: "helpers",
+            },
+            moduleName: "pkg",
+          },
+        },
+        {
+          id: "select",
+          kind: "select" as const,
+          label: "Select",
+          position: { x: 260, y: 0 },
+          data: { mappings: [{ name: "gross", expression: "pkg.add10(total)" }] },
+        },
+        {
+          id: "output",
+          kind: "output" as const,
+          label: "Output",
+          position: { x: 520, y: 0 },
+          data: outputData("out"),
+        },
+      ],
+      edges: [
+        { id: "e-orders-select", source: "orders", sourceHandle: "out", target: "select", targetHandle: "in" },
+        { id: "e-select-output", source: "select", sourceHandle: "out", target: "output", targetHandle: "in" },
+      ],
+    };
+
+    const result = compileOutput(
+      {
+        version: 2,
+        metadata: { name: "Workspace" },
+        entryGraphId: "graph-consumer",
+        graphs: [consumerGraph],
+        installedPackages: [
+          {
+            packageId: "team/helper-lib",
+            version: "1.0.0",
+            metadata: { name: "Helper Lib" },
+            exports: [
+              {
+                exportKey: "helpers",
+                graphId: "pkg-helper-graph",
+                displayName: "Helpers",
+              },
+            ],
+            graphs: [packageGraph],
+            dependencyRefs: [],
+          },
+        ],
+        packageManifest: null,
+      },
+      "graph-consumer",
+      "output",
+    );
+
+    expect(result.semantic.diagnostics).toEqual([]);
+    expect(result.sql).toContain('(total + 10) AS "gross"');
+  });
+
   test("compiles a parent output that references an installed package export", () => {
     const packageGraph = {
       id: "pkg-graph",

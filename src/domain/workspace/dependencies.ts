@@ -3,8 +3,23 @@ import { inferSubgraphTarget } from "./interfaces";
 
 export function collectReferencedGraphIds(graph: Pick<GraphDefinition, "nodes">): string[] {
   return graph.nodes
-    .filter((node): node is Extract<GraphNode, { kind: "subgraph" }> => node.kind === "subgraph")
+    .filter(
+      (
+        node,
+      ): node is
+        | Extract<GraphNode, { kind: "subgraph" }>
+        | Extract<GraphNode, { kind: "importGraphHelpers" }> =>
+        node.kind === "subgraph" || node.kind === "importGraphHelpers",
+    )
     .flatMap((node) => {
+      if (node.kind === "importGraphHelpers") {
+        const target = inferSubgraphTarget(node.data);
+        if (!target || target.kind !== "local" || target.graphId === "") {
+          return [];
+        }
+        return [target.graphId];
+      }
+
       const target = inferSubgraphTarget(node.data);
       if (!target || target.kind !== "local" || target.graphId === "") {
         return [];

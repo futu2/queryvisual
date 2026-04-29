@@ -168,6 +168,7 @@ export function lowerOutputToIr(semantic: SemanticOutput): IRRelNode | null {
           break;
         case "helperFunctions":
         case "importHelperFunctions":
+        case "importGraphHelpers":
           lowered = null;
           break;
       }

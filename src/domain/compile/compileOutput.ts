@@ -48,7 +48,10 @@ function lowerWorkspaceOutputToIr(params: {
     return null;
   }
 
-  const helpers = buildHelperRegistry(params.semantic.document);
+  const helpers = buildHelperRegistry(params.semantic.document, {
+    workspace: params.workspace,
+    graphId: params.semantic.graphId,
+  });
   const renderOptions = { helpers };
   const cache = new Map<string, IRRelNode>();
   const inProgress = new Set<string>();
@@ -266,6 +269,7 @@ function lowerWorkspaceOutputToIr(params: {
           break;
         case "helperFunctions":
         case "importHelperFunctions":
+        case "importGraphHelpers":
           lowered = null;
           break;
       }

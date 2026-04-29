@@ -107,6 +107,11 @@ function resolveNodeSchemaInternal(
       schema = Object.fromEntries([...groupBy, ...aggregates]);
       break;
     }
+    case "helperFunctions":
+    case "importHelperFunctions":
+    case "importGraphHelpers":
+      schema = {};
+      break;
   }
 
   visiting.delete(nodeId);

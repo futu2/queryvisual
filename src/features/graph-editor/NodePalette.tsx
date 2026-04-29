@@ -12,6 +12,7 @@ const paletteItems: Array<{
     | "nodeKinds.subgraph"
     | "nodeKinds.helperFunctions"
     | "nodeKinds.importHelperFunctions"
+    | "nodeKinds.importGraphHelpers"
     | "nodeKinds.join"
     | "nodeKinds.where"
     | "nodeKinds.select"
@@ -24,7 +25,7 @@ const paletteItems: Array<{
   { kind: "fromTable", canonicalLabel: "From", messageKey: "nodeKinds.fromTable" },
   { kind: "subgraph", canonicalLabel: "Subgraph", messageKey: "nodeKinds.subgraph" },
   { kind: "helperFunctions", canonicalLabel: "Helper Functions", messageKey: "nodeKinds.helperFunctions" },
-  { kind: "importHelperFunctions", canonicalLabel: "Import Helpers", messageKey: "nodeKinds.importHelperFunctions" },
+  { kind: "importGraphHelpers", canonicalLabel: "Import Graph Helpers", messageKey: "nodeKinds.importGraphHelpers" },
   { kind: "join", canonicalLabel: "Join", messageKey: "nodeKinds.join" },
   { kind: "where", canonicalLabel: "Where", messageKey: "nodeKinds.where" },
   { kind: "select", canonicalLabel: "Select", messageKey: "nodeKinds.select" },
@@ -82,13 +83,19 @@ function createNode(kind: NodeKind, index: number): GraphNode {
       return {
         ...base,
         kind,
-        data: { helpers: [{ name: "add10", expression: "$1 + 10" }] },
+        data: { moduleName: "", helpers: [{ name: "add10", expression: "$1 + 10" }] },
       };
     case "importHelperFunctions":
       return {
         ...base,
         kind,
         data: { moduleName: "" },
+      };
+    case "importGraphHelpers":
+      return {
+        ...base,
+        kind,
+        data: { graphId: "", moduleName: "" },
       };
     case "where":
       return { ...base, kind, data: { predicate: "id > 0" } };

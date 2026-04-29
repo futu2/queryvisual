@@ -41,6 +41,7 @@ type SelectNode = Extract<GraphNode, { kind: "select" }>;
 type AggregationNode = Extract<GraphNode, { kind: "aggregation" }>;
 type SortNode = Extract<GraphNode, { kind: "sort" }>;
 type HelperFunctionsNode = Extract<GraphNode, { kind: "helperFunctions" }>;
+type ImportGraphHelpersNode = Extract<GraphNode, { kind: "importGraphHelpers" }>;
 type NamedExpressionDraftRow = DraftRow<NamedExpression>;
 type HelperFunctionDraftRow = DraftRow<HelperFunctionDefinition>;
 type SortItemDraftValue = SortItem & {
@@ -76,6 +77,7 @@ type SortEditorDraft = Omit<SortNode, "data"> & {
 
 type HelperFunctionsEditorDraft = Omit<HelperFunctionsNode, "data"> & {
   data: {
+    moduleName: string;
     helpers: HelperFunctionDraftRow[];
   };
 };
@@ -369,6 +371,7 @@ function toEditableNodeDraft(node: GraphNode): EditableNodeDraft {
     return {
       ...node,
       data: {
+        moduleName: node.data.moduleName ?? "",
         helpers: ensureDraftRows(node.data.helpers, blankHelperFunction),
       },
     };
@@ -432,6 +435,7 @@ export function serializeNodeEditorDraft(draft: EditableNodeDraft): GraphNode {
     return {
       ...draft,
       data: {
+        moduleName: draft.data.moduleName.trim(),
         helpers: sanitizeNamedExpressions(helpers),
       },
     };
@@ -466,6 +470,7 @@ function NamedExpressionRows({
   document,
   nodeId,
   schemaOverrides,
+  allowPlaceholders,
   t,
   onChange,
 }: {
@@ -478,6 +483,7 @@ function NamedExpressionRows({
   document: GraphDocument;
   nodeId: string;
   schemaOverrides?: Record<string, ColumnMap>;
+  allowPlaceholders?: boolean;
   t: Translator;
   onChange: (rows: NamedExpressionDraftRow[]) => void;
 }) {
@@ -605,6 +611,7 @@ function NamedExpressionRows({
               document={document}
               nodeId={nodeId}
               schemaOverrides={schemaOverrides}
+              allowPlaceholders={allowPlaceholders}
               multiline
               onChange={(expression) => {
                 const next = [...rows];
@@ -774,9 +781,163 @@ function HelperFunctionRows(props: {
       rowCardTestIdPrefix="helper-row-card"
       document={props.document}
       nodeId={props.nodeId}
+      allowPlaceholders
       t={props.t}
       onChange={props.onChange}
     />
+  );
+}
+
+function GraphHelperImportEditor({
+  draft,
+  workspace,
+  t,
+  setDraft,
+}: {
+  draft: ImportGraphHelpersNode;
+  workspace?: GraphWorkspace;
+  t: Translator;
+  setDraft: (node: ImportGraphHelpersNode) => void;
+}) {
+  const graphs = workspace?.graphs ?? [];
+  const currentTarget = inferSubgraphTarget(draft.data);
+  const sourceKind = currentTarget?.kind === "package" ? "package" : "local";
+  const selectedGraphId =
+    currentTarget?.kind === "local" ? currentTarget.graphId : draft.data.graphId;
+  const packageExports =
+    workspace?.installedPackages.flatMap((pkg) =>
+      pkg.exports.map((entry) => ({
+        key: `${pkg.packageId}@${pkg.version}#${entry.exportKey}`,
+        target: {
+          kind: "package" as const,
+          packageId: pkg.packageId,
+          version: pkg.version,
+          exportKey: entry.exportKey,
+        },
+        graphId: entry.graphId,
+        displayName: `${pkg.metadata.name} / ${entry.displayName}`,
+      })),
+    ) ?? [];
+  const selectedPackageKey =
+    currentTarget?.kind === "package"
+      ? `${currentTarget.packageId}@${currentTarget.version}#${currentTarget.exportKey}`
+      : "";
+
+  return (
+    <div className="editor-stack">
+      <label>
+        {t("editor.helperSource")}
+        <select
+          aria-label={t("editor.helperSource")}
+          value={sourceKind}
+          onChange={(event) => {
+            if (event.target.value === "package") {
+              const firstPackageExport = packageExports[0] ?? null;
+              setDraft({
+                ...draft,
+                data: {
+                  ...draft.data,
+                  graphId: firstPackageExport?.graphId ?? "",
+                  target: firstPackageExport?.target ?? {
+                    kind: "package",
+                    packageId: "",
+                    version: "",
+                    exportKey: "",
+                  },
+                },
+              });
+              return;
+            }
+
+            const localGraphId =
+              currentTarget?.kind === "local" ? currentTarget.graphId : "";
+            setDraft({
+              ...draft,
+              data: {
+                ...draft.data,
+                graphId: localGraphId,
+                target: { kind: "local", graphId: localGraphId },
+              },
+            });
+          }}
+        >
+          <option value="local">{t("editor.helperSource.local")}</option>
+          <option value="package">{t("editor.helperSource.package")}</option>
+        </select>
+      </label>
+      {sourceKind === "local" ? (
+      <label>
+        {t("editor.helperGraph")}
+        <select
+          aria-label={t("editor.helperGraph")}
+          value={selectedGraphId}
+          onChange={(event) =>
+            setDraft({
+              ...draft,
+              data: {
+                ...draft.data,
+                graphId: event.target.value,
+                target: { kind: "local", graphId: event.target.value },
+              },
+            })
+          }
+        >
+          <option value="">{t("editor.selectGraphPrompt")}</option>
+          {graphs.map((graph) => (
+            <option key={graph.id} value={graph.id}>
+              {graph.metadata.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      ) : (
+        <label>
+          {t("editor.packageExport")}
+          <select
+            aria-label={t("editor.packageExport")}
+            value={selectedPackageKey}
+            onChange={(event) => {
+              const nextPackageExport =
+                packageExports.find((entry) => entry.key === event.target.value) ??
+                null;
+
+              setDraft({
+                ...draft,
+                data: {
+                  ...draft.data,
+                  graphId: nextPackageExport?.graphId ?? "",
+                  target: nextPackageExport?.target ?? {
+                    kind: "package",
+                    packageId: "",
+                    version: "",
+                    exportKey: "",
+                  },
+                },
+              });
+            }}
+          >
+            <option value="">{t("editor.selectPackageExportPrompt")}</option>
+            {packageExports.map((entry) => (
+              <option key={entry.key} value={entry.key}>
+                {entry.displayName}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <label>
+        {t("editor.moduleName")}
+        <input
+          value={draft.data.moduleName}
+          onChange={(event) =>
+            setDraft({
+              ...draft,
+              data: { ...draft.data, moduleName: event.target.value },
+            })
+          }
+        />
+      </label>
+    </div>
   );
 }
 
@@ -1004,13 +1165,29 @@ export function renderNodeEditor(
       );
     case "helperFunctions":
       return (
-        <HelperFunctionRows
-          rows={draft.data.helpers}
-          document={document}
-          nodeId={draft.id}
-          t={t}
-          onChange={(helpers) => setDraft({ ...draft, data: { helpers } })}
-        />
+        <div className="editor-stack">
+          <label>
+            {t("editor.moduleName")}
+            <input
+              value={draft.data.moduleName}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  data: { ...draft.data, moduleName: event.target.value },
+                })
+              }
+            />
+          </label>
+          <HelperFunctionRows
+            rows={draft.data.helpers}
+            document={document}
+            nodeId={draft.id}
+            t={t}
+            onChange={(helpers) =>
+              setDraft({ ...draft, data: { ...draft.data, helpers } })
+            }
+          />
+        </div>
       );
     case "importHelperFunctions":
       return (
@@ -1023,6 +1200,15 @@ export function renderNodeEditor(
             }
           />
         </label>
+      );
+    case "importGraphHelpers":
+      return (
+        <GraphHelperImportEditor
+          draft={draft}
+          workspace={options?.workspace}
+          t={t}
+          setDraft={setDraft}
+        />
       );
     case "limit":
       return (

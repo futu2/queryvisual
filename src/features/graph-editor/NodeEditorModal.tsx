@@ -46,6 +46,7 @@ const nodeKindMessageKeys = {
   subgraph: "nodeKinds.subgraph",
   helperFunctions: "nodeKinds.helperFunctions",
   importHelperFunctions: "nodeKinds.importHelperFunctions",
+  importGraphHelpers: "nodeKinds.importGraphHelpers",
   join: "nodeKinds.join",
   where: "nodeKinds.where",
   select: "nodeKinds.select",

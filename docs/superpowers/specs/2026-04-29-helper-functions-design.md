@@ -9,7 +9,8 @@ fields.
 The feature should behave like lightweight graph-local utility functions:
 
 - helper definitions are explicit nodes on the canvas
-- imports decide which helper sets are available to the graph
+- helper nodes are automatically available to the graph they are located in
+- a separate graph-import node can import helpers from another local graph
 - helpers can be called as normal expression functions
 - helpers expand to SQL inline during compilation
 - helper dependencies are allowed, but recursive dependencies are invalid
@@ -19,7 +20,7 @@ The feature should behave like lightweight graph-local utility functions:
 This design adds:
 
 - a `helperFunctions` node kind
-- an `importHelperFunctions` node kind
+- an `importGraphHelpers` node kind
 - graph-scoped helper import resolution
 - optional helper module names for disambiguation
 - helper placeholders such as `$1` and `$2`
@@ -37,11 +38,14 @@ This design does not add:
 ## Approved Decisions
 
 - `helperFunctions` nodes define helper rows.
-- `helperFunctions` nodes have one output handle.
-- `importHelperFunctions` nodes have one input handle and no output handle.
-- Importers affect the whole graph they are located in, not only downstream
-  relational nodes.
-- Importers may set an optional `moduleName`.
+- `helperFunctions` nodes have no input or output handles.
+- `helperFunctions` nodes affect the whole graph they are located in, not only
+  downstream relational nodes.
+- `helperFunctions` nodes may set an optional `moduleName`.
+- `importGraphHelpers` nodes import helpers from another local graph or from
+  an installed package graph export.
+- `importGraphHelpers` nodes have no input or output handles.
+- `importGraphHelpers` nodes may set an optional `moduleName` alias.
 - Named-module imports expose both qualified calls, such as `math.add10(...)`,
   and unqualified calls when the helper name is unique.
 - Helper definitions may call other imported helpers in the same graph.
@@ -64,21 +68,22 @@ graph-level helper registry and no placeholder syntax.
 
 ## Chosen Model
 
-The feature should use two node kinds:
+The feature should use two active node kinds:
 
 1. `helperFunctions` defines a set of helper rows.
-2. `importHelperFunctions` imports a connected helper set into the current graph.
+2. `importGraphHelpers` imports helper definitions from another local graph or
+   from an installed package export.
 
-The importer is intentionally non-relational. It has no output handle and does
-not participate in data flow. Its only job is to make helper definitions
+Both node kinds are intentionally non-relational. They have no dataflow handles
+and do not participate in row flow. Their only job is to make helper definitions
 available to expression analysis and SQL rendering for the graph.
 
 This keeps graph semantics explicit:
 
-- a helper set sitting on the canvas does nothing until imported
-- deleting an importer removes those helpers from the graph's expression scope
-- module naming lives on the importer, because the same helper set may be
-  imported under different modules in future workflows
+- a helper set on the canvas is available to its containing graph
+- deleting a helper node removes those helpers from that graph's expression scope
+- local helper libraries are modeled as normal graphs and imported explicitly
+- graph import module aliases can disambiguate helpers from multiple libraries
 
 ## Data Model
 
@@ -88,7 +93,7 @@ Extend node kinds conceptually:
 type NodeKind =
   | ExistingNodeKind
   | "helperFunctions"
-  | "importHelperFunctions";
+  | "importGraphHelpers";
 ```
 
 Add helper rows:
@@ -106,20 +111,25 @@ Add nodes:
 type HelperFunctionsNode = GraphNodeBase<
   "helperFunctions",
   {
+    moduleName: string;
     helpers: HelperFunctionDefinition[];
   }
 >;
 
-type ImportHelperFunctionsNode = GraphNodeBase<
-  "importHelperFunctions",
+type ImportGraphHelpersNode = GraphNodeBase<
+  "importGraphHelpers",
   {
+    graphId: string;
+    target?: SubgraphTarget;
     moduleName: string;
   }
 >;
 ```
 
-`moduleName` is stored as a string. An empty string means the import has no
-module qualifier.
+`moduleName` is stored as a string. An empty string means the helper set has no
+module qualifier. On `importGraphHelpers`, a non-empty `moduleName` aliases all
+imported helpers under that module; an empty alias preserves the modules defined
+by helper nodes in the imported graph.
 
 ## Helper Syntax
 
@@ -158,13 +168,10 @@ expression containing `$1` should produce a parse or validation error.
 
 ## Import Resolution
 
-For each graph, build a helper registry from all structurally valid
-`importHelperFunctions` nodes:
+For each graph, build a helper registry from:
 
-1. find the single incoming edge to the importer's `in` handle
-2. require the source node to be a `helperFunctions` node
-3. trim the importer's `moduleName`
-4. add each helper row from the connected helper set to the registry
+1. every `helperFunctions` node in the graph
+2. every structurally valid `importGraphHelpers` node in the graph
 
 Each imported helper receives:
 
@@ -185,8 +192,29 @@ Unqualified calls resolve by helper name:
 - if multiple imported helpers have the name, validation reports an ambiguous
   helper call
 
-Named modules do not hide unqualified access. A helper imported as `math.add10`
+Named modules do not hide unqualified access. A helper defined as `math.add10`
 is also callable as `add10(...)` when no other imported helper shares `add10`.
+
+`importGraphHelpers` nodes:
+
+1. require a workspace context
+2. support source mode `local graph` or `installed package`
+3. for local graph imports, require `graphId` to point at another local graph
+4. for package imports, require `target` to identify an installed package export
+5. resolve package imports through the package export, not private package graph ids
+6. build the source graph's helper registry
+7. import all source helpers into the current graph
+8. apply the import node's `moduleName` as an alias when non-empty
+
+For package imports, the exported package graph acts as the helper library graph.
+This keeps package helper imports aligned with package subgraph imports: package
+exports are the public API boundary, while package-internal graph ids remain an
+implementation detail.
+
+Helper graph imports are dependencies between local graphs only when they target
+local graphs. Package helper imports are package dependencies and should not
+block deletion of unrelated local graphs with the same graph id.
+Cycles through local subgraph references or local helper imports are invalid.
 
 ## Helper Dependencies
 
@@ -260,8 +288,11 @@ function-call path, preserving current behavior for SQL built-ins.
 
 Validation should report errors for:
 
-- importer missing its helper input
-- importer connected to a non-`helperFunctions` node
+- graph helper import without a selected graph
+- graph helper import without workspace context
+- graph helper import that references a missing graph
+- graph helper import that references a missing installed package export
+- graph helper import cycles
 - duplicate qualified helper definitions for the same module and name
 - invalid helper names
 - invalid module names
@@ -272,31 +303,34 @@ Validation should report errors for:
 - ambiguous unqualified helper calls
 - recursive helper dependencies
 
-Importer nodes should not require output wiring. Helper nodes should not require
-their output to be consumed unless referenced by an importer.
+Helper nodes and graph helper import nodes should not require any relational
+wiring.
 
 ## UI
 
 Add palette entries:
 
 - `Helper Functions`
-- `Import Helpers`
+- `Import Graph Helpers`
 
 Node handles:
 
-- `helperFunctions`: source handle `out`, no target handle
-- `importHelperFunctions`: target handle `in`, no source handle
+- `helperFunctions`: no source handle, no target handle
+- `importGraphHelpers`: no source handle, no target handle
 
 Node summaries:
 
 - `helperFunctions`: number of helper rows
-- `importHelperFunctions`: module name when set, otherwise imported helper count
+- `importGraphHelpers`: module name when set, otherwise graph helper import
 
 Editors:
 
 - `helperFunctions` uses draggable rows matching select and aggregation style
-  with helper name and helper expression fields
-- `importHelperFunctions` has a `moduleName` text field
+  with module name, helper name, and helper expression fields
+- `importGraphHelpers` has a helper graph selector and optional `moduleName`
+  alias field
+- `importGraphHelpers` supports local/package source selection matching the
+  package export selector used by subgraph nodes
 
 Expression suggestions may include imported helper names and qualified helper
 names as a follow-up improvement. It is not required for the initial functional
@@ -306,7 +340,9 @@ implementation.
 
 Domain tests should cover:
 
-- helper registry construction from importer nodes
+- helper registry construction from helper nodes
+- helper registry construction from local graph helper imports
+- helper registry construction from installed package helper imports
 - module-qualified and unqualified resolution
 - ambiguity diagnostics
 - arity diagnostics
@@ -319,8 +355,8 @@ UI tests should cover:
 
 - palette entries create the new nodes
 - helper editor can add, edit, duplicate, reorder, and remove rows
-- importer editor saves `moduleName`
-- canvas handles match the required directionality
+- graph helper import editor saves `graphId` and `moduleName`
+- canvas handles are absent for helper metadata nodes
 
 Compiler tests should cover:
 

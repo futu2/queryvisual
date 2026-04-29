@@ -18,8 +18,9 @@ const PRESENTATION_BY_KIND: Record<
   graphInput: { family: "source", glyph: "IN" },
   fromTable: { family: "source", glyph: "TB" },
   subgraph: { family: "transform", glyph: "SG" },
-  helperFunctions: { family: "source", glyph: "FN" },
+  helperFunctions: { family: "terminal", glyph: "FN" },
   importHelperFunctions: { family: "terminal", glyph: "IMP" },
+  importGraphHelpers: { family: "terminal", glyph: "GH" },
   join: { family: "transform", glyph: "+" },
   where: { family: "transform", glyph: "?" },
   select: { family: "transform", glyph: "[]" },
@@ -35,6 +36,7 @@ const NODE_KIND_LABEL_KEYS: Record<GraphNode["kind"], MessageKey> = {
   subgraph: "nodeKinds.subgraph",
   helperFunctions: "nodeKinds.helperFunctions",
   importHelperFunctions: "nodeKinds.importHelperFunctions",
+  importGraphHelpers: "nodeKinds.importGraphHelpers",
   join: "nodeKinds.join",
   where: "nodeKinds.where",
   select: "nodeKinds.select",
@@ -89,6 +91,7 @@ function summaryText(
     case "helperFunctions":
       return t("queryNode.summary.helpers", { count: node.data.helpers.length });
     case "importHelperFunctions":
+    case "importGraphHelpers":
       return node.data.moduleName.trim()
         ? t("queryNode.summary.importedModule", { moduleName: node.data.moduleName.trim() })
         : t("queryNode.summary.importedHelpers");
@@ -148,7 +151,12 @@ function TargetHandles({
     return null;
   }
 
-  if (node.kind === "subgraph" || node.kind === "helperFunctions") {
+  if (
+    node.kind === "subgraph" ||
+    node.kind === "helperFunctions" ||
+    node.kind === "importHelperFunctions" ||
+    node.kind === "importGraphHelpers"
+  ) {
     return null;
   }
 
@@ -301,6 +309,8 @@ export function QueryNode({ id, data, selected }: NodeProps<FlowNodeData>) {
       {hasErrors ? <span className="query-node__badge">{t("queryNode.error")}</span> : null}
       {data.node.kind === "output" ||
       data.node.kind === "subgraph" ||
+      data.node.kind === "helperFunctions" ||
+      data.node.kind === "importGraphHelpers" ||
       data.node.kind === "importHelperFunctions" ? null : (
         <>
           <span hidden data-query-node-handle-marker="source-out" />

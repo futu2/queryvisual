@@ -1,8 +1,12 @@
 import type { Diagnostic } from "../diagnostics/types";
-import type { GraphDocument, GraphNode } from "../document/types";
+import type { GraphDocument, GraphNode, GraphWorkspace } from "../document/types";
 import type { Expr } from "../expr/ast";
 import { inferExpressionType } from "../expr/infer";
 import { parseExpression } from "../expr/parser";
+import {
+  buildSubgraphWorkspace,
+  resolveSubgraphTarget,
+} from "../workspace/interfaces";
 import type {
   HelperCallResolution,
   HelperRegistry,
@@ -26,6 +30,10 @@ function canonicalName(name: string) {
 
 function formatQualifiedName(moduleName: string, helperName: string) {
   return moduleName ? `${moduleName}.${helperName}` : helperName;
+}
+
+function helperNodeModuleName(source: Extract<GraphNode, { kind: "helperFunctions" }>) {
+  return (source.data as { moduleName?: string }).moduleName ?? "";
 }
 
 function highestPlaceholderIndex(expr: Expr | null): number {
@@ -283,10 +291,44 @@ function inferHelperReturnTypes(
   }
 }
 
-export function buildHelperRegistry(document: GraphDocument): HelperRegistry {
+export type BuildHelperRegistryOptions = {
+  workspace?: GraphWorkspace;
+  graphId?: string;
+  importStack?: string[];
+};
+
+export function buildHelperRegistry(
+  document: GraphDocument,
+  options: BuildHelperRegistryOptions = {},
+): HelperRegistry {
   const nodesById = new Map(document.nodes.map((node) => [node.id, node]));
   const helpers: ImportedHelperDefinition[] = [];
   const diagnostics: Diagnostic[] = [];
+  const currentGraphId =
+    options.graphId ?? ("id" in document ? document.id : undefined);
+  const legacyImportedSourceIds = new Set(
+    document.edges
+      .filter((edge) => {
+        const target = nodesById.get(edge.target);
+        return target?.kind === "importHelperFunctions";
+      })
+      .map((edge) => edge.source),
+  );
+
+  for (const source of document.nodes) {
+    if (source.kind !== "helperFunctions") continue;
+    if (legacyImportedSourceIds.has(source.id)) continue;
+    importHelpers(
+      source,
+      {
+        moduleName: helperNodeModuleName(source),
+        moduleNodeId: source.id,
+        idPrefix: source.id,
+      },
+      helpers,
+      diagnostics,
+    );
+  }
 
   for (const importer of document.nodes) {
     if (importer.kind !== "importHelperFunctions") continue;
@@ -332,7 +374,144 @@ export function buildHelperRegistry(document: GraphDocument): HelperRegistry {
       continue;
     }
 
-    importHelpers(source, importer, helpers, diagnostics);
+    importHelpers(
+      source,
+      {
+        moduleName: importer.data.moduleName,
+        moduleNodeId: importer.id,
+        idPrefix: importer.id,
+      },
+      helpers,
+      diagnostics,
+    );
+  }
+
+  for (const importer of document.nodes) {
+    if (importer.kind !== "importGraphHelpers") continue;
+
+    const target = importer.data.target ?? {
+      kind: "local" as const,
+      graphId: importer.data.graphId,
+    };
+    const isEmptyLocalTarget =
+      target.kind === "local" && target.graphId.trim() === "";
+    const isEmptyPackageTarget =
+      target.kind === "package" &&
+      (target.packageId.trim() === "" ||
+        target.version.trim() === "" ||
+        target.exportKey.trim() === "");
+    if (isEmptyLocalTarget || isEmptyPackageTarget) {
+      diagnostics.push(
+        diagnostic(
+          "helpers.graph-import-missing-graph",
+          "Graph helper imports require a graph",
+          importer.id,
+          "graphId",
+        ),
+      );
+      continue;
+    }
+
+    const rawModuleName = importer.data.moduleName.trim();
+    if (rawModuleName !== "" && !NAME_RE.test(rawModuleName)) {
+      diagnostics.push(
+        diagnostic(
+          "helpers.invalid-module",
+          "Helper module names must be valid identifiers",
+          importer.id,
+          "moduleName",
+        ),
+      );
+      continue;
+    }
+
+    if (!options.workspace) {
+      diagnostics.push(
+        diagnostic(
+          "helpers.graph-import-requires-workspace",
+          "Graph helper imports require a workspace context",
+          importer.id,
+          "graphId",
+        ),
+      );
+      continue;
+    }
+
+    const resolved = resolveSubgraphTarget(options.workspace, {
+      graphId: importer.data.graphId,
+      target,
+    });
+
+    if (!resolved.graph) {
+      diagnostics.push(
+        diagnostic(
+          target.kind === "package"
+            ? "helpers.graph-import-missing-package-export"
+            : "helpers.graph-import-missing-graph",
+          target.kind === "package"
+            ? `Installed package export ${target.packageId}@${target.version}#${target.exportKey} does not exist.`
+            : `Referenced helper graph ${target.graphId} does not exist in the workspace`,
+          importer.id,
+          target.kind === "package" ? "target" : "graphId",
+        ),
+      );
+      continue;
+    }
+
+    if (target.kind === "local" && currentGraphId && target.graphId === currentGraphId) {
+      diagnostics.push(
+        diagnostic(
+          "helpers.graph-import-cycle",
+          `Helper graph import cycle detected: ${currentGraphId} -> ${target.graphId}`,
+          importer.id,
+          "graphId",
+        ),
+      );
+      continue;
+    }
+
+    const sourceGraphId = resolved.graph.id;
+    if (target.kind === "local" && options.importStack?.includes(sourceGraphId)) {
+      diagnostics.push(
+        diagnostic(
+          "helpers.graph-import-cycle",
+          `Helper graph import cycle detected: ${[
+            ...(options.importStack ?? []),
+            ...(currentGraphId ? [currentGraphId] : []),
+            sourceGraphId,
+          ].join(" -> ")}`,
+          importer.id,
+          "graphId",
+        ),
+      );
+      continue;
+    }
+
+    const sourceWorkspace =
+      target.kind === "package"
+        ? buildSubgraphWorkspace(options.workspace, resolved)
+        : options.workspace;
+
+    const sourceRegistry = buildHelperRegistry(resolved.graph, {
+      workspace: sourceWorkspace,
+      graphId: sourceGraphId,
+      importStack: [...(options.importStack ?? []), currentGraphId ?? sourceGraphId],
+    });
+    diagnostics.push(...sourceRegistry.diagnostics);
+
+    const moduleOverride = rawModuleName === "" ? null : canonicalName(rawModuleName);
+    for (const helper of sourceRegistry.helpers) {
+      const moduleName = moduleOverride ?? helper.moduleName;
+      helpers.push({
+        ...helper,
+        id: `${importer.id}:${helper.id}:${formatQualifiedName(
+          moduleName,
+          helper.name,
+        )}`,
+        moduleName,
+        importerNodeId: importer.id,
+      });
+    }
   }
 
   addDuplicateQualifiedNameDiagnostics(helpers, diagnostics);
@@ -361,18 +540,22 @@ export function buildHelperRegistry(document: GraphDocument): HelperRegistry {
 
 function importHelpers(
   source: Extract<GraphNode, { kind: "helperFunctions" }>,
-  importer: Extract<GraphNode, { kind: "importHelperFunctions" }>,
+  moduleSource: {
+    moduleName: string;
+    moduleNodeId: string;
+    idPrefix: string;
+  },
   helpers: ImportedHelperDefinition[],
   diagnostics: Diagnostic[],
 ) {
-  const rawModuleName = importer.data.moduleName.trim();
+  const rawModuleName = moduleSource.moduleName.trim();
 
   if (rawModuleName !== "" && !NAME_RE.test(rawModuleName)) {
     diagnostics.push(
       diagnostic(
         "helpers.invalid-module",
         "Helper module names must be valid identifiers",
-        importer.id,
+        moduleSource.moduleNodeId,
         "moduleName",
       ),
     );
@@ -412,7 +595,7 @@ function importHelpers(
     }
 
     helpers.push({
-      id: `${importer.id}:${rowIndex}:${formatQualifiedName(moduleName, helperName)}`,
+      id: `${moduleSource.idPrefix}:${rowIndex}:${formatQualifiedName(moduleName, helperName)}`,
       name: helperName,
       moduleName,
       expression: helper.expression,
@@ -420,7 +603,7 @@ function importHelpers(
       arity: highestPlaceholderIndex(ast),
       returnType: "unknown",
       definingNodeId: source.id,
-      importerNodeId: importer.id,
+      importerNodeId: moduleSource.moduleNodeId,
       rowIndex,
     });
   });

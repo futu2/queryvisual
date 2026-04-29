@@ -71,6 +71,105 @@ describe("fileIO", () => {
     expect(serializeDocumentJson(parsed)).toContain('"sourceHandle": "orders_report"');
   });
 
+  test("parses and serializes helper function and graph helper import nodes", () => {
+    const parsed = parseWorkspaceJson(
+      JSON.stringify({
+        version: 2,
+        metadata: { name: "workspace" },
+        entryGraphId: "graph-main",
+        graphs: [
+          {
+            id: "graph-main",
+            metadata: { name: "Main" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [
+              {
+                id: "import-helpers",
+                kind: "importGraphHelpers",
+                label: "Import Graph Helpers",
+                position: { x: 0, y: 0 },
+                data: {
+                  graphId: "graph-helpers",
+                  moduleName: "lib",
+                  target: {
+                    kind: "package",
+                    packageId: "team/helper-lib",
+                    version: "1.0.0",
+                    exportKey: "helpers",
+                  },
+                },
+              },
+            ],
+            edges: [],
+          },
+          {
+            id: "graph-helpers",
+            metadata: { name: "Helpers" },
+            viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [
+              {
+                id: "helpers",
+                kind: "helperFunctions",
+                label: "Helper Functions",
+                position: { x: 0, y: 0 },
+                data: {
+                  moduleName: "math",
+                  helpers: [{ name: "add10", expression: "$1 + 10" }],
+                },
+              },
+            ],
+            edges: [],
+          },
+        ],
+        installedPackages: [],
+        packageManifest: null,
+      }),
+    );
+
+    expect(parsed.graphs[0]?.nodes[0]?.kind).toBe("importGraphHelpers");
+    expect(parsed.graphs[1]?.nodes[0]?.kind).toBe("helperFunctions");
+    expect(serializeWorkspaceJson(parsed)).toContain('"kind": "importGraphHelpers"');
+    expect(serializeWorkspaceJson(parsed)).toContain('"packageId": "team/helper-lib"');
+  });
+
+  test("rejects graph helper imports with malformed package targets", () => {
+    expect(() =>
+      parseWorkspaceJson(
+        JSON.stringify({
+          version: 2,
+          metadata: { name: "workspace" },
+          entryGraphId: "graph-main",
+          graphs: [
+            {
+              id: "graph-main",
+              metadata: { name: "Main" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [
+                {
+                  id: "import-helpers",
+                  kind: "importGraphHelpers",
+                  label: "Import Graph Helpers",
+                  position: { x: 0, y: 0 },
+                  data: {
+                    graphId: "graph-helpers",
+                    moduleName: "lib",
+                    target: {
+                      kind: "package",
+                      packageId: "team/helper-lib",
+                    },
+                  },
+                },
+              ],
+              edges: [],
+            },
+          ],
+          installedPackages: [],
+          packageManifest: null,
+        }),
+      ),
+    ).toThrow("Invalid QueryVisual workspace");
+  });
+
   test("rejects subgraph nodes with a malformed target even when graphId is present", () => {
     expect(() =>
       parseWorkspaceJson(

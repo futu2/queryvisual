@@ -396,11 +396,12 @@ describe("NodeEditorModal", () => {
       kind: "helperFunctions",
       label: "Helper Functions",
       position: { x: 0, y: 0 },
-      data: { helpers: [{ name: "add10", expression: "$1 + 10" }] },
+      data: { moduleName: "", helpers: [{ name: "add10", expression: "$1 + 10" }] },
     };
 
     renderModal({ node, onSave });
 
+    await user.type(screen.getByLabelText("Module name"), "math");
     await user.clear(screen.getByLabelText("Helper name 1"));
     await user.type(screen.getByLabelText("Helper name 1"), "gross");
     await user.clear(screen.getByLabelText("Helper expression 1"));
@@ -410,31 +411,150 @@ describe("NodeEditorModal", () => {
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
         kind: "helperFunctions",
-        data: { helpers: [{ name: "gross", expression: "$1 + $2" }] },
+        data: { moduleName: "math", helpers: [{ name: "gross", expression: "$1 + $2" }] },
       }),
     );
   });
 
-  test("edits importer module name", async () => {
+  test("does not show parse diagnostics for helper placeholders", () => {
+    const node: GraphNode = {
+      id: "helpers",
+      kind: "helperFunctions",
+      label: "Helper Functions",
+      position: { x: 0, y: 0 },
+      data: { moduleName: "", helpers: [{ name: "add10", expression: "$1 + 10" }] },
+    };
+
+    renderModal({ node });
+
+    expect(screen.queryByText("Expression could not be parsed.")).toBeNull();
+  });
+
+  test("edits graph helper import target and module name", async () => {
     const user = userEvent.setup();
     const onSave = mock();
     const node: GraphNode = {
       id: "import",
-      kind: "importHelperFunctions",
-      label: "Import Helpers",
+      kind: "importGraphHelpers",
+      label: "Import Graph Helpers",
       position: { x: 0, y: 0 },
-      data: { moduleName: "" },
+      data: { graphId: "", moduleName: "" },
+    };
+    const workspace: GraphWorkspace = {
+      version: 2,
+      metadata: { name: "Workspace" },
+      entryGraphId: "graph-main",
+      graphs: [
+        {
+          id: "graph-main",
+          metadata: { name: "Main" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [node],
+          edges: [],
+        },
+        {
+          id: "graph-helpers",
+          metadata: { name: "Helpers" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [],
+          edges: [],
+        },
+      ],
+      installedPackages: [],
+      packageManifest: null,
     };
 
-    renderModal({ node, onSave });
+    renderModal({ node, workspace, onSave });
 
+    await user.selectOptions(screen.getByLabelText("Helper graph"), "graph-helpers");
     await user.type(screen.getByLabelText("Module name"), "math");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
-        kind: "importHelperFunctions",
-        data: { moduleName: "math" },
+        kind: "importGraphHelpers",
+        data: {
+          graphId: "graph-helpers",
+          moduleName: "math",
+          target: { kind: "local", graphId: "graph-helpers" },
+        },
+      }),
+    );
+  });
+
+  test("edits graph helper import to target an installed package export", async () => {
+    const user = userEvent.setup();
+    const onSave = mock();
+    const node: GraphNode = {
+      id: "import",
+      kind: "importGraphHelpers",
+      label: "Import Graph Helpers",
+      position: { x: 0, y: 0 },
+      data: { graphId: "", moduleName: "" },
+    };
+    const workspace: GraphWorkspace = {
+      version: 2,
+      metadata: { name: "Workspace" },
+      entryGraphId: "graph-main",
+      graphs: [
+        {
+          id: "graph-main",
+          metadata: { name: "Main" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [node],
+          edges: [],
+        },
+      ],
+      installedPackages: [
+        {
+          packageId: "team/helper-lib",
+          version: "1.0.0",
+          metadata: { name: "Helper Lib" },
+          exports: [
+            {
+              exportKey: "helpers",
+              graphId: "pkg-helper-graph",
+              displayName: "Helpers",
+            },
+          ],
+          graphs: [
+            {
+              id: "pkg-helper-graph",
+              metadata: { name: "Package Helpers" },
+              viewport: { x: 0, y: 0, zoom: 1 },
+              nodes: [],
+              edges: [],
+            },
+          ],
+          dependencyRefs: [],
+        },
+      ],
+      packageManifest: null,
+    };
+
+    renderModal({ node, workspace, onSave });
+
+    await user.selectOptions(screen.getByLabelText("Helper source"), "package");
+    await user.selectOptions(
+      screen.getByLabelText("Package export"),
+      "team/helper-lib@1.0.0#helpers",
+    );
+    await user.type(screen.getByLabelText("Module name"), "pkg");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "importGraphHelpers",
+        data: {
+          graphId: "pkg-helper-graph",
+          moduleName: "pkg",
+          target: {
+            kind: "package",
+            packageId: "team/helper-lib",
+            version: "1.0.0",
+            exportKey: "helpers",
+          },
+        },
       }),
     );
   });
@@ -446,6 +566,7 @@ describe("NodeEditorModal", () => {
       label: "Helper Functions",
       position: { x: 0, y: 0 },
       data: {
+        moduleName: "",
         helpers: [
           { name: "add10", expression: "$1 + 10" },
           { name: "add20", expression: "$1 + 20" },
