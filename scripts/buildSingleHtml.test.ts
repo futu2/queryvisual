@@ -1,0 +1,82 @@
+import { describe, expect, test } from "bun:test";
+import {
+  assertNoExternalAssets,
+  collectBundleOutputs,
+  renderSingleHtml,
+} from "./buildSingleHtml";
+
+function artifact(path: string, type: string, body: string): Blob & { path: string } {
+  return Object.assign(new Blob([body], { type }), { path });
+}
+
+describe("renderSingleHtml", () => {
+  test("inlines css and javascript into a stable html shell", () => {
+    const html = renderSingleHtml({
+      css: ".app{color:red}",
+      js: "document.body.dataset.ready = 'true';",
+    });
+
+    expect(html).toContain("<title>QueryVisual</title>");
+    expect(html).toContain('<div id="root"></div>');
+    expect(html).toContain("<style>");
+    expect(html).toContain(".app{color:red}");
+    expect(html).toContain('<script type="module">');
+    expect(html).toContain("document.body.dataset.ready");
+  });
+
+  test("escapes inline end tags so html parsing does not truncate assets", () => {
+    const html = renderSingleHtml({
+      css: "body::before{content:'</style>'}",
+      js: "console.log('</script>');",
+    });
+
+    expect(html).toContain("<\\/style>");
+    expect(html).toContain("<\\/script>");
+    expect(html).not.toContain("content:'</style>'");
+    expect(html).not.toContain("console.log('</script>');");
+  });
+});
+
+describe("collectBundleOutputs", () => {
+  test("collects javascript and css outputs from Bun build artifacts", async () => {
+    const outputs = [
+      artifact("./frontend.js", "text/javascript;charset=utf-8", "console.log('ok')"),
+      artifact("./frontend.css", "text/css;charset=utf-8", ".root{display:block}"),
+    ];
+
+    await expect(collectBundleOutputs(outputs)).resolves.toEqual({
+      js: "console.log('ok')",
+      css: ".root{display:block}",
+    });
+  });
+
+  test("throws when the javascript bundle is missing", async () => {
+    const outputs = [artifact("./frontend.css", "text/css", ".root{}")];
+
+    await expect(collectBundleOutputs(outputs)).rejects.toThrow(
+      "Bun build did not produce a JavaScript bundle",
+    );
+  });
+});
+
+describe("assertNoExternalAssets", () => {
+  test("allows inline-only html", () => {
+    expect(() =>
+      assertNoExternalAssets(
+        '<style>.app{}</style><div id="root"></div><script type="module">console.log(1)</script>',
+      ),
+    ).not.toThrow();
+  });
+
+  test("rejects external script sources", () => {
+    expect(() =>
+      assertNoExternalAssets('<script type="module" src="./frontend.js"></script>'),
+    ).toThrow("single HTML output still references an external script");
+  });
+
+  test("rejects external stylesheet links", () => {
+    expect(() =>
+      assertNoExternalAssets('<link rel="stylesheet" href="./frontend.css">'),
+    ).toThrow("single HTML output still references an external stylesheet");
+  });
+});
