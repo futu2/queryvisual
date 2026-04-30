@@ -8,10 +8,29 @@ type RowCardProps = {
   onDragEnd?: DragEventHandler<HTMLElement>;
   onDragOver?: DragEventHandler<HTMLElement>;
   onDrop?: DragEventHandler<HTMLElement>;
+  isDragging?: boolean;
   header: ReactNode;
   actions: ReactNode;
   children?: ReactNode;
 };
+
+function DragHandleIcon() {
+  return (
+    <svg
+      className="row-drag-handle-icon"
+      aria-hidden="true"
+      focusable="false"
+      viewBox="0 0 12 18"
+    >
+      <circle cx="3" cy="3" r="1.4" />
+      <circle cx="9" cy="3" r="1.4" />
+      <circle cx="3" cy="9" r="1.4" />
+      <circle cx="9" cy="9" r="1.4" />
+      <circle cx="3" cy="15" r="1.4" />
+      <circle cx="9" cy="15" r="1.4" />
+    </svg>
+  );
+}
 
 export function RowCard({
   dragLabel,
@@ -21,6 +40,7 @@ export function RowCard({
   onDragEnd,
   onDragOver,
   onDrop,
+  isDragging = false,
   header,
   actions,
   children,
@@ -38,7 +58,7 @@ export function RowCard({
   return (
     <section
       data-testid={testId}
-      className="row-card"
+      className={isDragging ? "row-card row-card--dragging" : "row-card"}
       onDragOver={onDragOver ? handleDragOver : undefined}
       onDrop={onDrop ? handleDrop : undefined}
     >
@@ -52,7 +72,7 @@ export function RowCard({
           onDragStart={draggable ? onDragStart : undefined}
           onDragEnd={draggable ? onDragEnd : undefined}
         >
-          ⋮⋮
+          <DragHandleIcon />
         </button>
         <div className="row-card-title">{header}</div>
         <div className="row-card-actions">{actions}</div>

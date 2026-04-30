@@ -117,6 +117,8 @@ describe("RowCard", () => {
     const dragHandle = screen.getByRole("button", { name: "Drag mapping 1" });
     expect(dragHandle.getAttribute("tabindex")).toBe("-1");
     expect(dragHandle.classList.contains("row-drag-handle")).toBeTrue();
+    expect(dragHandle.textContent).toBe("");
+    expect(dragHandle.querySelector("svg")).toBeTruthy();
     expect(screen.getByText("Mapping 1")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Action slot" })).toBeTruthy();
     expect(screen.getByText("Body content")).toBeTruthy();

@@ -10,7 +10,12 @@ import { createDefaultOutputListenerConfig } from "../../domain/document/outputL
 import { NodeEditorModal, type NodeEditorModalHandle } from "./NodeEditorModal";
 import { I18nProvider } from "../i18n/I18nContext";
 
-afterEach(cleanup);
+afterEach(() => {
+  document.body.querySelectorAll(".row-drag-image").forEach((element) => {
+    element.remove();
+  });
+  cleanup();
+});
 
 function createMockDataTransfer() {
   const store = new Map<string, string>();
@@ -22,6 +27,7 @@ function createMockDataTransfer() {
       store.set(format, value);
     }),
     getData: mock((format: string) => store.get(format) ?? ""),
+    setDragImage: mock((_element: Element, _x: number, _y: number) => {}),
     clearData: mock((format?: string) => {
       if (typeof format === "string") {
         store.delete(format);
@@ -37,8 +43,18 @@ function dispatchDragEvent(
   target: Element,
   type: "dragstart" | "dragover" | "drop" | "dragend",
   dataTransfer?: ReturnType<typeof createMockDataTransfer>,
+  options: { clientX?: number; clientY?: number } = {},
 ) {
   const event = new Event(type, { bubbles: true, cancelable: true });
+
+  Object.defineProperty(event, "clientX", {
+    value: options.clientX ?? 0,
+    configurable: true,
+  });
+  Object.defineProperty(event, "clientY", {
+    value: options.clientY ?? 0,
+    configurable: true,
+  });
 
   if (dataTransfer) {
     Object.defineProperty(event, "dataTransfer", {
@@ -646,12 +662,86 @@ describe("NodeEditorModal", () => {
     expect(firstCard.getAttribute("draggable")).not.toBe("true");
     expect(firstHandle.getAttribute("draggable")).toBe("true");
 
-    dispatchDragEvent(firstHandle, "dragstart", dataTransfer);
+    firstCard.getBoundingClientRect = () =>
+      ({
+        x: 40,
+        y: 80,
+        left: 40,
+        top: 80,
+        right: 360,
+        bottom: 200,
+        width: 320,
+        height: 120,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    const assignRowLayoutRects = () => {
+      const rowWrappers = Array.from(
+        document.querySelectorAll<HTMLElement>(".mapping-row"),
+      );
+      rowWrappers.forEach((rowWrapper) => {
+        rowWrapper.getBoundingClientRect = () => {
+          const currentIndex = Array.from(
+            document.querySelectorAll<HTMLElement>(".mapping-row"),
+          ).indexOf(rowWrapper);
+          const top = 80 + currentIndex * 132;
+
+          return {
+            x: 40,
+            y: top,
+            left: 40,
+            top,
+            right: 360,
+            bottom: top + 120,
+            width: 320,
+            height: 120,
+            toJSON: () => ({}),
+          } as DOMRect;
+        };
+      });
+    };
+    assignRowLayoutRects();
+
+    dispatchDragEvent(firstHandle, "dragstart", dataTransfer, {
+      clientX: 56,
+      clientY: 96,
+    });
     expect(dataTransfer.effectAllowed).toBe("move");
     expect(dataTransfer.getData("text/plain")).not.toBe("");
+    expect(dataTransfer.setDragImage).toHaveBeenCalledTimes(1);
+    const [dragImage, offsetX, offsetY] = dataTransfer.setDragImage.mock.calls[0];
+    expect((dragImage as HTMLElement).classList.contains("row-drag-image")).toBeTrue();
+    expect(
+      ((dragImage as HTMLElement).querySelector("input") as HTMLInputElement | null)
+        ?.value,
+    ).toBe("gross_total");
+    expect(offsetX).toBe(16);
+    expect(offsetY).toBe(16);
 
-    dispatchDragEvent(thirdCard, "dragover", dataTransfer);
+    dispatchDragEvent(thirdCard, "dragover", dataTransfer, { clientY: 360 });
+    expect(
+      (
+        within(screen.getByTestId("mapping-row-card-3")).getByLabelText(
+          "Mapping name 3",
+        ) as HTMLInputElement
+      ).value,
+    ).toBe("customer_id");
+
+    dispatchDragEvent(thirdCard, "dragover", dataTransfer, { clientY: 420 });
+    expect(
+      (
+        within(screen.getByTestId("mapping-row-card-3")).getByLabelText(
+          "Mapping name 3",
+        ) as HTMLInputElement
+      ).value,
+    ).toBe("gross_total");
+    expect(
+      screen
+        .getByTestId("mapping-row-card-3")
+        .parentElement?.classList.contains("mapping-row--reordering"),
+    ).toBeTrue();
     dispatchDragEvent(thirdCard, "drop", dataTransfer);
+    expect(document.body.querySelector(".row-drag-image")).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "Save" }));
 

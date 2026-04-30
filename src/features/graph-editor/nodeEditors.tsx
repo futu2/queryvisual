@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { DragEvent as ReactDragEvent } from "react";
 import type {
   GraphDocument,
@@ -135,6 +135,17 @@ const columnTypes: ColumnType[] = [
 ];
 
 const rowDragDataType = "application/x-queryvisual-row-id";
+const rowDragImageOffset = 16;
+const rowReorderAnimationMs = 220;
+
+type RowDragImageRef = {
+  current: HTMLElement | null;
+};
+
+type RowReorderAnimationApi = {
+  captureRowPositions: () => void;
+  registerRowElement: (rowId: string) => (element: HTMLElement | null) => void;
+};
 
 function blankFieldRow(): FieldRow {
   return { name: "", type: "string" };
@@ -227,6 +238,7 @@ function handleRowDragStart(
   event: ReactDragEvent<HTMLElement>,
   rowId: string,
   setDraggedRowId: (rowId: string | null) => void,
+  dragImageRef?: RowDragImageRef,
 ) {
   setDraggedRowId(rowId);
   if (!event.dataTransfer) return;
@@ -234,6 +246,66 @@ function handleRowDragStart(
   event.dataTransfer.effectAllowed = "move";
   event.dataTransfer.setData(rowDragDataType, rowId);
   event.dataTransfer.setData("text/plain", rowId);
+  attachRowDragImage(event, dragImageRef);
+}
+
+function clearRowDragImage(dragImageRef?: RowDragImageRef) {
+  dragImageRef?.current?.remove();
+  if (dragImageRef) {
+    dragImageRef.current = null;
+  }
+}
+
+function finishRowDrag(
+  setDraggedRowId: (rowId: string | null) => void,
+  dragImageRef?: RowDragImageRef,
+) {
+  setDraggedRowId(null);
+  clearRowDragImage(dragImageRef);
+}
+
+function attachRowDragImage(
+  event: ReactDragEvent<HTMLElement>,
+  dragImageRef?: RowDragImageRef,
+) {
+  const setDragImage = event.dataTransfer?.setDragImage;
+  if (!setDragImage || !dragImageRef) return;
+
+  clearRowDragImage(dragImageRef);
+
+  const rowCard = event.currentTarget.closest(".row-card");
+  if (!(rowCard instanceof HTMLElement)) return;
+
+  const rowRect = rowCard.getBoundingClientRect();
+  const dragImage = rowCard.cloneNode(true) as HTMLElement;
+  dragImage.classList.add("row-drag-image");
+  dragImage.setAttribute("aria-hidden", "true");
+  dragImage.removeAttribute("data-testid");
+  dragImage.style.width = `${rowRect.width || rowCard.offsetWidth}px`;
+  dragImage.querySelectorAll("[id]").forEach((element) => {
+    element.removeAttribute("id");
+  });
+  dragImage.querySelectorAll("[data-testid]").forEach((element) => {
+    element.removeAttribute("data-testid");
+  });
+  document.body.appendChild(dragImage);
+  dragImageRef.current = dragImage;
+
+  const offsetX =
+    event.clientX > 0 && rowRect.left > 0
+      ? event.clientX - rowRect.left
+      : rowDragImageOffset;
+  const offsetY =
+    event.clientY > 0 && rowRect.top > 0
+      ? event.clientY - rowRect.top
+      : rowDragImageOffset;
+
+  setDragImage.call(
+    event.dataTransfer,
+    dragImage,
+    Math.max(rowDragImageOffset, offsetX),
+    Math.max(rowDragImageOffset, offsetY),
+  );
 }
 
 function getDraggedRowId(
@@ -247,6 +319,118 @@ function getDraggedRowId(
   return nativeRowId || draggedRowId;
 }
 
+function prefersReducedMotion() {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+}
+
+function useRowReorderAnimation(rowIds: string[]): RowReorderAnimationApi {
+  const rowElementsRef = useRef(new Map<string, HTMLElement>());
+  const previousRectsRef = useRef<Map<string, DOMRect> | null>(null);
+  const cleanupTimersRef = useRef<number[]>([]);
+
+  const clearAnimationTimers = () => {
+    cleanupTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+    cleanupTimersRef.current = [];
+  };
+
+  useEffect(() => {
+    return () => {
+      clearAnimationTimers();
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    const previousRects = previousRectsRef.current;
+    previousRectsRef.current = null;
+    if (!previousRects || prefersReducedMotion()) return;
+
+    clearAnimationTimers();
+
+    rowElementsRef.current.forEach((element, rowId) => {
+      const previousRect = previousRects.get(rowId);
+      if (!previousRect) return;
+
+      const nextRect = element.getBoundingClientRect();
+      const deltaX = previousRect.left - nextRect.left;
+      const deltaY = previousRect.top - nextRect.top;
+      if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) return;
+
+      element.classList.add("mapping-row--reordering");
+      element.style.transition = "none";
+      element.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+      element.getBoundingClientRect();
+
+      window.requestAnimationFrame(() => {
+        element.style.transition = `transform ${rowReorderAnimationMs}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+        element.style.transform = "translate(0, 0)";
+      });
+
+      const cleanupTimer = window.setTimeout(() => {
+        element.classList.remove("mapping-row--reordering");
+        element.style.removeProperty("transition");
+        element.style.removeProperty("transform");
+      }, rowReorderAnimationMs + 40);
+      cleanupTimersRef.current.push(cleanupTimer);
+    });
+  }, [rowIds.join("|")]);
+
+  return {
+    captureRowPositions: () => {
+      const previousRects = new Map<string, DOMRect>();
+      rowElementsRef.current.forEach((element, rowId) => {
+        previousRects.set(rowId, element.getBoundingClientRect());
+      });
+      previousRectsRef.current = previousRects;
+    },
+    registerRowElement: (rowId: string) => (element: HTMLElement | null) => {
+      if (element) {
+        rowElementsRef.current.set(rowId, element);
+        return;
+      }
+
+      rowElementsRef.current.delete(rowId);
+    },
+  };
+}
+
+function reorderRowsDuringDrag<T extends object>(
+  event: ReactDragEvent<HTMLElement>,
+  rows: DraftRow<T>[],
+  targetIndex: number,
+  draggedRowId: string | null,
+  onChange: (rows: DraftRow<T>[]) => void,
+  captureRowPositions: () => void,
+) {
+  const activeRowId = getDraggedRowId(event, draggedRowId);
+  const fromIndex = rows.findIndex((candidate) => candidate.rowId === activeRowId);
+
+  if (fromIndex === -1 || fromIndex === targetIndex) return;
+  if (!hasCrossedRowReorderThreshold(event, fromIndex, targetIndex)) return;
+  captureRowPositions();
+  onChange(moveDraftRow(rows, fromIndex, targetIndex));
+}
+
+function hasCrossedRowReorderThreshold(
+  event: ReactDragEvent<HTMLElement>,
+  fromIndex: number,
+  targetIndex: number,
+) {
+  const targetRow =
+    event.currentTarget.closest<HTMLElement>(".mapping-row") ?? event.currentTarget;
+  const targetRect = targetRow.getBoundingClientRect();
+
+  if (event.clientY <= 0 || targetRect.height <= 0) {
+    return true;
+  }
+
+  const midpointY = targetRect.top + targetRect.height / 2;
+  if (fromIndex < targetIndex) {
+    return event.clientY >= midpointY;
+  }
+
+  return event.clientY <= midpointY;
+}
+
 function FromTableFieldRows({
   rows,
   t,
@@ -257,29 +441,41 @@ function FromTableFieldRows({
   onChange: (rows: DraftRow<FieldRow>[]) => void;
 }) {
   const [draggedRowId, setDraggedRowId] = useState<string | null>(null);
+  const dragImageRef = useRef<HTMLElement | null>(null);
+  const { captureRowPositions, registerRowElement } = useRowReorderAnimation(
+    rows.map((row) => row.rowId),
+  );
   const fieldLabel = t(rowActionItemMessageKeys.field);
 
   return (
     <div className="editor-stack">
       {rows.map((row, index) => (
-        <div key={row.rowId} className="mapping-row">
+        <div
+          key={row.rowId}
+          ref={registerRowElement(row.rowId)}
+          className="mapping-row"
+        >
           <RowCard
             testId={`field-row-card-${index + 1}`}
             dragLabel={t("rowDrag.label", { item: fieldLabel, row: index + 1 })}
             draggable={rows.length > 1}
+            isDragging={row.rowId === draggedRowId}
             onDragStart={(event) =>
-              handleRowDragStart(event, row.rowId, setDraggedRowId)
+              handleRowDragStart(event, row.rowId, setDraggedRowId, dragImageRef)
             }
-            onDragEnd={() => setDraggedRowId(null)}
-            onDragOver={() => {}}
-            onDrop={(event) => {
-              const activeRowId = getDraggedRowId(event, draggedRowId);
-              const fromIndex = rows.findIndex(
-                (candidate) => candidate.rowId === activeRowId,
-              );
-              setDraggedRowId(null);
-              if (fromIndex === -1) return;
-              onChange(moveDraftRow(rows, fromIndex, index));
+            onDragEnd={() => finishRowDrag(setDraggedRowId, dragImageRef)}
+            onDragOver={(event) =>
+              reorderRowsDuringDrag(
+                event,
+                rows,
+                index,
+                draggedRowId,
+                onChange,
+                captureRowPositions,
+              )
+            }
+            onDrop={() => {
+              finishRowDrag(setDraggedRowId, dragImageRef);
             }}
             header={
               <InlineRowNameInput
@@ -488,12 +684,20 @@ function NamedExpressionRows({
   onChange: (rows: NamedExpressionDraftRow[]) => void;
 }) {
   const [draggedRowId, setDraggedRowId] = useState<string | null>(null);
+  const dragImageRef = useRef<HTMLElement | null>(null);
+  const { captureRowPositions, registerRowElement } = useRowReorderAnimation(
+    rows.map((row) => row.rowId),
+  );
   const itemLabel = t(rowActionItemMessageKeys[itemKey]);
 
   return (
     <div className="editor-stack">
       {rows.map((row, index) => (
-        <div key={row.rowId} className="mapping-row">
+        <div
+          key={row.rowId}
+          ref={registerRowElement(row.rowId)}
+          className="mapping-row"
+        >
           <RowCard
             testId={
               rowCardTestIdPrefix
@@ -502,19 +706,23 @@ function NamedExpressionRows({
             }
             dragLabel={t("rowDrag.label", { item: itemLabel, row: index + 1 })}
             draggable={rows.length > 1}
+            isDragging={row.rowId === draggedRowId}
             onDragStart={(event) =>
-              handleRowDragStart(event, row.rowId, setDraggedRowId)
+              handleRowDragStart(event, row.rowId, setDraggedRowId, dragImageRef)
             }
-            onDragEnd={() => setDraggedRowId(null)}
-            onDragOver={() => {}}
-            onDrop={(event) => {
-              const activeRowId = getDraggedRowId(event, draggedRowId);
-              const fromIndex = rows.findIndex(
-                (candidate) => candidate.rowId === activeRowId,
-              );
-              setDraggedRowId(null);
-              if (fromIndex === -1) return;
-              onChange(moveDraftRow(rows, fromIndex, index));
+            onDragEnd={() => finishRowDrag(setDraggedRowId, dragImageRef)}
+            onDragOver={(event) =>
+              reorderRowsDuringDrag(
+                event,
+                rows,
+                index,
+                draggedRowId,
+                onChange,
+                captureRowPositions,
+              )
+            }
+            onDrop={() => {
+              finishRowDrag(setDraggedRowId, dragImageRef);
             }}
             header={
               <InlineRowNameInput
@@ -649,29 +857,41 @@ function SortItemRows({
   onChange: (rows: SortItemDraftRow[]) => void;
 }) {
   const [draggedRowId, setDraggedRowId] = useState<string | null>(null);
+  const dragImageRef = useRef<HTMLElement | null>(null);
+  const { captureRowPositions, registerRowElement } = useRowReorderAnimation(
+    rows.map((row) => row.rowId),
+  );
   const sortItemLabel = t(rowActionItemMessageKeys.sortItem);
 
   return (
     <div className="editor-stack">
       {rows.map((row, index) => (
-        <div key={row.rowId} className="mapping-row">
+        <div
+          key={row.rowId}
+          ref={registerRowElement(row.rowId)}
+          className="mapping-row"
+        >
           <RowCard
             testId={`sort-row-card-${index + 1}`}
             dragLabel={t("rowDrag.label", { item: sortItemLabel, row: index + 1 })}
             draggable={rows.length > 1}
+            isDragging={row.rowId === draggedRowId}
             onDragStart={(event) =>
-              handleRowDragStart(event, row.rowId, setDraggedRowId)
+              handleRowDragStart(event, row.rowId, setDraggedRowId, dragImageRef)
             }
-            onDragEnd={() => setDraggedRowId(null)}
-            onDragOver={() => {}}
-            onDrop={(event) => {
-              const activeRowId = getDraggedRowId(event, draggedRowId);
-              const fromIndex = rows.findIndex(
-                (candidate) => candidate.rowId === activeRowId,
-              );
-              setDraggedRowId(null);
-              if (fromIndex === -1) return;
-              onChange(moveDraftRow(rows, fromIndex, index));
+            onDragEnd={() => finishRowDrag(setDraggedRowId, dragImageRef)}
+            onDragOver={(event) =>
+              reorderRowsDuringDrag(
+                event,
+                rows,
+                index,
+                draggedRowId,
+                onChange,
+                captureRowPositions,
+              )
+            }
+            onDrop={() => {
+              finishRowDrag(setDraggedRowId, dragImageRef);
             }}
             header={null}
             actions={
