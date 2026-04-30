@@ -57,6 +57,14 @@ describe("collectBundleOutputs", () => {
       "Bun build did not produce a JavaScript bundle",
     );
   });
+
+  test("throws when the css bundle is missing", async () => {
+    const outputs = [artifact("./frontend.js", "text/javascript", "console.log('ok')")];
+
+    await expect(collectBundleOutputs(outputs)).rejects.toThrow(
+      "Bun build did not produce a CSS bundle",
+    );
+  });
 });
 
 describe("assertNoExternalAssets", () => {
@@ -77,6 +85,12 @@ describe("assertNoExternalAssets", () => {
   test("rejects external stylesheet links", () => {
     expect(() =>
       assertNoExternalAssets('<link rel="stylesheet" href="./frontend.css">'),
+    ).toThrow("single HTML output still references an external stylesheet");
+  });
+
+  test("rejects external stylesheet links with tokenized rel values", () => {
+    expect(() =>
+      assertNoExternalAssets('<link rel="preload stylesheet" href="./frontend.css">'),
     ).toThrow("single HTML output still references an external stylesheet");
   });
 });

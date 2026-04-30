@@ -62,6 +62,10 @@ export async function collectBundleOutputs(
     throw new Error("Bun build did not produce a JavaScript bundle");
   }
 
+  if (!css) {
+    throw new Error("Bun build did not produce a CSS bundle");
+  }
+
   return { css, js };
 }
 
@@ -70,8 +74,10 @@ export function assertNoExternalAssets(html: string): void {
     throw new Error("single HTML output still references an external script");
   }
 
-  if (/<link\b(?=[^>]*\brel\s*=\s*["']?stylesheet["']?)(?=[^>]*\bhref\s*=)[^>]*>/i.test(html)) {
-    throw new Error("single HTML output still references an external stylesheet");
+  for (const linkTag of html.matchAll(/<link\b[^>]*>/gi)) {
+    if (isExternalStylesheetLink(linkTag[0])) {
+      throw new Error("single HTML output still references an external stylesheet");
+    }
   }
 }
 
@@ -112,6 +118,26 @@ function isJavaScriptOutput(path: string, type: string): boolean {
 
 function isCssOutput(path: string, type: string): boolean {
   return type.includes("css") || path.endsWith(".css");
+}
+
+function isExternalStylesheetLink(linkTag: string): boolean {
+  const href = getHtmlAttribute(linkTag, "href");
+  const rel = getHtmlAttribute(linkTag, "rel");
+
+  return Boolean(
+    href &&
+      rel
+        ?.split(/\s+/)
+        .some((token) => token.toLowerCase() === "stylesheet"),
+  );
+}
+
+function getHtmlAttribute(tag: string, name: string): string | undefined {
+  const match = tag.match(
+    new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'>]+))`, "i"),
+  );
+
+  return match?.[1] ?? match?.[2] ?? match?.[3];
 }
 
 function escapeInlineScript(source: string): string {
