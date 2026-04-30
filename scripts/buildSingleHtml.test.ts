@@ -76,15 +76,44 @@ describe("assertNoExternalAssets", () => {
     ).not.toThrow();
   });
 
+  test("allows inline-only html when inline assets contain external tag-like strings", () => {
+    expect(() =>
+      assertNoExternalAssets(
+        [
+          "<style>",
+          '.app::before{content:"<link rel=\\"stylesheet\\" href=\\"frontend.css\\">"}',
+          "</style>",
+          '<script type="module">',
+          'console.log("<script src=./frontend.js>");',
+          "</script>",
+        ].join(""),
+      ),
+    ).not.toThrow();
+  });
+
   test("rejects external script sources", () => {
     expect(() =>
       assertNoExternalAssets('<script type="module" src="./frontend.js"></script>'),
     ).toThrow("single HTML output still references an external script");
   });
 
+  test("rejects external script sources when an earlier quoted attribute contains a greater-than sign", () => {
+    expect(() =>
+      assertNoExternalAssets('<script data-note=">" src="./frontend.js"></script>'),
+    ).toThrow("single HTML output still references an external script");
+  });
+
   test("rejects external stylesheet links", () => {
     expect(() =>
       assertNoExternalAssets('<link rel="stylesheet" href="./frontend.css">'),
+    ).toThrow("single HTML output still references an external stylesheet");
+  });
+
+  test("rejects external stylesheet links when an earlier quoted attribute contains a greater-than sign", () => {
+    expect(() =>
+      assertNoExternalAssets(
+        '<link data-note=">" rel="stylesheet" href="./frontend.css">',
+      ),
     ).toThrow("single HTML output still references an external stylesheet");
   });
 
