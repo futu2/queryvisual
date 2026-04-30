@@ -9,6 +9,7 @@ optimization pipeline.
 - `bun run dev` starts the Bun server with HMR
 - `bun test` runs the test suite
 - `bun run build` builds the browser assets into `dist/`
+- `bun run build:single` builds a self-contained `dist/index.html` with inline JavaScript and CSS
 - `bun run start` serves the production build
 
 ## Current Scope
